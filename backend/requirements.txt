@@ -1,0 +1,44 @@
+# Kora FastAPI backend — runnable slice dependencies.
+# These all install cleanly and let the backend boot with zero secrets.
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+email-validator==2.2.0
+python-multipart==0.0.18
+pandas==2.2.3
+reportlab==4.2.5
+tenacity==9.0.0
+truststore==0.10.1
+openai==2.21.0
+python-dotenv==1.2.1
+langgraph>=1.0.9
+langchain==1.2.10
+langchain-core==1.2.14
+langchain-openai==1.1.10
+
+# --- Production extras (uncomment + configure to go live) -------------------
+# Heavier / system-dependent packages are intentionally NOT required for the
+# local zero-secret slice (mock AI + in-memory store). Add them when wiring
+# real services per SKILL.md §2/§7/§26:
+supabase==2.10.0
+stripe==11.3.0
+resend==2.5.1
+httpx
+google-cloud-aiplatform==1.74.0
+google-cloud-documentai==3.2.0
+google-cloud-storage==2.19.0
+weasyprint==63.1            # needs GTK system libs on Windows
+sentry-sdk==2.19.2
+pytest==8.3.4
+pytest-asyncio==0.24.0
+
+# Contract reviewer — document text extraction
+pypdf==5.1.0
+python-docx==1.1.2
+google-auth>=2.28.0
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.2.0
+google-api-python-client>=2.118.0
+cryptography>=42.0.0
+pdfplumber

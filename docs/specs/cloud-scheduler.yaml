@@ -1,0 +1,56 @@
+# GCP Cloud Scheduler jobs for Kora (production deployment on Cloud Run).
+#
+# Deploy with:
+#   gcloud scheduler jobs create http kora-supervisor-daily \
+#     --schedule="0 7 * * *" --uri="$API_URL/api/manager/run" \
+#     --http-method=POST --headers="x-cron-secret=$CRON_SECRET" \
+#     --location=us-central1 --time-zone=UTC
+#
+# Or apply all three jobs from this file using a deployment script.
+#
+# Environment variables needed:
+#   API_URL       — Cloud Run service URL
+#   CRON_SECRET   — must match CRON_SECRET in backend .env
+
+jobs:
+  - name: kora-supervisor-daily
+    description: "Full supervisor pass — reconcile, assess, queue tasks, briefing"
+    schedule: "0 7 * * *"
+    time_zone: UTC
+    http_target:
+      uri: ${API_URL}/api/manager/run
+      http_method: POST
+      headers:
+        x-cron-secret: ${CRON_SECRET}
+        Content-Type: application/json
+    retry_config:
+      retry_count: 2
+      min_backoff_duration: 30s
+
+  - name: kora-butler-morning
+    description: "Butler morning briefing — Mon–Fri client relationship summary"
+    schedule: "30 7 * * 1-5"
+    time_zone: UTC
+    http_target:
+      uri: ${API_URL}/api/butler/run
+      http_method: POST
+      headers:
+        x-cron-secret: ${CRON_SECRET}
+        Content-Type: application/json
+    retry_config:
+      retry_count: 2
+      min_backoff_duration: 30s
+
+  - name: kora-invoice-followups
+    description: "Invoice follow-up campaign — reconcile payments then send reminders"
+    schedule: "0 9 * * 1-5"
+    time_zone: UTC
+    http_target:
+      uri: ${API_URL}/api/invoices/run-follow-ups
+      http_method: POST
+      headers:
+        x-cron-secret: ${CRON_SECRET}
+        Content-Type: application/json
+    retry_config:
+      retry_count: 2
+      min_backoff_duration: 60s

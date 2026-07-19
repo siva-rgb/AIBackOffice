@@ -1,0 +1,12 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets — never commit (SKILL.md §16 Rule 9)
+.env
+.env.*
+gcloud-key.json
+*.pem
+*.key

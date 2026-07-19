@@ -1,0 +1,154 @@
+name: Kora scheduled agent runs
+
+# Fires the three cron endpoints on the deployed backend.
+# Requires two repository secrets:
+#   KORA_API_URL    — e.g. https://kora-api-xxxx-uc.a.run.app
+#   KORA_CRON_SECRET — must match CRON_SECRET in backend .env
+
+on:
+  schedule:
+    # Supervisor full pass — 7:00 UTC daily (detects overdue, queues tasks, briefing)
+    - cron: "0 7 * * *"
+    # Butler morning briefing — 7:30 UTC Mon–Fri
+    - cron: "30 7 * * 1-5"
+    # Invoice follow-up campaign — 9:00 UTC Mon–Fri
+    - cron: "0 9 * * 1-5"
+    # Gmail client-email intel refresh — 6:30 UTC daily (before the briefings)
+    - cron: "30 6 * * *"
+    # Drive intel sync (transcripts + docs) — 6:45 UTC daily
+    - cron: "45 6 * * *"
+    # Graph memory sync (rebuild relationship graph) — 6:50 UTC daily (before briefings)
+    - cron: "50 6 * * *"
+    # Semantic memory reindex (embed new learned facts/intel) — 6:55 UTC daily
+    - cron: "55 6 * * *"
+    # Notion task mirror (two-way sync of the task ledger) — 7:10 UTC daily
+    - cron: "10 7 * * *"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Which job to run manually"
+        required: true
+        default: supervisor
+        type: choice
+        options: [supervisor, butler, invoices, gmail, drive, graph, memory, notion, all]
+
+jobs:
+  supervisor:
+    if: >
+      github.event_name == 'workflow_dispatch' && (inputs.job == 'supervisor' || inputs.job == 'all') ||
+      github.event_name == 'schedule' && startsWith(github.event.schedule, '0 7')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run supervisor pass
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "${{ secrets.KORA_API_URL }}/api/manager/run" \
+            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP $STATUS"
+          [ "$STATUS" = "200" ] || exit 1
+
+  butler:
+    if: >
+      github.event_name == 'workflow_dispatch' && (inputs.job == 'butler' || inputs.job == 'all') ||
+      github.event_name == 'schedule' && startsWith(github.event.schedule, '30 7')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run butler morning briefing
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "${{ secrets.KORA_API_URL }}/api/butler/run" \
+            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP $STATUS"
+          [ "$STATUS" = "200" ] || exit 1
+
+  invoices:
+    if: >
+      github.event_name == 'workflow_dispatch' && (inputs.job == 'invoices' || inputs.job == 'all') ||
+      github.event_name == 'schedule' && startsWith(github.event.schedule, '0 9')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run invoice follow-up campaign
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "${{ secrets.KORA_API_URL }}/api/invoices/run-follow-ups" \
+            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP $STATUS"
+          [ "$STATUS" = "200" ] || exit 1
+
+  gmail:
+    if: >
+      github.event_name == 'workflow_dispatch' && (inputs.job == 'gmail' || inputs.job == 'all') ||
+      github.event_name == 'schedule' && startsWith(github.event.schedule, '30 6')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Gmail client-email intel sync
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "${{ secrets.KORA_API_URL }}/api/gmail/run" \
+            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP $STATUS"
+          [ "$STATUS" = "200" ] || exit 1
+
+  drive:
+    if: >
+      github.event_name == 'workflow_dispatch' && (inputs.job == 'drive' || inputs.job == 'all') ||
+      github.event_name == 'schedule' && startsWith(github.event.schedule, '45 6')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Drive intel sync
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "${{ secrets.KORA_API_URL }}/api/drive/run" \
+            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP $STATUS"
+          [ "$STATUS" = "200" ] || exit 1
+
+  graph:
+    if: >
+      github.event_name == 'workflow_dispatch' && (inputs.job == 'graph' || inputs.job == 'all') ||
+      github.event_name == 'schedule' && startsWith(github.event.schedule, '50 6')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run graph memory sync
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "${{ secrets.KORA_API_URL }}/api/graph/run" \
+            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP $STATUS"
+          [ "$STATUS" = "200" ] || exit 1
+
+  memory:
+    if: >
+      github.event_name == 'workflow_dispatch' && (inputs.job == 'memory' || inputs.job == 'all') ||
+      github.event_name == 'schedule' && startsWith(github.event.schedule, '55 6')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run semantic memory reindex
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "${{ secrets.KORA_API_URL }}/api/memory/reindex" \
+            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP $STATUS"
+          [ "$STATUS" = "200" ] || exit 1
+
+  notion:
+    if: >
+      github.event_name == 'workflow_dispatch' && (inputs.job == 'notion' || inputs.job == 'all') ||
+      github.event_name == 'schedule' && startsWith(github.event.schedule, '10 7')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Notion task mirror sync
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "${{ secrets.KORA_API_URL }}/api/notion/run" \
+            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP $STATUS"
+          [ "$STATUS" = "200" ] || exit 1

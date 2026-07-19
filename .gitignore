@@ -1,0 +1,73 @@
+# ============================================================================
+# Kora — repository ignore rules
+# Secrets rule: never commit real credentials. Only *.example templates with
+# placeholder values belong in git.
+# ============================================================================
+
+# --- Secrets & credentials --------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.local
+!*.local.example
+
+# Google Cloud service-account keys (JSON). Broad by design.
+gcloud-key.json
+*service-account*.json
+*serviceaccount*.json
+pg-us-n-app-*.json
+*-key.json
+
+# Certificates / private keys
+*.pem
+*.key
+*.p12
+*.pfx
+
+# --- Python / backend -------------------------------------------------------
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# --- Node / frontend --------------------------------------------------------
+node_modules/
+/.pnp
+.pnp.js
+.next/
+out/
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# --- Tooling / local config -------------------------------------------------
+.claude/settings.local.json
+
+# --- Binary docs (may embed setup credentials) ------------------------------
+*.docx
+*.xlsx
+*.pdf
+
+# --- OS / editor ------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
