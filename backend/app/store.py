@@ -116,6 +116,11 @@ update_retainer = _b.update_retainer
 get_butler_memory = _b.get_butler_memory
 set_butler_memory = _b.set_butler_memory
 
+# Client view cache (M3 PM agent fan-out)
+get_client_view = _b.get_client_view
+upsert_client_view = _b.upsert_client_view
+delete_client_view = _b.delete_client_view
+
 # Playbook (Agent Intelligence)
 upsert_playbook_entry = _b.upsert_playbook_entry
 get_playbook_entries = _b.get_playbook_entries

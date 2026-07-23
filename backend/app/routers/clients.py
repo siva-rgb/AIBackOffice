@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 
 from .. import store
-from ..dependencies import get_current_user
+from ..dependencies import get_current_user, verify_cron_secret
 from pydantic import Field
 
 from ..models import (
@@ -20,10 +20,20 @@ from ..models import (
     NoteCreate,
     User,
 )
-from ..services import butler
+from ..config import settings
+from ..seed import DEMO_USER_ID
+from ..services import butler, pm_agent
 from ..utils.security import safe_sanitize
 
 router = APIRouter(prefix="/api/clients", tags=["clients"])
+
+
+def _scheduler_user_id() -> str:
+    if settings.KORA_DATA_BACKEND == "supabase":
+        u = store.get_user_by_email(settings.DEMO_EMAIL)
+        if u:
+            return u.id
+    return DEMO_USER_ID
 
 
 def _now() -> str:
@@ -90,6 +100,42 @@ async def refresh_health(client_id: str, user: User = Depends(get_current_user))
     if not c:
         raise HTTPException(status_code=404, detail="Client not found")
     return butler.compute_client_health(user.id, c, persist=True)
+
+
+# --- Client view (M3 PM agent fan-out) --------------------------------------
+@router.get("/{client_id}/view")
+async def get_client_view(client_id: str, user: User = Depends(get_current_user)):
+    """The agent-composed one-pager. Serves cache — never triggers an LLM call.
+
+    A cold client (no cache yet) gets a deterministic, number-safe shell flagged
+    `stale: true`, so opening the page can never surprise-bill the user.
+    """
+    view = pm_agent.get_client_view(user.id, client_id)
+    if view is None:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return view
+
+
+@router.post("/{client_id}/view/refresh")
+async def refresh_client_view(client_id: str, user: User = Depends(get_current_user)):
+    """Recompose the view via the analyst fan-out, then cache it."""
+    view = pm_agent.compose_client_view(user.id, client_id)
+    if view is None:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return view
+
+
+@router.post("/views/refresh-all")
+async def refresh_all_client_views(
+    authorization: str | None = Header(default=None),
+    is_cron: bool = Depends(verify_cron_secret),
+):
+    """Nightly recompose of every client's view. Scheduler path uses
+    x-cron-secret; a signed-in user may refresh their own set."""
+    if is_cron:
+        return pm_agent.refresh_all_views(_scheduler_user_id())
+    user = await get_current_user(authorization)
+    return pm_agent.refresh_all_views(user.id)
 
 
 # --- Engagements ------------------------------------------------------------

@@ -363,6 +363,8 @@ def delete_client(user_id: str, client_id: str) -> bool:
     if not c:
         return False
     _clients.remove(c)
+    # Postgres cascades the cached view via FK; the mock must match.
+    _client_views.pop((user_id, client_id), None)
     return True
 
 
@@ -588,6 +590,27 @@ def get_butler_memory(user_id: str) -> dict:
 def set_butler_memory(user_id: str, memory: dict) -> dict:
     _butler_memory[user_id] = memory
     return memory
+
+
+# --- Client view cache (M3 PM agent fan-out) --------------------------------
+_client_views: dict[tuple[str, str], dict] = {}
+
+
+def get_client_view(user_id: str, client_id: str) -> dict | None:
+    row = _client_views.get((user_id, client_id))
+    return dict(row) if row else None
+
+
+def upsert_client_view(user_id: str, client_id: str, view: dict,
+                       token_cost: dict, refreshed_at: str) -> dict:
+    row = {"user_id": user_id, "client_id": client_id, "view": view,
+           "token_cost": token_cost, "refreshed_at": refreshed_at}
+    _client_views[(user_id, client_id)] = row
+    return dict(row)
+
+
+def delete_client_view(user_id: str, client_id: str) -> bool:
+    return _client_views.pop((user_id, client_id), None) is not None
 
 
 # --- Playbook (Agent Intelligence) ------------------------------------------

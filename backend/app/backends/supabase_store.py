@@ -538,6 +538,27 @@ def set_butler_memory(user_id: str, memory: dict) -> dict:
     return memory
 
 
+# ---- Client view cache (M3 PM agent fan-out) -------------------------------
+def get_client_view(user_id: str, client_id: str) -> dict | None:
+    r = (_sb.table("client_view_cache").select("*")
+         .eq("user_id", user_id).eq("client_id", client_id).limit(1).execute())
+    return r.data[0] if r.data else None
+
+
+def upsert_client_view(user_id: str, client_id: str, view: dict,
+                       token_cost: dict, refreshed_at: str) -> dict:
+    row = {"user_id": user_id, "client_id": client_id, "view": view,
+           "token_cost": token_cost, "refreshed_at": refreshed_at}
+    _sb.table("client_view_cache").upsert(row, on_conflict="user_id,client_id").execute()
+    return row
+
+
+def delete_client_view(user_id: str, client_id: str) -> bool:
+    r = (_sb.table("client_view_cache").delete()
+         .eq("user_id", user_id).eq("client_id", client_id).execute())
+    return bool(r.data)
+
+
 # ---- Playbook (Agent Intelligence) -----------------------------------------
 def upsert_playbook_entry(user_id: str, entry: dict) -> dict:
     from datetime import datetime, timezone

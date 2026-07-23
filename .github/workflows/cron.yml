@@ -23,6 +23,9 @@ on:
     - cron: "55 6 * * *"
     # Notion task mirror (two-way sync of the task ledger) — 7:10 UTC daily
     - cron: "10 7 * * *"
+    # Client view fan-out (recompose per-client one-pagers) — 7:20 UTC daily,
+    # after delivery/money/notion data is fresh
+    - cron: "20 7 * * *"
   workflow_dispatch:
     inputs:
       job:
@@ -30,7 +33,7 @@ on:
         required: true
         default: supervisor
         type: choice
-        options: [supervisor, butler, invoices, gmail, drive, graph, memory, notion, all]
+        options: [supervisor, butler, invoices, gmail, drive, graph, memory, notion, client_views, all]
 
 jobs:
   supervisor:
@@ -148,6 +151,21 @@ jobs:
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
             "${{ secrets.KORA_API_URL }}/api/notion/run" \
+            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP $STATUS"
+          [ "$STATUS" = "200" ] || exit 1
+
+  client_views:
+    if: >
+      github.event_name == 'workflow_dispatch' && (inputs.job == 'client_views' || inputs.job == 'all') ||
+      github.event_name == 'schedule' && startsWith(github.event.schedule, '20 7')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recompose per-client views (PM agent fan-out)
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "${{ secrets.KORA_API_URL }}/api/clients/views/refresh-all" \
             -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
             -H "Content-Type: application/json")
           echo "HTTP $STATUS"
