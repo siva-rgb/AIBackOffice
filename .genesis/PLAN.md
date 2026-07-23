@@ -52,15 +52,22 @@ doesn't undo it:
    They were each verified with throwaway smoke scripts that proved they worked *that day* and were
    then discarded. Nothing protects them now, and G4's pytest half cannot pass at all (`exit 5`), so
    the anti-slop spine is decorative until a harness exists. **M0 fixes this first.**
-2. **The Client Canvas is the product's differentiator** and is the reason the
-   `feature/project-management` branch exists. It answers "why would I use this instead of Notion?" —
-   Notion is empty until a human fills it; KORA fills itself from Gmail/Stripe/transcripts/graph.
+2. **Agent-maintained client & project intelligence is the product's differentiator** and is the
+   reason the `feature/project-management` branch exists. It answers "why would I use this instead of
+   Notion?" — Notion is empty until a human fills it; KORA fills itself from Gmail/Stripe/
+   transcripts/graph. Expanded on 2026-07-23 into the **M1–M4 arc** (see ADR-0001); the originally
+   planned standalone "Client Canvas" milestone was absorbed into **M4**.
 
 > **Product rule to apply when scoping any future milestone:** *can the agent maintain this surface
 > without the user typing?* If no, it is a container the user has to fill — Notion already won that,
-> don't build it. This is why we are NOT building a block editor, wiki, generic databases, or
-> sprint/story/epic ceremony (that is Jira vocabulary for engineering teams; the target user is a
-> freelancer with four clients).
+> don't build it. This is why we are NOT building a block editor, wiki, or generic databases.
+>
+> **Amended 2026-07-23 (ADR-0001):** a `Story` level under `Task` **is** being built, which an earlier
+> version of this rule discouraged as "Jira ceremony." The amendment is deliberate and conditional:
+> stories pass the rule **only because every qualitative field is agent-authored from evidence with
+> provenance** (`going_well` / `not_going_well` / `blockers` each cite a source record). A story layer
+> that users had to fill by hand would fail the rule and must not be built. Depth concern was raised
+> and the user reaffirmed — proceeding.
 
 Notion's role is settled and **not** to be extended: KORA's `tasks` table is canonical, Notion is an
 optional mirror via `external_ref`. Keep it working; stop investing in it.
@@ -85,30 +92,71 @@ optional mirror via `external_ref`. Keep it working; stop investing in it.
 - **Token budget:** 50000
 - **⚠ Note:** this supersedes the harness-creation that the old M1 carried inside its own boundary; M2 (plan gating) now inherits a working harness.
 
-### M1 — Client Canvas (the agent-composed client one-pager)
-- **Outcome:** Opening a client shows a living, agent-maintained picture of the relationship — money, open work, commitments, risks, and next actions — composed from data KORA already holds, with **zero user typing**.
-- **Phase (swe-master):** set at L1 start by routing through `agentic-swe-master` (product/AI feature; likely 9 + 19 overlap). Do not invent a number before routing.
-- **Files / freeze boundary:** `backend/app/services/client_canvas.py` (new) · `backend/migrations/2026-07-23_add_client_canvas.sql` (new) · `backend/app/routers/clients.py` · `backend/app/backends/{memory_store,supabase_store}.py` · `backend/app/store.py` · `frontend/components/butler/client-canvas.tsx` (new) · `frontend/components/butler/client-workspace.tsx` · `frontend/lib/api/types.ts` · `backend/tests/test_client_canvas.py`
-- **Demo command:** `cd backend && KORA_DATA_BACKEND=mock venv/Scripts/python.exe -m pytest tests/test_client_canvas.py -q`
-- **Architecture (agreed before planning — deterministic gather → ONE LLM call):**
-  - `gather_canvas_state()` — **no LLM.** Reuses `butler.get_client_detail` (health, financials, invoices, engagements, tasks), `email_intel_cache`, meetings + action items, `graph_memory.query_subgraph`, client-scoped `memory_recall.recall`, `get_playbook_for_client`.
-  - `suggest_actions()` — **deterministic rules**, each returning a *typed* action bound to a real record id (`chase_invoice`/`draft_email`/`create_task`/`unblock_task`) so the UI wires a real button. Never model-invented.
-  - `compose_canvas()` — exactly **one** LLM call producing only a 2–3 sentence narrative + risk read, passed through the existing `validate_briefing`-style guard.
-- **Success criteria:**
-  1. `gather_canvas_state` returns the money/work/commitments/risks blocks from the real stores with **no LLM call** (assert the provider is never invoked).
-  2. Every action from `suggest_actions` carries a payload id that resolves to a real record; a client with no data yields an empty action list, not invented ones.
-  3. **Figures are never model-authored** — a test feeds a narrative containing a wrong amount and asserts the validator strips/corrects it.
-  4. `GET /api/clients/{id}/canvas` serves the cache with **zero LLM calls**; `POST .../canvas/refresh` recomposes.
-  5. Degrades safely: a client with no email intel / no graph / no tasks still renders a canvas.
-  6. `cd frontend && npx tsc --noEmit` exits 0.
-- **Loops:** L1, L4
-- **Skills:** canon + `llmops-ai-agents` + modular-architecture + design-system skill (frontend)
-- **Token budget:** 50000
-- **Open decisions to resolve at L1 start (default = the recommendation, override at kickoff):**
-  - (a) Canvas **replaces** the Overview tab (default) vs. added as a separate first tab. Recommendation: replace — two overlapping summaries is worse than one good one.
-  - (b) Narrative is **LLM-composed** (default, 2–3 sentences only) vs. fully deterministic/templated.
+## The M1–M4 arc — Agent-maintained client & project intelligence
 
-### M2 — Enforce plan gating
+Governed by **ADR-0001** (accepted 2026-07-23). Read it before starting any of M1–M4.
+
+**G0 finding that shapes the whole arc:** three of the four hierarchy levels **already exist** —
+`Client` ✅, `Engagement` ✅ (*is* the Project level: status, dates, budget, `value_delivered`),
+`Task` ✅ (client + engagement linked, auto-capture, Notion mirror). Only **Story is unbuilt**.
+`ClientNote.note_type` already covers `meeting|call|email|decision|blocker|update|general`; meeting
+scheduling exists via HITL `create_calendar_event`; payment discussion exists via invoices + email
+`financial_mentions`. **Extend these. Do not create a parallel hierarchy.**
+
+The standalone "Client Canvas" milestone was **absorbed into M4** — the agent-maintained client view
+*is* the top of this pyramid, so building both would duplicate work.
+
+### M1 — Story level + evidence-backed qualitative status
+- **Outcome:** A `Story` entity under `Task`, carrying `progress_pct` and qualitative status where **every entry cites its evidence**. This is the layer that makes the hierarchy self-filling rather than another empty container.
+- **Phase (swe-master):** route at L1 start via `agentic-swe-master`. Do not invent a number.
+- **Files / freeze boundary:** `backend/app/models.py` · `backend/migrations/2026-07-23_add_stories.sql` (new) · `backend/app/backends/{memory_store,supabase_store}.py` · `backend/app/store.py` · `backend/app/services/story_ledger.py` (new) · `backend/app/routers/stories.py` (new) · `backend/app/main.py` · `backend/tests/test_stories.py` (new)
+- **Demo command:** `cd backend && KORA_DATA_BACKEND=mock venv/Scripts/python.exe -m pytest tests/test_stories.py -q`
+- **Success criteria:**
+  1. `Story` CRUD under a parent `task_id`; deleting a task defines an explicit cascade rule (documented, tested).
+  2. `progress_pct` constrained 0–100; `blockers` / `going_well` / `not_going_well` are lists of `{text, source, source_ref, observed_at, user_edited}`.
+  3. **A qualitative entry with no `source_ref` is refused** — enforces the `qualitative_fields_carry_provenance` invariant (ADR-0001).
+  4. **`user_edited = true` survives an agent refresh** — a simulated refresh must not mutate or delete it (invariant `user_override_survives_agent_refresh`).
+  5. `cd frontend && npx tsc --noEmit` still exits 0.
+- **Loops:** L1, L4 · **Skills:** canon + modular-architecture + tdd · **Budget:** 50000
+
+### M2 — Deterministic roll-up health (story → task → project → client)
+- **Outcome:** Project and client health finally reflect **delivery**, not just money and silence. Today `compute_client_health` reads invoices/engagements/staleness only.
+- **Files / freeze boundary:** `backend/app/services/rollup.py` (new) · `backend/app/services/butler.py` (extend `compute_client_health`) · `backend/tests/test_rollup.py` (new)
+- **Demo command:** `cd backend && KORA_DATA_BACKEND=mock venv/Scripts/python.exe -m pytest tests/test_rollup.py -q`
+- **Success criteria:**
+  1. Changing one story's `progress_pct` or adding a blocker moves task → project → client health **arithmetically and predictably**.
+  2. **Zero LLM calls** — the test asserts the provider is never invoked (invariant `rollup_health_is_deterministic`).
+  3. Delivery signal is **added to**, not substituted for, the existing money/silence signals; the pre-existing health behaviour is pinned by a test so this is a strict extension.
+  4. Degenerate inputs are safe: project with no stories, story with no progress, 100% complete with an open blocker — all defined, none crash.
+- **Loops:** L1, L4 · **Skills:** canon + production-readiness · **Budget:** 50000
+
+### M3 — PM agent fan-out (role-scoped analysts + deterministic merge)
+- **Outcome:** The "team of specialists" that keeps the view current — four narrow analysts run in parallel and a **code** synthesizer merges them.
+- **Files / freeze boundary:** `backend/app/services/pm_agent.py` (new) · `backend/migrations/2026-07-23_add_client_view_cache.sql` (new) · `backend/app/routers/clients.py` · `.github/workflows/cron.yml` · `backend/tests/test_pm_agent.py` (new)
+- **Demo command:** `cd backend && KORA_DATA_BACKEND=mock venv/Scripts/python.exe -m pytest tests/test_pm_agent.py -q`
+- **Architecture:** analysts = **Delivery** (stories/tasks/blockers/progress) · **Money** (invoices/payments/forecast) · **Relationship** (email sentiment, silence, commitments) · **Risk** (what's not going well). Each gets a narrow tool subset and its own prompt. **The merge is deterministic code, never an LLM.**
+- **Success criteria:**
+  1. Four analysts run **in parallel**; the merge is code (asserted — no LLM call in the merge path).
+  2. **One analyst failing degrades only its section** — the other three still populate the view (this is the load-bearing reliability property).
+  3. **No figure originates from an LLM** — a test injects a wrong amount into an analyst response and asserts the validator strips/corrects it.
+  4. `GET` serves cache with **zero LLM calls**; `POST .../refresh` recomposes; nightly cron job added (invariant `client_view_refresh_is_cached`).
+  5. Token cost per client refresh is **measured and asserted under a cap** — fan-out multiplies calls, so this is a real budget gate, not a nicety.
+- **Loops:** L1, L4 · **Skills:** canon + `llmops-ai-agents` + production-readiness · **Budget:** 50000
+
+### M4 — Client workspace UI (hierarchy + client-level surfaces) — *absorbs the Client Canvas*
+- **Outcome:** The full picture in one place: `Client → Project → Task → Story` with roll-up health, plus the client-level surfaces (payment discussion, general discussion, key notes, meeting scheduling) wired to what already exists.
+- **Files / freeze boundary:** `frontend/components/butler/{client-canvas,project-tree,story-card}.tsx` (new) · `frontend/components/butler/client-workspace.tsx` · `frontend/lib/api/types.ts`
+- **Demo command:** `cd frontend && npx tsc --noEmit && npm run build`
+- **Success criteria:**
+  1. Tree renders Client → Project → Task → Story with per-level roll-up health.
+  2. Qualitative entries show **provenance** ("from meeting 12 Jul") and **staleness**, so an old judgement never reads as current.
+  3. A user edit marks the entry `user_edited` and visibly distinguishes it from agent-authored content.
+  4. Client-level surfaces **reuse existing endpoints** — `ClientNote` note types for discussion/key notes, HITL `create_calendar_event` for scheduling, invoices/`financial_mentions` for payment. No new note system.
+  5. `npx tsc --noEmit` exit 0 and `npm run build` succeeds.
+- **Loops:** L1, L4 · **Skills:** canon + design-system skill (**mandatory** for frontend) + qa · **Budget:** 50000
+- **Decision carried from the Canvas plan:** the composed client view **replaces** the Overview tab (two overlapping summaries is worse than one good one).
+
+### M5 — Enforce plan gating
 - **Outcome:** Premium capabilities reject free-plan users server-side, driven by one auditable entitlements policy. Billing stops being decorative.
 - **Phase (swe-master):** 11 — Security Architecture
 - **Files / freeze boundary:** `backend/app/entitlements.py` (new) · `backend/app/dependencies.py` · `backend/app/routers/{contracts,cashflow,butler,memory,graph}.py` · `backend/tests/` + `backend/conftest.py` (new)
@@ -123,7 +171,7 @@ optional mirror via `external_ref`. Keep it working; stop investing in it.
 - **Token budget:** 50000
 - **⚠ Prerequisite — now satisfied by M0:** the pytest harness (`conftest.py`, `pytest.ini`, `tests/`) is created in **M0**, so this milestone inherits a working one and only adds `tests/test_plan_gating.py`. The seeded demo user is `plan="pro"` (`app/seed.py:50`), so the free-user case **must** be produced by overriding `get_current_user` via `app.dependency_overrides` — it cannot be reached with plain curl in mock mode.
 
-### M3 — Regression suite over the critical paths
+### M6 — Regression suite over the critical paths
 - **Outcome:** Broadens M0's harness to the *older* critical paths (M0 covered the recently-shipped features) and wires a CI test job.
 - **Phase:** 9 — Evaluation Systems
 - **Files:** `backend/tests/**` · `.github/workflows/` (add a test job) — `pytest.ini` already exists from M0
@@ -133,7 +181,7 @@ optional mirror via `external_ref`. Keep it working; stop investing in it.
 - **Skills:** canon + llmops-ai-agents + production-readiness
 - **Token budget:** 50000
 
-### M4 — Containerize the frontend + Cloud Run deploy config
+### M7 — Containerize the frontend + Cloud Run deploy config
 - **Outcome:** Both services are containerized and deployable to Cloud Run; the backend already is, the frontend is not.
 - **Phase:** 13 — Infrastructure & Deployment
 - **Files:** `frontend/Dockerfile` (new) · `frontend/.dockerignore` (new) · `backend/.dockerignore` (new) · `frontend/next.config.mjs` (`output: 'standalone'`) · `cloudbuild.yaml` (new) · `DEPLOY.md` (new)
@@ -144,7 +192,7 @@ optional mirror via `external_ref`. Keep it working; stop investing in it.
 - **Token budget:** 50000
 - **⚠ Blocked on environment:** Docker 29.1.5 is installed but the **daemon was not running** at genesis. Start Docker Desktop before this milestone, or the demo command cannot be computed.
 
-### M5 — Wire digest / alert email delivery behind an approval gate
+### M8 — Wire digest / alert email delivery behind an approval gate
 - **Outcome:** Daily digests and alerts can actually reach the user, without weakening the "no send without approval" contract.
 - **Phase:** 19 — Human-in-the-Loop
 - **Files:** `backend/app/services/{alert_agent,gmail_agent,supervisor}.py` · `backend/app/routers/alerts.py` · `backend/tests/test_digest_delivery.py` (new)
