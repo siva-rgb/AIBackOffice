@@ -12,13 +12,18 @@ import { Card, CardHeader, Badge, StatCard } from '@/components/ui';
 import { FormattedText } from '@/components/formatted-text';
 import { authedFetch } from '@/lib/api/browser';
 import { formatMoney, formatDate, humanize, cn } from '@/lib/utils';
+import { ClientCanvas } from './client-canvas';
+import { ProjectTree } from './project-tree';
 import type {
   ClientDetail, Engagement, ClientNote, Meeting,
   EmailIntel, CalendarEvent, UnloggedMeeting, DriveDoc,
   ClientTask, TaskStatus,
 } from '@/lib/api/types';
 
-const TABS = ['overview', 'tasks', 'engagements', 'notes', 'meetings', 'email', 'calendar', 'drive', 'financials'] as const;
+// 'canvas' is the composed one-pager (M3) — it replaces the old Overview tab, so
+// there is one good summary, not two overlapping ones. 'projects' is the
+// Client → Project → Task → Story hierarchy with roll-up health (M1/M2).
+const TABS = ['canvas', 'projects', 'tasks', 'engagements', 'notes', 'meetings', 'email', 'calendar', 'drive', 'financials'] as const;
 type Tab = (typeof TABS)[number];
 
 const input =
@@ -33,7 +38,7 @@ export function ClientWorkspace({ detail }: { detail: ClientDetail }) {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab');
   const [tab, setTab] = useState<Tab>(
-    (TABS as readonly string[]).includes(initialTab ?? '') ? (initialTab as Tab) : 'overview',
+    (TABS as readonly string[]).includes(initialTab ?? '') ? (initialTab as Tab) : 'canvas',
   );
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -119,7 +124,8 @@ export function ClientWorkspace({ detail }: { detail: ClientDetail }) {
         ))}
       </div>
 
-      {tab === 'overview' && <Overview detail={detail} />}
+      {tab === 'canvas' && <ClientCanvas clientId={detail.id} />}
+      {tab === 'projects' && <ProjectTree clientId={detail.id} />}
       {tab === 'tasks' && <TasksTab clientId={detail.id} initial={detail.tasks ?? []} />}
       {tab === 'engagements' && <Engagements detail={detail} />}
       {tab === 'notes' && <Notes detail={detail} />}
@@ -754,48 +760,6 @@ function DriveTab({ clientId }: { clientId: string }) {
         );
       })}
     </Card>
-  );
-}
-
-function Overview({ detail }: { detail: ClientDetail }) {
-  return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Card>
-        <CardHeader title="Health signals" subtitle="Computed from your real data" />
-        <div className="space-y-3 p-5">
-          {detail.healthRisks.length === 0 && detail.healthPositives.length === 0 && (
-            <p className="text-sm text-gray-500">No notable signals yet.</p>
-          )}
-          {detail.healthRisks.map((r, i) => (
-            <p key={`r${i}`} className="flex items-start gap-2 text-sm text-gray-700">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-500" /> {r}
-            </p>
-          ))}
-          {detail.healthPositives.map((p, i) => (
-            <p key={`p${i}`} className="flex items-start gap-2 text-sm text-gray-700">
-              <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-500" /> {p}
-            </p>
-          ))}
-        </div>
-      </Card>
-      <Card>
-        <CardHeader title="Recent notes" />
-        {detail.notes.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-gray-500">No notes yet. Use quick capture to log anything about this client.</p>
-        ) : (
-          <ul className="divide-y divide-gray-100">
-            {detail.notes.slice(0, 5).map((n) => (
-              <li key={n.id} className="px-5 py-3">
-                <p className="text-sm text-gray-700">{n.contentMd}</p>
-                <p className="mt-0.5 text-xs text-gray-400">
-                  {humanize(n.noteType)} · {formatDate(n.createdAt)}{n.isAiGenerated && ' · via Kora'}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-    </div>
   );
 }
 

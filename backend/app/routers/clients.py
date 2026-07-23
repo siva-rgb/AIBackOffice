@@ -22,7 +22,7 @@ from ..models import (
 )
 from ..config import settings
 from ..seed import DEMO_USER_ID
-from ..services import butler, pm_agent
+from ..services import butler, pm_agent, rollup
 from ..utils.security import safe_sanitize
 
 router = APIRouter(prefix="/api/clients", tags=["clients"])
@@ -100,6 +100,18 @@ async def refresh_health(client_id: str, user: User = Depends(get_current_user))
     if not c:
         raise HTTPException(status_code=404, detail="Client not found")
     return butler.compute_client_health(user.id, c, persist=True)
+
+
+@router.get("/{client_id}/tree")
+async def client_tree(client_id: str, user: User = Depends(get_current_user)):
+    """Client → Project → Task with per-level roll-up health (M2, deterministic).
+
+    Stories hang off each task via `GET /api/stories?client_id=`; the UI groups
+    them by `taskId`. Zero LLM calls — pure arithmetic over the ledger.
+    """
+    if not store.get_client(user.id, client_id):
+        raise HTTPException(status_code=404, detail="Client not found")
+    return rollup.client_tree(user.id, client_id)
 
 
 # --- Client view (M3 PM agent fan-out) --------------------------------------

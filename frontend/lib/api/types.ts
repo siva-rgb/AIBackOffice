@@ -542,6 +542,115 @@ export interface ClientDetail extends Client {
   graphFacts?: { rel: string; label: string }[];
 }
 
+// ── Story layer (M1) + roll-up (M2) + composed view (M3) ───────────────────
+export type StoryStatus = 'todo' | 'in_progress' | 'blocked' | 'done' | 'cancelled';
+export type ObservationKind = 'blocker' | 'going_well' | 'not_going_well';
+export type EvidenceSource = 'email' | 'meeting' | 'drive' | 'task' | 'invoice' | 'agent' | 'user';
+export type HealthLabel = 'on_track' | 'at_risk' | 'needs_attention' | 'critical';
+
+export interface StoryObservation {
+  id: string;
+  kind: ObservationKind;
+  text: string;
+  source: EvidenceSource;
+  sourceRef: string;      // the email / meeting / doc this judgement came from
+  observedAt: string;
+  userEdited: boolean;
+}
+
+export interface Story {
+  id: string;
+  taskId: string;
+  clientId: string | null;
+  engagementId: string | null;
+  title: string;
+  descriptionMd: string | null;
+  status: StoryStatus;
+  progressPct: number;
+  observations: StoryObservation[];
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+// One task's roll-up (M2). Health numbers are computed server-side only.
+export interface TaskRollup {
+  taskId: string;
+  title: string;
+  status: TaskStatus;
+  progressPct: number;
+  storyCount: number;
+  openStoryCount: number;
+  doneStoryCount: number;
+  blockerCount: number;
+  notGoingWellCount: number;
+  goingWellCount: number;
+  stalledCount: number;
+  isOverdue: boolean;
+}
+
+// A project (engagement) roll-up, or the whole-client roll-up — same shape.
+export interface RollupScore {
+  score: number;
+  label: HealthLabel;
+  progressPct: number;
+  taskCount: number;
+  storyCount: number;
+  blockerCount: number;
+  notGoingWellCount: number;
+  goingWellCount: number;
+  overdueCount: number;
+  stalledCount: number;
+  risks: string[];
+  positives: string[];
+  hasData: boolean;
+}
+
+export interface ProjectNode extends RollupScore {
+  engagementId: string;
+  title: string;
+  status: string;
+  tasks: TaskRollup[];
+}
+
+export interface ClientTree extends RollupScore {
+  clientId: string;
+  projects: ProjectNode[];
+  unassignedTasks: TaskRollup[];
+}
+
+// Composed one-pager (M3). Numbers come from the ledger; prose from analysts.
+export interface ClientViewSection {
+  metrics: Record<string, unknown>;
+  summary: string;
+  highlights: string[];
+  concerns: string[];
+  degraded: boolean;
+}
+
+export interface ClientView {
+  clientId: string;
+  clientName: string;
+  headline: {
+    healthScore: number;
+    healthLabel: string;
+    progressPct: number;
+    outstanding: number;
+    openBlockers: number;
+  };
+  sections: {
+    delivery: ClientViewSection;
+    money: ClientViewSection;
+    relationship: ClientViewSection;
+    risk: ClientViewSection;
+  };
+  degradedSections: string[];
+  generatedAt: string | null;
+  stale: boolean;
+  refreshedAt?: string | null;
+  tokenCost?: { totalTokens?: number; estUsd?: number; withinCap?: boolean };
+}
+
 export interface QuickCapture {
   id: string;
   rawText: string;
