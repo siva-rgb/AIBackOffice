@@ -71,3 +71,6 @@ desktop.ini
 .idea/
 .vscode/
 *.swp
+
+# Local agent scaffolding / rolling state (genesis-kit)
+.genesis/
