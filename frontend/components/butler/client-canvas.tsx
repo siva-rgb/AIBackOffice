@@ -7,8 +7,12 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui';
 import { authedFetch } from '@/lib/api/browser';
-import { formatDateTime, cn } from '@/lib/utils';
+import { formatDateTime, formatMoney, humanize, cn } from '@/lib/utils';
 import type { ClientView, ClientViewSection } from '@/lib/api/types';
+
+function healthTone(score: number): string {
+  return score >= 75 ? 'text-emerald-600' : score >= 55 ? 'text-amber-600' : 'text-red-600';
+}
 
 // The composed one-pager (M3). Numbers here come from the ledger; the prose is
 // analyst-written and figure-checked server-side, so nothing shown is invented.
@@ -78,6 +82,37 @@ export function ClientCanvas({ clientId }: { clientId: string }) {
           {refreshing ? 'Composing…' : 'Ask Kora to refresh'}
         </button>
       </div>
+
+      {/* Client-level roll-up — the top of the pyramid, computed server-side */}
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Client health</p>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className={cn('text-3xl font-bold tabular-nums', healthTone(view.headline.healthScore))}>
+                {view.headline.healthScore}
+              </span>
+              <span className="text-sm text-gray-500">{humanize(view.headline.healthLabel)}</span>
+            </div>
+          </div>
+          <div className="flex gap-6">
+            <div className="text-right">
+              <p className="text-[11px] uppercase tracking-wide text-gray-400">Delivery</p>
+              <p className="text-lg font-semibold tabular-nums text-gray-900">{view.headline.progressPct}%</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[11px] uppercase tracking-wide text-gray-400">Outstanding</p>
+              <p className="text-lg font-semibold tabular-nums text-gray-900">{formatMoney(view.headline.outstanding)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[11px] uppercase tracking-wide text-gray-400">Blockers</p>
+              <p className={cn('text-lg font-semibold tabular-nums', view.headline.openBlockers > 0 ? 'text-red-600' : 'text-gray-900')}>
+                {view.headline.openBlockers}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {/* Sections — Delivery · Money · Relationship · Risk */}
       <div className="grid gap-4 lg:grid-cols-2">

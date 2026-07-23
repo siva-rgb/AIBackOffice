@@ -47,8 +47,23 @@ TOKEN_CAP_PER_REFRESH = 16000
 
 ANALYST_KEYS = ("delivery", "money", "relationship", "risk")
 
-_CURRENCY_RE = re.compile(r"\$\s?\d[\d,]*(?:\.\d+)?")
-_PERCENT_RE = re.compile(r"\b\d+(?:\.\d+)?\s?%")
+# Figure shapes an analyst might quote. We match anything that *looks like money
+# or a percentage* and redact it unless it is a real ledger figure — a
+# hallucination is by definition off-brief, so it can appear in any of these
+# forms, not just the "$X" / "X%" the briefs feed. One combined pattern in a
+# SINGLE pass, most-specific alternatives first, so a kept "$3,000" is consumed
+# whole and its inner "3,000" is never re-scanned. 4-digit bare integers (years)
+# and small counts are left alone — "since 2024" and "5 tasks" survive, while
+# "$99,999", "USD 99,999", "99,999.00", "500000" and "87 percent" do not.
+_FIGURE_RE = re.compile(
+    r"\$\s?\d[\d,]*(?:\.\d+)?"                       # $99,999 / $ 99999.00
+    r"|(?:USD|EUR|GBP|INR|CAD|AUD)\s?\d[\d,]*(?:\.\d+)?"  # USD 99,999
+    r"|\d{1,3}(?:,\d{3})+(?:\.\d+)?"                 # 1,200,000  99,999.00
+    r"|\d+(?:\.\d+)?\s?%"                            # 87%
+    r"|\d+(?:\.\d+)?\s?percent\b"                    # 87 percent
+    r"|\d{5,}(?:\.\d+)?",                            # 500000 (bare, 5+ digits)
+    re.IGNORECASE,
+)
 
 
 def _now() -> str:
@@ -165,9 +180,7 @@ def _strip_unverified_figures(text: str, allowed: set[str]) -> str:
             return tok
         return "[unverified]"
 
-    text = _CURRENCY_RE.sub(repl, text)
-    text = _PERCENT_RE.sub(repl, text)
-    return text
+    return _FIGURE_RE.sub(repl, text)
 
 
 # ── Analyst specs ───────────────────────────────────────────────────────────

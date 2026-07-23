@@ -32,9 +32,11 @@ const SOURCE_VERB: Record<string, string> = {
   task: 'from a task', invoice: 'from an invoice', agent: 'inferred by Kora', user: 'you noted',
 };
 
-function daysSince(iso: string): number {
-  const ms = Date.now() - new Date(iso).getTime();
-  return Math.max(0, Math.floor(ms / 86_400_000));
+function daysSince(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;      // never let a bad date read as "fresh"
+  return Math.max(0, Math.floor((Date.now() - t) / 86_400_000));
 }
 
 function progressTone(pct: number): string {
@@ -95,21 +97,28 @@ function ObservationRow({
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(obs.text);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
   const age = daysSince(obs.observedAt);
-  const stale = age >= STALE_DAYS;
+  const stale = age !== null && age >= STALE_DAYS;
 
   async function save() {
     if (!text.trim() || text.trim() === obs.text) { setEditing(false); return; }
     setBusy(true);
+    setFailed(false);
     try {
+      // The endpoint uses only `text` — it sets user_edited + source=user itself
+      // so the nightly agent refresh won't overwrite the edit (M1 rule, M4
+      // criterion 3). kind/sourceRef are sent only to satisfy the shared
+      // ObservationCreate schema's required fields.
       const res = await authedFetch(`/api/stories/${storyId}/observations/${obs.id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        // The API marks an edited observation user_edited + source=user, so the
-        // nightly agent refresh will never overwrite it (M1 rule, M4 criterion 3).
         body: JSON.stringify({ kind: obs.kind, text: text.trim(), source: 'user', sourceRef: 'manual' }),
       });
       if (res.ok) { setEditing(false); onChanged?.(); }
+      else setFailed(true);
+    } catch {
+      setFailed(true);
     } finally {
       setBusy(false);
     }
@@ -117,19 +126,22 @@ function ObservationRow({
 
   if (editing) {
     return (
-      <li className="flex items-start gap-1.5">
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={2}
-          className="flex-1 rounded-md border border-kora-300 px-2 py-1 text-xs focus:border-kora-500 focus:outline-none focus:ring-1 focus:ring-kora-500"
-        />
-        <button onClick={save} disabled={busy} title="Save" className="mt-0.5 text-emerald-600 hover:text-emerald-700 disabled:opacity-50">
-          {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-        </button>
-        <button onClick={() => { setText(obs.text); setEditing(false); }} title="Cancel" className="mt-0.5 text-gray-400 hover:text-gray-600">
-          <X size={13} />
-        </button>
+      <li>
+        <div className="flex items-start gap-1.5">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={2}
+            className="flex-1 rounded-md border border-kora-300 px-2 py-1 text-xs focus:border-kora-500 focus:outline-none focus:ring-1 focus:ring-kora-500"
+          />
+          <button onClick={save} disabled={busy} title="Save" className="mt-0.5 text-emerald-600 hover:text-emerald-700 disabled:opacity-50">
+            {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+          </button>
+          <button onClick={() => { setText(obs.text); setEditing(false); setFailed(false); }} title="Cancel" className="mt-0.5 text-gray-400 hover:text-gray-600">
+            <X size={13} />
+          </button>
+        </div>
+        {failed && <p className="mt-1 text-[10px] text-red-600">Couldn’t save — try again.</p>}
       </li>
     );
   }

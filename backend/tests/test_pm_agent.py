@@ -156,6 +156,31 @@ def test_strip_redacts_only_the_unverified_figure():
     assert "$3,000" in out and "$50,000" not in out and "[unverified]" in out
 
 
+def test_a_kept_currency_figure_is_not_cannibalised_by_a_later_pattern():
+    """Single-pass guard: keeping "$3,000" must not leave "3,000" to be
+    re-scanned and wrongly redacted when only the $-form is allow-listed."""
+    out = pm_agent._strip_unverified_figures("Owed $3,000.", {"$3,000"})
+    assert out == "Owed $3,000."
+
+
+@pytest.mark.parametrize("bad", [
+    "USD 99,999", "99,999.00", "1,200,000", "500000", "87 percent", "$99,999",
+])
+def test_fabricated_figures_are_stripped_in_any_money_or_percent_form(bad):
+    """A hallucination is off-brief and can use any format, not just $X / X%."""
+    out = pm_agent._strip_unverified_figures(f"forecast is {bad} next quarter", set())
+    assert bad not in out and "[unverified]" in out
+
+
+@pytest.mark.parametrize("kept", [
+    "since 2024", "across 5 tasks", "3 blockers", "closed 12 tickets",
+])
+def test_years_and_small_counts_are_not_redacted(kept):
+    """Guard against over-redaction: 4-digit years and small counts survive."""
+    out = pm_agent._strip_unverified_figures(f"Progress {kept} this month.", set())
+    assert out == f"Progress {kept} this month."
+
+
 def test_headline_numbers_come_from_the_ledger_not_the_model(user_id, loaded_client):
     """Even a model screaming a wrong score cannot move the headline."""
     liar = _fake_chat('{"summary": "health is 100/100!", "highlights": [], "concerns": []}')

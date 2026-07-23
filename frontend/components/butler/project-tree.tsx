@@ -86,6 +86,23 @@ export function ProjectTree({ clientId }: { clientId: string }) {
 
   return (
     <div className="space-y-3">
+      {/* Client-level roll-up — the top of the hierarchy (M2, server-computed) */}
+      {tree.hasData && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50/60 px-4 py-2.5">
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+            <FolderOpen size={15} className="text-gray-400" />
+            Overall delivery
+            <span className="text-xs font-normal text-gray-400">
+              · {tree.taskCount} task(s), {tree.storyCount} story(ies)
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <ProgressBar pct={tree.progressPct} />
+            <HealthBadge score={tree.score} label={tree.label} />
+          </div>
+        </div>
+      )}
+
       {tree.projects.map((p) => (
         <ProjectRow key={p.engagementId} project={p} storiesByTask={storiesByTask} onChanged={load} />
       ))}
