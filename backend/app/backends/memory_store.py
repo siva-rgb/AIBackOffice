@@ -440,7 +440,60 @@ def delete_task(user_id: str, task_id: str) -> bool:
     if not t:
         return False
     _tasks.remove(t)
+    # Cascade to stories — Postgres does this via ON DELETE CASCADE, so the mock
+    # backend must too or the two backends diverge and orphan stories here only.
+    delete_stories_for_task(user_id, task_id)
     return True
+
+
+# --- Story layer (children of tasks) ----------------------------------------
+_stories: list = []
+
+
+def list_stories(user_id: str, *, task_id: str | None = None,
+                 client_id: str | None = None, statuses: list[str] | None = None) -> list:
+    rows = [s for s in _stories if s.user_id == user_id]
+    if task_id is not None:
+        rows = [s for s in rows if s.task_id == task_id]
+    if client_id is not None:
+        rows = [s for s in rows if s.client_id == client_id]
+    if statuses:
+        allowed = set(statuses)
+        rows = [s for s in rows if s.status in allowed]
+    return sorted(rows, key=lambda s: s.created_at)
+
+
+def get_story(user_id: str, story_id: str):
+    return next((s for s in _stories if s.id == story_id and s.user_id == user_id), None)
+
+
+def insert_story(story):
+    _stories.append(story)
+    return story
+
+
+def update_story(user_id: str, story_id: str, patch: dict):
+    s = get_story(user_id, story_id)
+    if not s:
+        return None
+    for k, v in patch.items():
+        setattr(s, k, v)
+    return s
+
+
+def delete_story(user_id: str, story_id: str) -> bool:
+    s = get_story(user_id, story_id)
+    if not s:
+        return False
+    _stories.remove(s)
+    return True
+
+
+def delete_stories_for_task(user_id: str, task_id: str) -> int:
+    doomed = [s for s in _stories if s.user_id == user_id and s.task_id == task_id]
+    for s in doomed:
+        _stories.remove(s)
+    return len(doomed)
 
 
 # --- Butler: client notes ---------------------------------------------------

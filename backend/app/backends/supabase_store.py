@@ -17,6 +17,7 @@ from ..models import (
     Proposal,
     QuickCapture,
     Retainer,
+    Story,
     Task,
     Transaction,
     User,
@@ -395,8 +396,54 @@ def update_task(user_id: str, task_id: str, patch: dict) -> Task | None:
 
 
 def delete_task(user_id: str, task_id: str) -> bool:
+    # stories.task_id is ON DELETE CASCADE, so child stories go with it.
     r = _sb.table("tasks").delete().eq("id", task_id).eq("user_id", user_id).execute()
     return bool(r.data)
+
+
+# ---- Story layer (children of tasks) ---------------------------------------
+def list_stories(user_id: str, *, task_id: str | None = None,
+                 client_id: str | None = None, statuses: list[str] | None = None) -> list[Story]:
+    q = _sb.table("stories").select("*").eq("user_id", user_id)
+    if task_id is not None:
+        q = q.eq("task_id", task_id)
+    if client_id is not None:
+        q = q.eq("client_id", client_id)
+    if statuses:
+        q = q.in_("status", list(statuses))
+    r = q.order("created_at").execute()
+    return [Story(**row) for row in (r.data or [])]
+
+
+def get_story(user_id: str, story_id: str) -> Story | None:
+    r = _sb.table("stories").select("*").eq("id", story_id).eq("user_id", user_id).limit(1).execute()
+    return Story(**r.data[0]) if r.data else None
+
+
+def insert_story(story: Story) -> Story:
+    _sb.table("stories").insert(_dump(story)).execute()
+    return story
+
+
+def update_story(user_id: str, story_id: str, patch: dict) -> Story | None:
+    # Observations arrive as models when set from the service layer; JSONB needs plain dicts.
+    if "observations" in patch:
+        patch = {**patch, "observations": [
+            o.model_dump(by_alias=False, mode="json") if hasattr(o, "model_dump") else o
+            for o in (patch["observations"] or [])
+        ]}
+    r = _sb.table("stories").update(patch).eq("id", story_id).eq("user_id", user_id).execute()
+    return Story(**r.data[0]) if r.data else None
+
+
+def delete_story(user_id: str, story_id: str) -> bool:
+    r = _sb.table("stories").delete().eq("id", story_id).eq("user_id", user_id).execute()
+    return bool(r.data)
+
+
+def delete_stories_for_task(user_id: str, task_id: str) -> int:
+    r = _sb.table("stories").delete().eq("user_id", user_id).eq("task_id", task_id).execute()
+    return len(r.data or [])
 
 
 # ---- Butler: client notes --------------------------------------------------

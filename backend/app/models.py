@@ -584,6 +584,14 @@ TaskPriority = Literal["low", "medium", "high", "urgent"]
 # update in place instead of duplicating.
 TaskSource = Literal["manual", "meeting", "email", "contract", "agent", "notion"]
 
+# Story layer (ADR-0001) — the unit of work under a Task that carries *qualitative*
+# status. This is the level that makes the hierarchy self-filling: the agent writes
+# these observations from real evidence, so they are not empty boxes a user must fill.
+StoryStatus = Literal["todo", "in_progress", "blocked", "done", "cancelled"]
+QualitativeKind = Literal["blocker", "going_well", "not_going_well"]
+# Where an observation's evidence came from. `user` means a human wrote or corrected it.
+EvidenceSource = Literal["email", "meeting", "drive", "task", "invoice", "agent", "user"]
+
 
 class Client(CamelModel):
     id: str
@@ -666,6 +674,75 @@ class Task(CamelModel):
     completed_at: str | None = None
     created_at: str
     updated_at: str | None = None
+
+
+class StoryObservation(CamelModel):
+    """One qualitative judgement about a story, with the evidence that produced it.
+
+    ADR-0001 invariant `qualitative_fields_carry_provenance`: `source_ref` is
+    **required**. An observation nobody can trace back to an email, meeting or
+    document is not persisted — that is what stops this layer decaying into
+    unfalsifiable prose.
+
+    Note the deliberate overload: `Task.source_ref` is an auto-capture *idempotency
+    key*; here `source_ref` is an *evidence pointer* (a message id, meeting id,
+    file id, …). Same name, different job.
+    """
+
+    id: str
+    kind: QualitativeKind
+    text: str = Field(min_length=1, max_length=1000)
+    source: EvidenceSource
+    source_ref: str = Field(min_length=1, max_length=300)
+    observed_at: str
+    # Set when a human writes or corrects this entry. ADR-0001 invariant
+    # `user_override_survives_agent_refresh`: a later agent refresh must never
+    # mutate or delete an entry carrying this flag.
+    user_edited: bool = False
+
+
+class Story(CamelModel):
+    """A unit of work under a Task, carrying progress and qualitative status."""
+
+    id: str
+    user_id: str
+    task_id: str
+    # Denormalized from the parent task so a story can be scoped to a client or
+    # project without a join — the roll-up (M2) and per-client views read these hot.
+    client_id: str | None = None
+    engagement_id: str | None = None
+    title: str
+    description_md: str | None = None
+    status: StoryStatus = "todo"
+    progress_pct: int = Field(default=0, ge=0, le=100)
+    observations: list[StoryObservation] = []
+    completed_at: str | None = None
+    created_at: str
+    updated_at: str | None = None
+
+
+class StoryCreate(CamelModel):
+    task_id: str
+    title: str = Field(min_length=1, max_length=300)
+    description_md: str | None = Field(default=None, max_length=5000)
+    status: StoryStatus = "todo"
+    progress_pct: int = Field(default=0, ge=0, le=100)
+
+
+class StoryUpdate(CamelModel):
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    description_md: str | None = Field(default=None, max_length=5000)
+    status: StoryStatus | None = None
+    progress_pct: int | None = Field(default=None, ge=0, le=100)
+
+
+class ObservationCreate(CamelModel):
+    """Payload for adding an observation. `source_ref` is required by design."""
+
+    kind: QualitativeKind
+    text: str = Field(min_length=1, max_length=1000)
+    source: EvidenceSource = "user"
+    source_ref: str = Field(min_length=1, max_length=300)
 
 
 class QuickCapture(CamelModel):

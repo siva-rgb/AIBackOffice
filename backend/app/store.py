@@ -86,6 +86,14 @@ insert_task = _b.insert_task
 update_task = _b.update_task
 delete_task = _b.delete_task
 
+# Story layer (children of tasks; ADR-0001)
+list_stories = _b.list_stories
+get_story = _b.get_story
+insert_story = _b.insert_story
+update_story = _b.update_story
+delete_story = _b.delete_story
+delete_stories_for_task = _b.delete_stories_for_task
+
 # Butler: quick captures
 list_captures = _b.list_captures
 get_capture = _b.get_capture

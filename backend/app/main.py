@@ -33,6 +33,7 @@ from .routers import (
     retainers,
     storage,
     stripe_billing,
+    stories,
     stripe_connect,
     tasks,
     users,
@@ -138,4 +139,5 @@ app.include_router(meetings.router)
 app.include_router(graph.router)
 app.include_router(memory.router)
 app.include_router(tasks.router)
+app.include_router(stories.router)
 app.include_router(notion.router)
