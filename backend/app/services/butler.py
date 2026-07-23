@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from .. import store
 from ..models import Alert, Client, ClientNote, QuickCapture
-from . import agent_logger
+from . import agent_logger, rollup
 from .invoice_agent import _days_overdue
 from .vertex_ai import generate_with_retry, get_ai
 
@@ -66,7 +66,12 @@ def _financials(invoices) -> dict:
 # --- Health score (deterministic, server-side) ------------------------------
 def compute_client_health(user_id: str, client: Client, *, persist: bool = True) -> dict:
     """Score a client relationship 0-100 from real signals: overdue money, stalled
-    work, and silence. Deterministic and cheap — no LLM, never trusts client input."""
+    work, silence, and delivery. Deterministic and cheap — no LLM, never trusts
+    client input.
+
+    The delivery term (M2) is a strict *addition*: `rollup.delivery_signal`
+    returns a zero delta for a client with no tasks or stories, so every score
+    that was correct before this signal existed is still exactly that score."""
     invoices = _client_invoices(user_id, client.name)
     fin = _financials(invoices)
     engagements = store.list_engagements(user_id, client.id)
@@ -96,14 +101,21 @@ def compute_client_health(user_id: str, client: Client, *, persist: bool = True)
     elif silent_days is not None and silent_days <= 7:
         positives.append("Recent activity")
 
+    # Delivery (M2): blocked, overdue and stalled work now moves the score too.
+    # Contributes exactly 0 when the client has no tracked work.
+    delivery = rollup.delivery_signal(user_id, client.id)
+    if delivery["hasDeliveryData"]:
+        score += delivery["healthDelta"]
+        risks.extend(delivery["risks"])
+        positives.extend(delivery["positives"])
+
     if client.status == "churned":
         score = min(score, 20)
     if client.status == "prospect" and not invoices:
         score = max(score, 60)
 
     score = max(0, min(100, score))
-    label = ("on_track" if score >= 75 else "at_risk" if score >= 55
-             else "needs_attention" if score >= 35 else "critical")
+    label = rollup.health_label(score)
 
     if persist:
         try:
@@ -114,7 +126,7 @@ def compute_client_health(user_id: str, client: Client, *, persist: bool = True)
             print(f"[butler] health persist skipped: {exc}")
 
     return {"healthScore": score, "healthLabel": label, "risks": risks, "positiveSignals": positives,
-            "financials": fin}
+            "financials": fin, "delivery": delivery}
 
 
 # --- Client list + detail (for the frontend) --------------------------------
