@@ -7,6 +7,7 @@ from ..config import settings
 from ..dependencies import get_current_user, verify_cron_secret
 from ..models import CamelModel, User
 from ..seed import DEMO_USER_ID
+from ..entitlements import enforce_plan
 from ..services import memory_recall
 
 router = APIRouter(prefix="/api/memory", tags=["memory"])
@@ -26,7 +27,7 @@ class RecallRequest(CamelModel):
     k: int = 6
 
 
-@router.post("/recall")
+@router.post("/recall", dependencies=[Depends(enforce_plan)])
 async def recall_memory(req: RecallRequest, user: User = Depends(get_current_user)):
     """Hybrid semantic recall over the user's durable agent memory. Debug/UI entry
     point; agents use the `recall_memory` tool + the assemble_context tier."""

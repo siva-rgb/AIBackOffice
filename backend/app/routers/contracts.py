@@ -7,6 +7,7 @@ from fastapi.responses import Response
 
 from .. import store
 from ..dependencies import get_current_user
+from ..entitlements import enforce_plan
 from ..models import (
     Contract,
     ContractReview,
@@ -31,7 +32,8 @@ async def list_contracts(user: User = Depends(get_current_user)):
     return store.list_contracts(user.id)
 
 
-@router.post("/generate", response_model=Contract, status_code=201)
+@router.post("/generate", response_model=Contract, status_code=201,
+             dependencies=[Depends(enforce_plan)])
 async def generate(body: GenerateContractRequest, user: User = Depends(get_current_user)):
     # Rate limit the AI endpoint (SKILL.md §16 Rule 5: contracts 10/hour/user).
     rl = check_rate_limit(f"ai:contract:{user.id}", max_requests=10, window_seconds=3600)
@@ -55,7 +57,7 @@ def _review_response(review: ContractReview, saved: dict | None) -> dict:
     return out
 
 
-@router.post("/review")
+@router.post("/review", dependencies=[Depends(enforce_plan)])
 async def review_pasted(body: ReviewTextRequest, user: User = Depends(get_current_user)):
     """Review a contract the user received, pasted as text. Optionally save it so
     the Butler tracks it against a client (pass clientId, or save=true)."""
@@ -69,7 +71,7 @@ async def review_pasted(body: ReviewTextRequest, user: User = Depends(get_curren
     return _review_response(review, saved)
 
 
-@router.post("/review/upload")
+@router.post("/review/upload", dependencies=[Depends(enforce_plan)])
 async def review_upload(
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
@@ -97,7 +99,8 @@ async def review_upload(
     return _review_response(review, saved)
 
 
-@router.post("/{contract_id}/review", response_model=ContractReview)
+@router.post("/{contract_id}/review", response_model=ContractReview,
+             dependencies=[Depends(enforce_plan)])
 async def review_existing(contract_id: str, user: User = Depends(get_current_user)):
     """Review a contract Kora generated."""
     _check_review_limit(user.id)

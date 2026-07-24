@@ -7,6 +7,7 @@ from ..config import settings
 from ..dependencies import get_current_user, verify_cron_secret
 from ..models import User
 from ..seed import DEMO_USER_ID
+from ..entitlements import enforce_plan
 from ..services.graph_memory import sync_graph, query_subgraph
 from ..utils.casing import camelize
 
@@ -30,7 +31,7 @@ async def get_graph(user: User = Depends(get_current_user)):
     }
 
 
-@router.post("/sync")
+@router.post("/sync", dependencies=[Depends(enforce_plan)])
 async def sync(user: User = Depends(get_current_user)):
     """Rebuild the user's graph from current data (manual 'Rebuild memory')."""
     return sync_graph(user.id, rebuild=True)
