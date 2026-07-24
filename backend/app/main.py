@@ -76,16 +76,18 @@ app = FastAPI(
 app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS so the Next.js frontend can call the API with the Supabase JWT.
-# Include :3001 because Next.js dev auto-falls back to it when :3000 is busy.
+# In production only the deployed origin (FRONTEND_ORIGIN) is allowed; the
+# localhost dev origins (incl. :3001, Next's busy-port fallback) are added ONLY
+# outside production so prod CORS isn't loosened by hardcoded localhost.
+_cors_origins = [settings.FRONTEND_ORIGIN]
+if settings.ENVIRONMENT != "production":
+    _cors_origins += [
+        "http://localhost:3000", "http://127.0.0.1:3000",
+        "http://localhost:3001", "http://127.0.0.1:3001",
+    ]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.FRONTEND_ORIGIN,
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

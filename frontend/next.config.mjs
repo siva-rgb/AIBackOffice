@@ -12,6 +12,9 @@ const securityHeaders = [
 
 const nextConfig = {
   reactStrictMode: true,
+  // Emit a self-contained server bundle (.next/standalone) so the Docker image
+  // ships only the files it needs — no full node_modules. Cloud Run friendly.
+  output: 'standalone',
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }];
   },
