@@ -9,6 +9,12 @@ function isPublic(pathname: string): boolean {
 }
 
 export async function middleware(req: NextRequest) {
+  // E2E test bypass: skip all auth checks when running under Playwright.
+  // This env var is set only in the webServer config in playwright.config.ts.
+  if (process.env.KORA_E2E_BYPASS_AUTH === 'true') {
+    return NextResponse.next({ request: req });
+  }
+
   let res = NextResponse.next({ request: req });
 
   const supabase = createServerClient(

@@ -149,7 +149,7 @@ export function NewInvoiceForm() {
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Client name</label>
-          <input className={inputClass} value={clientName} onChange={(e) => setClientName(e.target.value)} required placeholder="Acme Corp" />
+          <input className={inputClass} value={clientName} onChange={(e) => setClientName(e.target.value)} required placeholder="Acme Corp" name="clientName" />
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Client email</label>
