@@ -74,8 +74,9 @@ def ingest(user_id: str) -> dict:
         body = f"{title}\n{read.get('text', '')}".strip()
 
         # Clear only THIS page's prior chunks, then re-add — idempotent, and a
-        # shrunk page leaves no stale tail. Other pages are untouched.
-        store.delete_agent_memory(user_id, ref_id_prefix=f"{page_id}#")
+        # shrunk page leaves no stale tail. Scoped to kind + this page's prefix
+        # so it can never touch another page or another memory kind.
+        store.delete_agent_memory(user_id, kind=MEMORY_KIND, ref_id_prefix=f"{page_id}#")
 
         for i, chunk in enumerate(_chunk(body)):
             memory_recall.remember(

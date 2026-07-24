@@ -923,10 +923,16 @@ def delete_agent_memory_for_user(user_id: str) -> None:
 
 def delete_agent_memory(user_id: str, *, kind: str | None = None,
                         ref_id_prefix: str | None = None) -> int:
-    """Delete a user's agent_memory rows, narrowed by kind and/or ref_id prefix."""
+    """Delete a user's agent_memory rows, narrowed by kind and/or ref_id prefix.
+
+    The prefix is matched as a literal: `%`/`_`/`\\` are escaped so the SQL LIKE
+    trailing wildcard is the ONLY wildcard, keeping this equivalent to the mock
+    backend's `str.startswith` for any prefix (Notion ids can't contain them, but
+    the helper is generic)."""
     q = _sb.table("agent_memory").delete().eq("user_id", user_id)
     if kind is not None:
         q = q.eq("kind", kind)
     if ref_id_prefix is not None:
-        q = q.like("ref_id", f"{ref_id_prefix}%")
+        literal = (ref_id_prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_"))
+        q = q.like("ref_id", f"{literal}%")
     return len(q.execute().data or [])

@@ -104,6 +104,27 @@ def test_a_failed_page_read_keeps_prior_memory(user_id, monkeypatch):
     assert store.get_agent_memory(user_id, kinds=["notion"]), "a failed read wiped good memory"
 
 
+def test_one_failing_page_does_not_stop_the_others(user_id, monkeypatch):
+    """Across several selected pages, one 404 must not corrupt or block the rest."""
+    monkeypatch.setattr(notion_connector, "is_connected", lambda uid: True)
+    monkeypatch.setattr(notion_connector, "_selected_page_ids",
+                        lambda uid: ["good-1", "bad", "good-2"])
+
+    def reader(uid, pid, **kw):
+        if pid == "bad":
+            return {"ok": False, "error": "Notion 404"}
+        return {"ok": True, "pageId": pid, "title": pid, "url": None, "text": f"content for {pid}"}
+
+    monkeypatch.setattr(notion_connector, "read_page_text", reader)
+    result = notion_ingest.ingest(user_id)
+
+    assert result["pages"] == 2 and result["failed"] == 1
+    ref_ids = {r["ref_id"] for r in store.get_agent_memory(user_id, kinds=["notion"])}
+    assert any(r.startswith("good-1#") for r in ref_ids)
+    assert any(r.startswith("good-2#") for r in ref_ids)
+    assert not any(r.startswith("bad#") for r in ref_ids)
+
+
 # ── Criterion 4 · privacy: disconnect purges only Notion memory ─────────────
 
 def test_purge_removes_only_notion_memory(user_id, connected):

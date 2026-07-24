@@ -178,7 +178,7 @@ Implemented all items from `privacy_artifacts/` that were designed but not yet w
 - **Store**: targeted `delete_agent_memory(kind=, ref_id_prefix=)` in both backends + `store.py`. Migration `2026-07-24_notion_ingest.sql` adds `ingest_page_ids` + `last_ingest_at` to `notion_connections`.
 - **API** `routers/notion.py`: dropped `/provision` + `/sync`; added `POST /select` (save chosen pages) and repurposed `/run` to ingest (cron + user). `DELETE /disconnect` now **purges** the user's Notion memories first (privacy). **UI**: `NotionConnectCard` reworked to connect → multi-select pages → "Save & read"; copy makes the read-only, never-writes contract explicit.
 - **cron**: the `notion` job (7:10 UTC) now ingests rather than syncs.
-- **Verified**: **110 backend tests** (19 notion, incl. read-only/idempotency/shrink/failed-read/purge/degradation + the agent-uses-it path); 5 mutations caught by distinct tests; read-only invariant grep (no `POST/PATCH /pages`, `/databases`, `push_task`) empty; app imports (155 routes, 7 `/api/notion/*`); `tsc --noEmit` 0; `npm run build` 37 routes. Needs `2026-07-24_notion_ingest.sql` applied for Supabase.
+- **Verified**: **backend tests** (20 notion, incl. read-only/idempotency/shrink/failed-read/multi-page-partial-failure/purge/degradation + the agent-uses-it path); **4 mutations** caught by distinct tests; read-only invariant grep (no `POST/PATCH /pages`, `/databases`, `push_task`) empty; app imports (155 routes, 7 `/api/notion/*`); `tsc --noEmit` 0; `npm run build` 37 routes. Needs `2026-07-24_notion_ingest.sql` applied for Supabase.
 
 ### 2.24 Task / project ledger + Notion connector — _done 2026-07-17_ · _Notion mirror (Phase 2) SUPERSEDED by §2.25 — now read-only_
 

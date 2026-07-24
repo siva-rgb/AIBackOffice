@@ -83,7 +83,7 @@ optional mirror via `external_ref`. Keep it working; stop investing in it.
 - **Demo command:** `cd backend && KORA_DATA_BACKEND=mock venv/Scripts/python.exe -m pytest -q`
 - **Success criteria:**
   1. Exit **0** with a non-zero test count (proves real tests ran, not `exit 5`).
-  2. Covers, in mock mode: `memory_recall` hybrid ranking + **lexical fallback when embeddings are unavailable**; `task_ledger` auto-capture **idempotency** for meeting/email/contract + `build_task_brief` single-listing of an overdue+blocked task; `notion_connector` pure mapping round-trip (`task_to_properties` → `page_to_patch`) + **the multi-tenant `_token()` isolation guard returning None**; `_profile_completeness` accepting a raw dict profile.
+  2. Covers, in mock mode: `memory_recall` hybrid ranking + **lexical fallback when embeddings are unavailable**; `task_ledger` auto-capture **idempotency** for meeting/email/contract + `build_task_brief` single-listing of an overdue+blocked task; `notion_connector` read-only surface + **the multi-tenant `_token()` isolation guard returning None** (the old `task_to_properties`→`page_to_patch` round-trip was removed with the write side in M9); `_profile_completeness` accepting a raw dict profile.
   3. **Zero network and zero secrets** — `embeddings.embed` monkeypatched, no Notion/Supabase/LLM calls. Suite passes from a cold checkout.
   4. `pytest.ini` pins `asyncio_default_fixture_loop_scope` (kills the upgrade-behaviour warning flagged in `LOOPS.md`).
   5. `cd frontend && npx tsc --noEmit` still exits 0.
