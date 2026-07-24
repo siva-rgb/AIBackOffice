@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from .. import store
 from ..dependencies import get_current_user
 from ..models import Alert, User
-from ..services.alert_agent import run_digest
+from ..services.alert_agent import queue_digest_email, run_digest
 from ..services.stats import compute_agent_stats
 
 router = APIRouter(prefix="/api", tags=["dashboard"])
@@ -24,6 +24,14 @@ async def list_alerts(user: User = Depends(get_current_user)):
 async def run_alerts_digest(user: User = Depends(get_current_user)):
     """Run the daily digest agent now (demo button / Cloud Scheduler path)."""
     return run_digest(user.id, triggered_by="user")
+
+
+@router.post("/alerts/digest/email")
+async def email_alerts_digest(user: User = Depends(get_current_user)):
+    """Queue the daily digest to be emailed to the user — behind the approval
+    gate. Never sends here; it creates a send_email_gmail task the user approves
+    in the Business Manager (or degrades to draft-only if Gmail isn't connected)."""
+    return queue_digest_email(user.id, triggered_by="user")
 
 
 @router.patch("/alerts/{alert_id}/read", response_model=Alert)

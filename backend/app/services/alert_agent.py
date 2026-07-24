@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 
 from .. import store
-from ..models import Alert
+from ..models import Alert, ManagerTask
 from . import agent_logger
 from .cashflow_agent import compute_forecast
 from .vertex_ai import generate_with_retry, get_ai
@@ -91,3 +91,93 @@ def _days_to_quarter_end(d: date) -> int:
     else:
         end = date(d.year, q_end_month + 1, 1) - timedelta(days=1)
     return (end - d).days
+
+
+# ── Digest email delivery (M8) — behind the approval gate ───────────────────
+# Alerts already exist in-app; this lets the daily digest actually reach the
+# user's inbox WITHOUT weakening the "no send without approval" contract. It
+# only ever *queues* a send_email_gmail manager_task; the send happens in
+# supervisor.approve_task → gmail_agent.execute_gmail_send, exactly like every
+# other outbound email. This function must never send.
+
+DIGEST_KIND = "send_email_gmail"
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _digest_source_id(day_iso: str) -> str:
+    return f"digest:{day_iso}"
+
+
+def build_digest_email(user_id: str) -> dict:
+    """Compose the digest subject/body from the user's current unread alerts.
+    Deterministic — no LLM. Returns {subject, bodyText, bodyHtml, alertCount}."""
+    alerts = [a for a in store.list_alerts(user_id) if not getattr(a, "read", False)]
+    day = date.today().strftime("%b %d")
+
+    if alerts:
+        lines = [f"- [{a.severity.upper()}] {a.title}: {a.body}".rstrip(": ") for a in alerts]
+        body_text = (f"Your KORA digest for {day}\n\n"
+                     f"{len(alerts)} thing(s) need your attention:\n\n" + "\n".join(lines))
+        html_items = "".join(f"<li><strong>{a.title}</strong> — {a.body}</li>" for a in alerts)
+        body_html = (f"<h2>Your KORA digest for {day}</h2>"
+                     f"<p>{len(alerts)} thing(s) need your attention:</p><ul>{html_items}</ul>")
+    else:
+        body_text = f"Your KORA digest for {day}\n\nAll clear — nothing needs your attention today."
+        body_html = (f"<h2>Your KORA digest for {day}</h2>"
+                     f"<p>All clear — nothing needs your attention today.</p>")
+
+    return {"subject": f"KORA daily digest — {day}", "bodyText": body_text,
+            "bodyHtml": body_html, "alertCount": len(alerts)}
+
+
+def queue_digest_email(user_id: str, *, triggered_by: str = "user") -> dict:
+    """Queue the daily digest for the user's approval. NEVER sends.
+
+    * No email on file → structured error, nothing queued.
+    * Gmail not connected → draft-only, nothing queued (clear note).
+    * Already queued today → idempotent no-op, returns the existing task.
+    * Otherwise → one proposed send_email_gmail manager_task the user approves.
+    """
+    user = store.get_user(user_id)
+    to_email = getattr(user, "email", None) if user else None
+    if not to_email:
+        return {"ok": False, "delivered": False, "note": "No email address on file for this account."}
+
+    from . import gmail_agent  # local import avoids a module-load cycle
+    if not gmail_agent.is_gmail_connected(user_id):
+        return {"ok": True, "delivered": False, "draftOnly": True,
+                "note": "Gmail isn't connected — the digest is available in-app as alerts; "
+                        "nothing was emailed."}
+
+    src = _digest_source_id(date.today().isoformat())
+    existing = store.find_open_manager_task(user_id, DIGEST_KIND, src)
+    if existing:
+        return {"ok": True, "delivered": False, "queued": True, "taskId": existing.id,
+                "note": "Today's digest is already awaiting your approval."}
+
+    email = build_digest_email(user_id)
+    task = ManagerTask(
+        id=store.uid("task"), user_id=user_id, kind=DIGEST_KIND,
+        title=f"Email you the daily digest: {email['subject']}",
+        rationale="Daily digest email — approve to send it to yourself.",
+        severity="info", status="proposed",
+        payload={
+            "to_email": to_email, "to_name": getattr(user, "full_name", None) or "there",
+            "subject": email["subject"], "body_text": email["bodyText"],
+            "body_html": email["bodyHtml"], "digest": True,
+        },
+        source_record_type="digest", source_record_id=src,
+        created_at=_now(),
+    )
+    store.insert_manager_task(task)
+    agent_logger.log_action(
+        user_id=user_id, agent_type="alert_generator",
+        action="Queued daily digest email for approval",
+        input={"alertCount": email["alertCount"]}, output={"taskId": task.id},
+        triggered_by=triggered_by, source_record_type="digest", source_record_id=src,
+    )
+    return {"ok": True, "delivered": False, "queued": True, "taskId": task.id,
+            "note": "Digest queued — approve it in the Business Manager to send it to your inbox."}

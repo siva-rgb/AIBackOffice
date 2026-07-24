@@ -592,8 +592,9 @@ def approve_task(user_id: str, task_id: str) -> dict:
             result = {"note": f"Proposal '{prop.title}' marked as sent."}
         elif task.kind in ("send_email_gmail", "send_meeting_followup"):
             from .gmail_agent import execute_gmail_send
-            execute_gmail_send(user_id, task.payload or {})
-            result = {"note": f"Email sent to {(task.payload or {}).get('to_email', 'recipient')}."}
+            message_id = execute_gmail_send(user_id, task.payload or {})
+            to = (task.payload or {}).get("to_email", "recipient")
+            result = {"note": f"Sent to {to}.", "gmailMessageId": message_id}
         elif task.kind == "create_calendar_event":
             from .calendar_agent import execute_calendar_event
             cal_result = execute_calendar_event(user_id, task.payload or {})

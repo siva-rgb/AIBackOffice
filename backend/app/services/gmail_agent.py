@@ -103,8 +103,9 @@ def queue_gmail_send(
     }).execute()
 
 
-def execute_gmail_send(user_id: str, task_payload: dict) -> bool:
-    """Execute an approved send_email_gmail task. Called only from approve_task."""
+def execute_gmail_send(user_id: str, task_payload: dict) -> str | None:
+    """Execute an approved send_email_gmail task and return the Gmail message id.
+    Called only from approve_task — the human approval IS the HITL gate."""
     start = datetime.now(timezone.utc)
     creds = get_user_credentials(user_id)
     if not creds:
@@ -136,4 +137,4 @@ def execute_gmail_send(user_id: str, task_payload: dict) -> bool:
         source_record_type="client",
         source_record_id=task_payload.get("related_client_id"),
     )
-    return True
+    return result.get("id")
