@@ -129,6 +129,15 @@ It needs two repository secrets: `KORA_API_URL` and `KORA_CRON_SECRET` (matching
 - The Supabase **service-role** key bypasses row-level security — backend only, never exposed to
   the frontend.
 
+## License & ownership
+
+**Copyright © 2026 [YOUR FULL LEGAL NAME]. All Rights Reserved.**
+
+Kora — including its source code, design, architecture, and documentation — was created by and
+is the exclusive property of the copyright holder. It is **proprietary software**, not open
+source. No permission is granted to use, copy, modify, deploy, or distribute it without prior
+written consent. See [LICENSE](LICENSE) for the full terms.
+
 ## Status
 
 The MVP vertical slice is complete and running end to end. Open items are tracked in
