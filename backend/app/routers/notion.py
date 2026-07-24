@@ -8,7 +8,7 @@ from ..config import settings
 from ..dependencies import get_current_user, verify_cron_secret
 from ..models import CamelModel, User
 from ..seed import DEMO_USER_ID
-from ..services import notion_connector
+from ..services import notion_connector, notion_ingest
 
 router = APIRouter(prefix="/api/notion", tags=["notion"])
 
@@ -21,13 +21,13 @@ def _scheduler_user_id() -> str:
     return DEMO_USER_ID
 
 
-class ProvisionRequest(CamelModel):
-    parent_page_id: str | None = None
+class SelectPagesRequest(CamelModel):
+    page_ids: list[str] = []
 
 
 @router.get("/status")
 async def notion_status(user: User = Depends(get_current_user)):
-    """Connection + provisioning state for the settings UI."""
+    """Connection + ingest-selection state for the settings UI."""
     return notion_connector.status(user.id)
 
 
@@ -57,23 +57,19 @@ async def notion_callback(code: str | None = None, state: str | None = None,
     return RedirectResponse(f"{app_url}/settings?notion={ok}")
 
 
-@router.post("/provision")
-async def notion_provision(payload: ProvisionRequest, user: User = Depends(get_current_user)):
-    """Create the KORA-owned Tasks database in the connected workspace.
-    Idempotent — returns the existing database if already provisioned."""
-    result = notion_connector.provision_tasks_db(user.id, payload.parent_page_id)
+@router.get("/pages")
+async def notion_pages(user: User = Depends(get_current_user)):
+    """Pages this user granted access to — the picker for what Kora may READ."""
+    result = notion_connector.list_parent_pages(user.id)
     if not result.get("ok"):
-        raise HTTPException(status_code=400, detail=result.get("error", "Could not provision."))
+        raise HTTPException(status_code=400, detail=result.get("error", "Could not list pages."))
     return result
 
 
-@router.post("/sync")
-async def notion_sync(user: User = Depends(get_current_user)):
-    """Push canonical tasks to Notion, then pull back human edits."""
-    result = notion_connector.sync(user.id)
-    if not result.get("ok"):
-        raise HTTPException(status_code=400, detail=result.get("error", "Sync failed."))
-    return result
+@router.post("/select")
+async def notion_select(payload: SelectPagesRequest, user: User = Depends(get_current_user)):
+    """Save which pages Kora may read. Read-only selection — writes nothing to Notion."""
+    return notion_connector.set_ingest_pages(user.id, payload.page_ids)
 
 
 @router.post("/run")
@@ -82,16 +78,21 @@ async def notion_run(
     authorization: str | None = Header(default=None),
     is_cron: bool = Depends(verify_cron_secret),
 ):
-    """Scheduled two-way sync. Scheduler path uses x-cron-secret."""
+    """Ingest the selected Notion pages into semantic memory. One-way, read-only.
+    Scheduler path uses x-cron-secret; the user path runs it for their own account."""
     if is_cron:
-        background_tasks.add_task(notion_connector.sync, _scheduler_user_id())
-        return {"status": "syncing", "trigger": "scheduler"}
+        background_tasks.add_task(notion_ingest.ingest, _scheduler_user_id())
+        return {"status": "ingesting", "trigger": "scheduler"}
     user = await get_current_user(authorization)
-    background_tasks.add_task(notion_connector.sync, user.id)
-    return {"status": "syncing", "trigger": "user"}
+    result = notion_ingest.ingest(user.id)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Ingest failed."))
+    return result
 
 
 @router.delete("/disconnect", status_code=204)
 async def notion_disconnect(user: User = Depends(get_current_user)):
+    # Revoking Notion also revokes what Kora learned from it.
+    notion_ingest.purge(user.id)
     notion_connector.disconnect(user.id)
     return None

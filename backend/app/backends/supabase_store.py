@@ -919,3 +919,14 @@ def get_agent_memory(user_id: str, *, client_id: str | None = None,
 
 def delete_agent_memory_for_user(user_id: str) -> None:
     _sb.table("agent_memory").delete().eq("user_id", user_id).execute()
+
+
+def delete_agent_memory(user_id: str, *, kind: str | None = None,
+                        ref_id_prefix: str | None = None) -> int:
+    """Delete a user's agent_memory rows, narrowed by kind and/or ref_id prefix."""
+    q = _sb.table("agent_memory").delete().eq("user_id", user_id)
+    if kind is not None:
+        q = q.eq("kind", kind)
+    if ref_id_prefix is not None:
+        q = q.like("ref_id", f"{ref_id_prefix}%")
+    return len(q.execute().data or [])

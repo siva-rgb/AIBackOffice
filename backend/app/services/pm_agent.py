@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from .. import store
-from . import butler, cost, llm, rollup
+from . import butler, cost, llm, memory_recall, rollup
 
 # ── Budget + shape constants ────────────────────────────────────────────────
 ANALYST_MAX_TOKENS = 600          # output cap per analyst
@@ -108,6 +108,19 @@ def _gather(user_id: str, client) -> dict:
     except Exception:
         facts = []
 
+    # Recalled context — this is where a connected Notion (M9) reaches the
+    # analysts: its ingested pages live in agent_memory (kind="notion") and
+    # surface here by relevance alongside graph facts and email intel. Prose
+    # only; it never contributes a number (the scrubber still guards output).
+    try:
+        recall_brief = memory_recall.build_recall_brief(
+            user_id, f"{client.name} project status delivery blockers priorities",
+            kinds=["notion", "graph_fact", "email_intel", "playbook"],
+            k=5, max_chars=700,
+        )
+    except Exception:
+        recall_brief = ""
+
     return {
         "client": client,
         "financials": fin,
@@ -116,6 +129,7 @@ def _gather(user_id: str, client) -> dict:
         "silentDays": silent_days,
         "blockers": blockers,
         "facts": facts,
+        "recallBrief": recall_brief,
     }
 
 
@@ -266,7 +280,13 @@ def _run_analyst(key: str, ctx: dict, allowed: set[str], chat) -> AnalystResult:
         if chat is None or not llm.is_configured():
             return AnalystResult(key=key, summary=_fallback_summary(key, ctx), degraded=True)
 
-        brief = spec["brief"](ctx)[:CONTEXT_CHAR_BUDGET]
+        brief = spec["brief"](ctx)
+        # Fold in recalled context (a connected Notion, graph facts, email intel)
+        # so the analyst reasons over what Kora *knows*, not just this milestone's
+        # numbers. Trimmed to the per-analyst char budget.
+        if ctx.get("recallBrief"):
+            brief = f"{brief}\n\n{ctx['recallBrief']}"
+        brief = brief[:CONTEXT_CHAR_BUDGET]
         result = chat(
             _SYSTEM.format(title=spec["title"]),
             brief,

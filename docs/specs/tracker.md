@@ -167,7 +167,20 @@ Implemented all items from `privacy_artifacts/` that were designed but not yet w
 - **Google disconnect cache cleanup** (`routers/auth_google.py`): disconnect now deletes `email_intel_cache` and `drive_doc_cache` rows for the user after revoking the token. Required by Google's Limited Use Requirements.
 - **Bug fix — Invoice `amount_paid` null** (`models.py`): `amount_paid: float = 0` → `amount_paid: float | None = 0`. Pydantic rejected DB rows where the column is NULL (older invoices); the `or 0` fallback in payment logic already handles None safely.
 
-### 2.24 Task / project ledger + Notion connector — _done 2026-07-17_
+### 2.25 Notion → read-only intelligence source (M9) — _done 2026-07-24_
+
+**Strategic pivot, with the user.** Once KORA grew its own agent-maintained work hierarchy (M1–M4: stories, roll-up health, PM fan-out, client workspace), a Notion *mirror* competed with a better-integrated native feature. Decision: Notion stops being a two-way task mirror and becomes a **read-only intelligence source** — the user connects Notion, picks pages, and Kora *reads* them into semantic memory. **This supersedes §2.24's Phase 2 + §2.24a below** (kept for history).
+
+- **Direction is one-way, Notion → Kora.** The write side is **removed**, not dormant: `provision_tasks_db`, `push_task`, `pull_changes`, `sync`, and the `task_to_properties`/`page_to_patch` mappings are gone; a test asserts they no longer exist. Kept verbatim: OAuth (`exchange_code`/`oauth_authorize_url`), the `_token()` cross-tenant guard + `is_multi_tenant()`, `_request`, and the page picker.
+- **`notion_connector.py`** gains `read_page_text` (title + block text, paginated, char-capped — reads `paragraph`/headings/lists/`to_do`/quote/callout/code blocks), `set_ingest_pages`, `_selected_page_ids`; `status()` now reports `selectedPageCount`/`lastIngestAt` instead of provisioning state.
+- **`services/notion_ingest.py` (new)**: `ingest()` reads each selected page and (re)indexes it into `agent_memory` as `kind="notion"` via `memory_recall.remember` — **idempotent per page** (ref_ids `"{page_id}#{i}"`, this page's old chunks cleared before re-add, so a shrunk page leaves no stale tail; a *failed* read keeps prior memory). `purge()` removes only `kind="notion"` rows. Provenance: `source="notion"` + page id/URL in metadata.
+- **The payoff — the agent uses it.** `pm_agent._gather` now folds a `build_recall_brief(kinds=["notion","graph_fact","email_intel","playbook"])` into every analyst's brief, so a fact that lives ONLY in a Notion page reaches the composed client view by relevance. Tested end-to-end (a Notion-only token appears in the analyst brief).
+- **Store**: targeted `delete_agent_memory(kind=, ref_id_prefix=)` in both backends + `store.py`. Migration `2026-07-24_notion_ingest.sql` adds `ingest_page_ids` + `last_ingest_at` to `notion_connections`.
+- **API** `routers/notion.py`: dropped `/provision` + `/sync`; added `POST /select` (save chosen pages) and repurposed `/run` to ingest (cron + user). `DELETE /disconnect` now **purges** the user's Notion memories first (privacy). **UI**: `NotionConnectCard` reworked to connect → multi-select pages → "Save & read"; copy makes the read-only, never-writes contract explicit.
+- **cron**: the `notion` job (7:10 UTC) now ingests rather than syncs.
+- **Verified**: **110 backend tests** (19 notion, incl. read-only/idempotency/shrink/failed-read/purge/degradation + the agent-uses-it path); 5 mutations caught by distinct tests; read-only invariant grep (no `POST/PATCH /pages`, `/databases`, `push_task`) empty; app imports (155 routes, 7 `/api/notion/*`); `tsc --noEmit` 0; `npm run build` 37 routes. Needs `2026-07-24_notion_ingest.sql` applied for Supabase.
+
+### 2.24 Task / project ledger + Notion connector — _done 2026-07-17_ · _Notion mirror (Phase 2) SUPERSEDED by §2.25 — now read-only_
 
 Closes the "nothing gets missed on client work" gap. Previously the only project object was `Engagement` (coarse status label, no sub-tasks) and "tasks" were scattered across `manager_tasks` (approval queue), `meeting_action_items` and quick captures — so a commitment made in an email or meeting had no guaranteed home. Decision (logged §5.12): **KORA is canonical**, Notion mirrors. Built in two phases.
 
@@ -189,6 +202,18 @@ Closes the "nothing gets missed on client work" gap. Previously the only project
 - **Verified**: py_compile all touched files; app imports (**143 routes**; 5 `/api/tasks` + 7 `/api/notion`; 13 agent tools with `_TOOLS`/`_HANDLERS` asserted in sync). Mock smoke: CRUD; **all 3 auto-capture paths produce exactly the expected 7 tasks and are idempotent on re-run**; stats (overdue/blocked/dueToday); `build_task_brief`; task tier present in `assemble_context`. Notion: graceful degradation when unconfigured (no exception), **full property round-trip** (KORA→Notion→patch→ledger, incl. `completed_at` stamping) and an assertion that linkage/provenance is *not* overridable. `npx tsc --noEmit` exit 0.
 - **Found & fixed during the build**: `build_task_brief` listed a task twice when it was both overdue *and* blocked — now bucketed so each task appears exactly once (as overdue, the more urgent framing).
 - **Needs migrations**: `2026-07-17_add_tasks.sql` (required) and `2026-07-17_add_notion_connection.sql` (only if using Notion). To use Notion set either `NOTION_API_KEY` or `NOTION_OAUTH_CLIENT_ID/SECRET`, plus `NOTION_PARENT_PAGE_ID` (a page shared with the integration).
+- **Live-verified against a real workspace (2026-07-22)**: token + parent-page access, `provision_tasks_db` created "KORA — Client Tasks", **full bidirectional round-trip** (push → properties correct in Notion incl. KoraId → edited Status to Done in Notion → `pull_changes` applied it to the ledger with `completed_at` stamped) → test data cleaned up. This closes the earlier "mock-only" caveat.
+
+#### 2.24a Multi-tenant hardening (OAuth) — _done 2026-07-22_
+Making the connector safe for many users on their own workspaces.
+- **⚠️ Cross-tenant leak fixed (the important one).** `_token()` previously fell back to the server-level `NOTION_API_KEY` for any user without their own token — in a multi-user deployment that would sync a user's client tasks into the **owner's** Notion workspace. New `is_multi_tenant()` (true when `NOTION_OAUTH_CLIENT_ID`+`SECRET` are set) now **disables the shared-key fallback entirely**; an unconnected user gets no token and is prompted to connect. Verified live: with `NOTION_API_KEY` still present in `.env`, `_token()` for an unconnected user returns `None`.
+- **Shared parent page guarded too**: `NOTION_PARENT_PAGE_ID` belongs to the owner's workspace, so it's only used single-tenant. Multi-tenant users must pick their own page.
+- **Parent-page picker**: `list_parent_pages()` (Notion `/v1/search`, filters out database-parented pages) + `GET /api/notion/pages`; `status()` gained `needsParentPage`. UI: "Choose page" → dropdown of pages the user shared → provision into it.
+- **`authMode` correctness**: no longer reports `api_key` when multi-tenant mode makes that key inert.
+- **Disconnect button** added to `NotionConnectCard` (the `DELETE /disconnect` endpoint had no UI) — needed to clear a stale connection when switching auth modes.
+- **`.env` fixes**: `NOTION_CLIENT_ID` → `NOTION_OAUTH_CLIENT_ID` (wrong name, was silently ignored) and the redirect URI placeholder → `http://localhost:8000/api/notion/callback`. Backup at `backend/.env.bak-notion`.
+- **Verified**: py_compile; app imports (144 routes, 8 `/api/notion/*`); multi-tenant detection true; **isolation guard asserted**; authorize URL builds; `tsc --noEmit` exit 0.
+- **Known limitation (pre-existing, all cron jobs)**: `/api/notion/run` syncs only `_scheduler_user_id()` (the DEMO_EMAIL user) — scheduled runs are single-tenant until the scheduler fans out over all users.
 
 ### 2.23 Hybrid semantic memory — recall (agent_memory) — _done 2026-07-16_
 

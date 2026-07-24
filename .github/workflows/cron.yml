@@ -21,7 +21,7 @@ on:
     - cron: "50 6 * * *"
     # Semantic memory reindex (embed new learned facts/intel) — 6:55 UTC daily
     - cron: "55 6 * * *"
-    # Notion task mirror (two-way sync of the task ledger) — 7:10 UTC daily
+    # Notion ingest (read selected pages into semantic memory) — 7:10 UTC daily
     - cron: "10 7 * * *"
     # Client view fan-out (recompose per-client one-pagers) — 7:20 UTC daily,
     # after delivery/money/notion data is fresh
@@ -147,7 +147,7 @@ jobs:
       github.event_name == 'schedule' && startsWith(github.event.schedule, '10 7')
     runs-on: ubuntu-latest
     steps:
-      - name: Run Notion task mirror sync
+      - name: Ingest Notion pages into semantic memory (read-only)
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
             "${{ secrets.KORA_API_URL }}/api/notion/run" \

@@ -156,6 +156,19 @@ The standalone "Client Canvas" milestone was **absorbed into M4** — the agent-
 - **Loops:** L1, L4 · **Skills:** canon + design-system skill (**mandatory** for frontend) + qa · **Budget:** 50000
 - **Decision carried from the Canvas plan:** the composed client view **replaces** the Overview tab (two overlapping summaries is worse than one good one).
 
+### M9 — Notion as a read-only intelligence source (repurpose the connector)
+- **Outcome:** A user who already lives in Notion connects it (read-only), picks which pages/databases to share, and Kora **ingests that content into `agent_memory`** (the hybrid semantic memory). The agent then surfaces Notion facts via recall — in the PM analysts, client view and chat. Kora **never writes to Notion**. Decided 2026-07-24: (1) ingest-into-memory (not compose-time re-read, not auto-capture); (2) user-picks pages; (3) the old two-way write path is **removed**, not left dormant.
+- **Files / freeze boundary:** `backend/app/services/notion_connector.py` (strip write side; keep OAuth+read; add `read_page_text` + page selection) · **new** `backend/app/services/notion_ingest.py` · `backend/app/routers/notion.py` (drop `/provision` + `/sync`; add select + ingest) · `backend/migrations/2026-07-24_notion_ingest.sql` (add `ingest_page_ids` to `notion_connections`) · `backend/app/backends/{memory,supabase}_store.py` + `app/store.py` (targeted `delete_agent_memory` by kind) · `backend/app/services/pm_agent.py` (analysts consume a recall brief incl. Notion) · `.github/workflows/cron.yml` (repurpose the notion job to ingest) · `frontend/components/settings/notion-connect-card.tsx` · `backend/tests/test_notion_ingest.py` (new)
+- **Demo command:** `cd backend && KORA_DATA_BACKEND=mock venv/Scripts/python.exe -m pytest tests/test_notion_ingest.py -q`
+- **Success criteria:**
+  1. **Read-only, provably:** no write path to Notion exists — `provision_tasks_db`/`push_task`/`sync` are gone, the removed endpoints 404, and a grep for Notion writes (`POST /pages`, `PATCH /pages`, `/databases`) is empty.
+  2. **Ingest + idempotent:** selected pages land in `agent_memory` as `kind="notion"` with page-id/URL provenance; re-ingest updates rather than duplicates (unique `(user_id, kind, ref_id)`).
+  3. **The agent uses it (the demo):** a fact that exists ONLY in a Notion page is recalled into the composed client view / a recall brief — proving intelligence, not dead data.
+  4. **Privacy:** disconnect purges that user's `kind="notion"` memories (and only those).
+  5. **Graceful:** no embeddings → lexical fallback; not connected → no-op, never raises.
+  6. `pytest` green (no regression), `npx tsc --noEmit` 0, `npm run build` succeeds.
+- **Loops:** L1, L4 · **Skills:** canon + llmops-ai-agents + production-readiness · **Budget:** 50000
+
 ### M5 — Enforce plan gating
 - **Outcome:** Premium capabilities reject free-plan users server-side, driven by one auditable entitlements policy. Billing stops being decorative.
 - **Phase (swe-master):** 11 — Security Architecture

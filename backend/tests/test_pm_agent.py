@@ -63,8 +63,11 @@ def _fake_chat(text='{"summary": "ok", "highlights": [], "concerns": []}',
 def _force_configured(monkeypatch):
     """Analysts short-circuit to a fallback when the gateway is unconfigured; in
     tests we inject a fake `chat`, so pretend it's configured to exercise the
-    real LLM path."""
+    real LLM path. Keep embeddings OFF, though — recall must stay lexical so no
+    test reaches for the (blank) gateway."""
     monkeypatch.setattr(llm, "is_configured", lambda: True)
+    from app.services import embeddings
+    monkeypatch.setattr(embeddings, "is_enabled", lambda: False)
 
 
 # ── Criterion 1 · four analysts run in parallel ────────────────────────────

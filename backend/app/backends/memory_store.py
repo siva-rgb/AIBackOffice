@@ -882,6 +882,21 @@ def delete_agent_memory_for_user(user_id: str) -> None:
     _agent_memory[user_id] = []
 
 
+def delete_agent_memory(user_id: str, *, kind: str | None = None,
+                        ref_id_prefix: str | None = None) -> int:
+    """Delete a user's agent_memory rows, narrowed by kind and/or ref_id prefix."""
+    rows = _agent_memory.get(user_id, [])
+    keep, removed = [], 0
+    for r in rows:
+        if kind is not None and r.get("kind") != kind:
+            keep.append(r); continue
+        if ref_id_prefix is not None and not str(r.get("ref_id") or "").startswith(ref_id_prefix):
+            keep.append(r); continue
+        removed += 1
+    _agent_memory[user_id] = keep
+    return removed
+
+
 # ---- Notion connection (task ledger mirror) --------------------------------
 _notion_connections: dict[str, dict] = {}
 
