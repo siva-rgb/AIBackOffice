@@ -1,0 +1,37 @@
+name: Tests
+
+# Runs the backend regression suite on every push / PR. The suite is hermetic:
+# conftest.py forces KORA_DATA_BACKEND=mock and blanks the gateway/Supabase env
+# BEFORE any app import, so it needs no secrets and touches no network.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests (mock backend, no secrets)
+        env:
+          KORA_DATA_BACKEND: mock
+        run: pytest -q
