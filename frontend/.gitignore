@@ -29,3 +29,7 @@ gcloud-key.json
 
 # typescript
 *.tsbuildinfo
+
+# Playwright generated output — never commit
+/e2e/report/
+/test-results/

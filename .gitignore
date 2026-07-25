@@ -72,5 +72,8 @@ desktop.ini
 .vscode/
 *.swp
 
+# Stray pip install artifacts
+backend/[0-9]*/
+
 # Local agent scaffolding / rolling state (genesis-kit)
-.genesis/checkpoints/
+.genesis/
