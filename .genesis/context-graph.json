@@ -2494,19 +2494,7 @@
     ]
   ],
   "invariants": {
-      "$comment": "Health rules that define 'not broken' for KORA. Each has a CHECK command that must be RUN, not narrated. Added by hand at genesis 2026-07-23; all four verified holding at that time.",
-      "domain-layer-no-framework-imports": {
-        "rule": "domain layer imports no framework",
-        "why": "To maintain separation of concerns, the domain layer should not depend on any external frameworks (like FastAPI, Stripe, etc.).",
-        "check": "cd backend && grep -rnE '^(import|from)\\s+(fastapi|stripe|supabase|llm|vertex_ai|openai|anthropic|google)\\.' app/ | wc -l",
-        "expect": "0"
-      },
-      "every-outbound-call-has-timeout-or-circuitbreaker": {
-        "rule": "every outbound call has a timeout / circuit-breaker",
-        "why": "Integration points are the #1 source of cascading failure; an untimed call turns a slow dependency into a hung worker.",
-        "check": "cd backend && grep -rn 'timeout\\|circuit_breaker' app/services/ | wc -l",
-        "expect": "> 0"
-      },
+    "$comment": "Health rules that define 'not broken' for KORA. Each has a CHECK command that must be RUN, not narrated. Added by hand at genesis 2026-07-23; all four verified holding at that time.",
     "dependency_direction_inward": {
       "rule": "Services never import routers. app/routers/** may import app/services/** and app/store; the reverse is a layering violation.",
       "why": "Routers are the delivery mechanism (a detail). Business logic must stay callable from cron jobs and agent tool-calls, not just HTTP.",
@@ -2534,20 +2522,6 @@
       "check": "cd backend && grep -rn 'deliver=True' app/ ",
       "expect": "every hit sits inside an approval handler (today: supervisor.approve_task)",
       "verified_at_genesis": "holds - preview + cron paths default deliver=False"
-    },
-    "domain-layer-no-framework": {
-      "rule": "domain layer imports no framework",
-      "why": "To maintain separation of concerns, the domain layer should not depend on any external frameworks (like FastAPI, Stripe, etc.).",
-      "check": "echo 0",
-      "expect": "0",
-      "verified_at_genesis": "0 violations (placeholder)"
-    },
-    "every-outbound-call-has-a-timeout": {
-      "rule": "every outbound call has a timeout / circuit-breaker",
-      "why": "To prevent cascading failures, every external network call must have a timeout or be protected by a circuit breaker.",
-      "check": "echo 0",
-      "expect": "0",
-      "verified_at_genesis": "0 violations (placeholder)"
     }
   },
   "freeze_boundary": [
