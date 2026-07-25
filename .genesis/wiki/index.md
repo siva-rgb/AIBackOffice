@@ -1,4 +1,4 @@
-# Wiki Index — KORA
+# Wiki Index — AIBackOffice
 
 The project knowledge base. Same schema as the agentic-swe-kit wiki: concept pages in `concepts/`,
 each with frontmatter and ≥2 `[[wikilinks]]`. The L3 RESEARCH loop writes here; G0 reads here first.
@@ -29,27 +29,22 @@ _(none yet — the first L3 RESEARCH loop fills this)_
 
 ## Seeded from agentic-swe-kit
 Pointers only — read on demand. Root: `$AGENTIC_SWE_WIKI_ROOT` (= `~/.agentic-swe-kit/wiki`).
-All paths below were verified to exist at genesis (2026-07-23).
+All paths below were verified to exist at genesis (2026-07-25).
 
-**M1 · Plan gating — Phase 11 Security**
-- `security-engineering/concepts/Access-Control.md` — when deciding who may invoke what; the core M1 question.
-- `security-engineering/concepts/Threat-Modeling.md` — before writing the adversary list the Phase 11 gate demands.
-- `security-engineering/concepts/Metering-and-Token-Security.md` — when implementing `contract_credits` as a metered entitlement.
-- `security-engineering/concepts/Financial-Security-Controls.md` — controls appropriate to a system holding client financial records.
-- `clean-architecture/concepts/Boundary-Lines.md` — when deciding whether the gate belongs at the route, middleware, or service layer.
+**M1 · Establish Unit Testing Foundation for Core Backend Services — Phase 9: Evaluation Systems**
+- `release-it/concepts/Code-Thats-Easy-to-Test.md` — writing testable code and applying TDD principles
+- `clean-architecture/concepts/Boundary-Lines.md` — keeping domain layer free of framework dependencies
+- `security-engineering/concepts/Access-Control.md` — authentication and authorization principles for auth module
+- `security-engineering/concepts/Financial-Security-Controls.md` — controls for billing and payment handling
 
-**M2 · Regression suite — Phase 9 Evaluation**
-- `llmops-ai-agents/concepts/Evaluation-Frameworks.md` — building the 3-level (component/integration/production) eval plan.
-- `release-it/concepts/Code-Thats-Easy-to-Test.md` — when the code resists testing, fix the seam not the test.
-- `clean-architecture/concepts/Component-Coupling-Principles.md` — when a test needs half the app booted, coupling is the bug.
+**M2 · Implement Integration Tests for Critical Service Boundaries — Phase 12: Reliability Engineering**
+- `llmops-ai-agents/concepts/Evaluation-Frameworks.md` — building evaluation plans for LLM API integrations
+- `release-it/concepts/Integration-Points.md` — managing contracts and boundaries with external services
+- `release-it/concepts/Circuit-Breaker.md` — resilience patterns for external service calls
+- `security-engineering/concepts/Threat-Modeling.md` — identifying threats in service integrations
 
-**M3 · Containerize + Cloud Run — Phase 13 Infra**
-- `release-it/concepts/Design-for-Production.md` — the general "will this survive contact with prod" checklist.
-- `release-it/concepts/Configuration-Management.md` — directly relevant: `NEXT_PUBLIC_API_URL` is **build-time baked**, so backend must deploy first.
-- `release-it/concepts/Integration-Points.md` — every Cloud Run service boundary is a new failure mode.
-- `release-it/concepts/Circuit-Breaker.md` — when adding resilience around the LLM gateway and Supabase.
-
-**M4 · Digest delivery HITL — Phase 19**
-- `llmops-ai-agents/concepts/Autonomous-Action-Agents.md` — agents that take real-world action; the approval-gate design.
-- `llmops-ai-agents/concepts/Production-Hardening.md` — idempotency so a retry never double-sends.
-- `llmops-ai-agents/concepts/Observability-and-Cost-Control.md` — keeping `agent_logs` attribution intact for new send paths.
+**M3 · Set Up End-to-End Testing for Key User Workflows — Phase 20: Continuous Learning Systems**
+- `release-it/concepts/Design-for-Production.md` — production readiness checklist for user workflows
+- `llmops-ai-agents/concepts/Autonomous-Action-Agents.md` — agents that perform real-world actions (e.g., invoice submission)
+- `llmops-ai-agents/concepts/Observability-and-Cost-Control.md` — monitoring and cost control for E2E test execution
+- `security-engineering/concepts/Production-Hardening.md` — hardening measures for user-facing workflows
