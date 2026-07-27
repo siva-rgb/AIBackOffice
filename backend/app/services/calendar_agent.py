@@ -9,6 +9,7 @@ from .google_auth import get_user_credentials
 
 def _db():
     from supabase import create_client
+
     return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
 
@@ -26,25 +27,27 @@ def queue_calendar_event(
     if not settings.SUPABASE_URL:
         return
     db = _db()
-    db.table("manager_tasks").insert({
-        "user_id": user_id,
-        "kind": "create_calendar_event",
-        "title": f"Schedule: {title} with {', '.join(attendee_names or attendee_emails)}",
-        "rationale": f"{title} on {start_datetime[:10]} for {duration_minutes} min",
-        "severity": "info",
-        "status": "proposed",
-        "payload": {
-            "title": title,
-            "start_datetime": start_datetime,
-            "duration_minutes": duration_minutes,
-            "attendee_emails": attendee_emails,
-            "attendee_names": attendee_names,
-            "description": description,
-            "client_id": client_id,
-        },
-        "source_record_type": "client",
-        "source_record_id": client_id,
-    }).execute()
+    db.table("manager_tasks").insert(
+        {
+            "user_id": user_id,
+            "kind": "create_calendar_event",
+            "title": f"Schedule: {title} with {', '.join(attendee_names or attendee_emails)}",
+            "rationale": f"{title} on {start_datetime[:10]} for {duration_minutes} min",
+            "severity": "info",
+            "status": "proposed",
+            "payload": {
+                "title": title,
+                "start_datetime": start_datetime,
+                "duration_minutes": duration_minutes,
+                "attendee_emails": attendee_emails,
+                "attendee_names": attendee_names,
+                "description": description,
+                "client_id": client_id,
+            },
+            "source_record_type": "client",
+            "source_record_id": client_id,
+        }
+    ).execute()
 
 
 def execute_calendar_event(user_id: str, task_payload: dict) -> dict:
@@ -55,13 +58,11 @@ def execute_calendar_event(user_id: str, task_payload: dict) -> dict:
         raise ValueError("Google account not connected")
 
     from googleapiclient.discovery import build
+
     service = build("calendar", "v3", credentials=creds)
 
     start_dt = task_payload["start_datetime"]
-    end_dt = (
-        datetime.fromisoformat(start_dt) +
-        timedelta(minutes=int(task_payload["duration_minutes"]))
-    ).isoformat()
+    end_dt = (datetime.fromisoformat(start_dt) + timedelta(minutes=int(task_payload["duration_minutes"]))).isoformat()
 
     event_body = {
         "summary": task_payload["title"],
@@ -77,12 +78,16 @@ def execute_calendar_event(user_id: str, task_payload: dict) -> dict:
         },
     }
 
-    created = service.events().insert(
-        calendarId="primary",
-        body=event_body,
-        conferenceDataVersion=1,
-        sendUpdates="all",
-    ).execute()
+    created = (
+        service.events()
+        .insert(
+            calendarId="primary",
+            body=event_body,
+            conferenceDataVersion=1,
+            sendUpdates="all",
+        )
+        .execute()
+    )
 
     latency_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
     meet_link = created.get("hangoutLink")
@@ -90,25 +95,27 @@ def execute_calendar_event(user_id: str, task_payload: dict) -> dict:
 
     if settings.SUPABASE_URL:
         db = _db()
-        db.table("meetings").insert({
-            "user_id": user_id,
-            "client_id": task_payload.get("client_id"),
-            "title": task_payload["title"],
-            "meeting_type": "video",
-            "meeting_date": start_dt,
-            "duration_minutes": task_payload["duration_minutes"],
-            "attendees": [
-                {"name": n, "email": e}
-                for n, e in zip(
-                    task_payload.get("attendee_names", []),
-                    task_payload.get("attendee_emails", []),
-                )
-            ],
-            "google_event_id": event_id,
-            "meet_link": meet_link,
-            "source": "calendar_import",
-            "parse_status": "pending",
-        }).execute()
+        db.table("meetings").insert(
+            {
+                "user_id": user_id,
+                "client_id": task_payload.get("client_id"),
+                "title": task_payload["title"],
+                "meeting_type": "video",
+                "meeting_date": start_dt,
+                "duration_minutes": task_payload["duration_minutes"],
+                "attendees": [
+                    {"name": n, "email": e}
+                    for n, e in zip(
+                        task_payload.get("attendee_names", []),
+                        task_payload.get("attendee_emails", []),
+                    )
+                ],
+                "google_event_id": event_id,
+                "meet_link": meet_link,
+                "source": "calendar_import",
+                "parse_status": "pending",
+            }
+        ).execute()
 
     agent_logger.log_action(
         user_id=user_id,

@@ -111,13 +111,19 @@ async def get_email_intel(
     if not settings.SUPABASE_URL:
         return []
     from supabase import create_client
+
     db = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
     from ..utils.casing import camelize
-    q = db.table("email_intel_cache").select(
-        "client_name, client_id, sentiment, relationship_health, "
-        "summary, action_needed, action_description, last_contact_days, "
-        "last_contact_direction, commitments_pending, open_questions, processed_at"
-    ).eq("user_id", user.id)
+
+    q = (
+        db.table("email_intel_cache")
+        .select(
+            "client_name, client_id, sentiment, relationship_health, "
+            "summary, action_needed, action_description, last_contact_days, "
+            "last_contact_direction, commitments_pending, open_questions, processed_at"
+        )
+        .eq("user_id", user.id)
+    )
     if client_id:
         q = q.eq("client_id", client_id)
     return camelize(q.order("last_contact_days").execute().data)
@@ -137,18 +143,22 @@ async def draft_email(
     from ..services.vertex_ai import generate_with_retry, get_ai
 
     db = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
-    client_rows = db.table("clients").select(
-        "name, email, what_we_do"
-    ).eq("id", client_id).eq("user_id", user.id).single().execute().data
+    client_rows = db.table("clients").select("name, email, what_we_do").eq("id", client_id).eq("user_id", user.id).single().execute().data
     if not client_rows:
         raise HTTPException(404, "Client not found")
 
-    cache = db.table("email_intel_cache").select(
-        "summary, commitments_pending, open_questions"
-    ).eq("user_id", user.id).eq("client_id", client_id).execute().data
+    cache = (
+        db.table("email_intel_cache")
+        .select("summary, commitments_pending, open_questions")
+        .eq("user_id", user.id)
+        .eq("client_id", client_id)
+        .execute()
+        .data
+    )
     email_ctx = cache[0] if cache else {}
 
     import json
+
     prompt = f"""Draft a professional email on behalf of a business owner.
 RECIPIENT: {client_rows['name']} ({client_rows.get('email', '')})
 RELATIONSHIP CONTEXT: {client_rows.get('what_we_do', '')}
@@ -170,6 +180,7 @@ Rules: address client by first name, single clear call to action, under 150 word
     try:
         from ..services.validation import validate_email_draft
         from .. import store
+
         invoices = store.list_invoices(user.id)
         known_amounts = [float(inv.total) for inv in invoices if inv.client_id == client_id and inv.total]
         draft = validate_email_draft(draft, client_rows.get("name", ""), known_amounts, user.id)

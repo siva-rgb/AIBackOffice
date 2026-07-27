@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>DONE — AIBackOffice</title>
+<title>DONE � AIBackOffice</title>
 <style>
   :root { --bg:#0d1117; --card:#161b22; --line:#30363d; --ink:#e6edf3; --mut:#8b949e;
           --ok:#2ea043; --warn:#d29922; --bad:#f85149; --accent:#58a6ff; }
@@ -32,44 +32,44 @@
 <body>
 <div class="wrap">
 
-  <h1>DONE — AIBackOffice</h1>
+  <h1>DONE � AIBackOffice</h1>
   <p class="sub">The single source of truth for <b>what "done" means</b> and <b>the implementation plan</b>.
-     This file is LOCKED — the driver model may not edit it without explicit user request.
-     Updated: 2026-07-27</p>
+     This file is LOCKED � the driver model may not edit it without explicit user request.
+      Updated: 2026-07-28</p>
 
-  <!-- ───────────── THE LOCKED SPEC ───────────── -->
-  <h2>1 · The Locked Spec (what we are building)</h2>
+  <!-- ------------- THE LOCKED SPEC ------------- -->
+  <h2>1 � The Locked Spec (what we are building)</h2>
   <div class="card locked">
-    <p><b>Cognitive job:</b> Harden an AI-powered business back-office (Kora) from a functional MVP into an enterprise-grade, secure, observable, and performant platform. The system must provide tenant-isolated SAAS operations — AI-driven bookkeeping, contract review, calendar intelligence, Gmail integration, cashflow analysis, and Stripe billing — while implementing the security, compliance, and reliability controls expected of a production system handling PII and financial data.</p>
-    <p><b>Inputs:</b> User financial data (transactions, invoices, contracts), Gmail messages via OAuth, Stripe webhooks, Notion integration, user-uploaded documents &nbsp;→&nbsp; <b>Outputs:</b> AI-generated reports (cashflow, bookkeeping, contract reviews), categorized transactions, notification alerts, PDF reports, audit logs, GDPR-compliant data exports</p>
-    <p><b>Autonomy level:</b> Supervised autonomy — AI agents drive analysis/categorisation, but financial decisions, deletions, and bulk operations require human approval &nbsp;|&nbsp; <b>Human-in-the-loop points:</b> Contract review approval, bulk transaction categorisation, data export/deletion requests, plan/billing changes</p>
-    <p><b>Failure tolerance:</b> Zero tolerance for cross-tenant data leakage, token encryption failure, or silent billing errors. Graceful degradation acceptable for non-critical LLM-dependent features (dashboard slow is OK; wrong tenant data is NOT) &nbsp;|&nbsp; <b>Trust boundary:</b> Multi-tenant SaaS — Google OAuth tokens, Stripe payment data, PII (tax IDs, addresses). Every query must be tenant-scoped. All outbound calls to external APIs (Gmail, Notion, Stripe, Supabase) require authenticated pipelines with timeout/circuit-breaker.</p>
+    <p><b>Cognitive job:</b> Harden an AI-powered business back-office (Kora) from a functional MVP into an enterprise-grade, secure, observable, and performant platform. The system must provide tenant-isolated SAAS operations � AI-driven bookkeeping, contract review, calendar intelligence, Gmail integration, cashflow analysis, and Stripe billing � while implementing the security, compliance, and reliability controls expected of a production system handling PII and financial data.</p>
+    <p><b>Inputs:</b> User financial data (transactions, invoices, contracts), Gmail messages via OAuth, Stripe webhooks, Notion integration, user-uploaded documents &nbsp;?&nbsp; <b>Outputs:</b> AI-generated reports (cashflow, bookkeeping, contract reviews), categorized transactions, notification alerts, PDF reports, audit logs, GDPR-compliant data exports</p>
+    <p><b>Autonomy level:</b> Supervised autonomy � AI agents drive analysis/categorisation, but financial decisions, deletions, and bulk operations require human approval &nbsp;|&nbsp; <b>Human-in-the-loop points:</b> Contract review approval, bulk transaction categorisation, data export/deletion requests, plan/billing changes</p>
+    <p><b>Failure tolerance:</b> Zero tolerance for cross-tenant data leakage, token encryption failure, or silent billing errors. Graceful degradation acceptable for non-critical LLM-dependent features (dashboard slow is OK; wrong tenant data is NOT) &nbsp;|&nbsp; <b>Trust boundary:</b> Multi-tenant SaaS � Google OAuth tokens, Stripe payment data, PII (tax IDs, addresses). Every query must be tenant-scoped. All outbound calls to external APIs (Gmail, Notion, Stripe, Supabase) require authenticated pipelines with timeout/circuit-breaker.</p>
     <p class="note">Filled during Genesis step G0 (Cognitive Design) via <code>agentic-swe-master</code>.</p>
   </div>
 
-  <!-- ───────────── DEFINITION OF DONE ───────────── -->
-  <h2>2 · Definition of Done (binary gates — checked by the VERIFIER, not the maker)</h2>
+  <!-- ------------- DEFINITION OF DONE ------------- -->
+  <h2>2 � Definition of Done (binary gates � checked by the VERIFIER, not the maker)</h2>
   <div class="card">
     <div class="gate"><span class="box"></span><span class="label"><b>G1 Skill:</b> Required skills loaded per milestone (canon + phase-specific). G0 existence pre-flight pass. <span class="note">(G1 gate)</span></span></div>
     <div class="gate"><span class="box"></span><span class="label"><b>G2 Progress:</b> Milestone's demo command executes and produces expected output. No {{PLACEHOLDER}} tokens remain in touched files. <span class="note">(G2 gate)</span></span></div>
     <div class="gate"><span class="box"></span><span class="label"><b>G3 Cost:</b> Token budget per milestone (50000) not exceeded. LLM token usage tracked. <span class="note">(G3 gate)</span></span></div>
     <div class="gate"><span class="box"></span><span class="label"><b>G4 Quality:</b> Threat model written; prompt-injection / untrusted-input considered. All LLM/structured outputs validated against schema. <span class="note">(security-engineer + llmops gates)</span></span></div>
     <div class="gate"><span class="box"></span><span class="label"><b>G5 Verify:</b> Dependency direction inward, zero cycles. Every outbound call has timeout/circuit-breaker. No context-graph.json invariant violated. <span class="note">(modular-architecture + production-readiness gates)</span></span></div>
-    <div class="gate"><span class="box"></span><span class="label"><code>mypy src/</code> clean AND <code>pytest</code> green (≥80% coverage on changed files) <span class="note">(typecheck + test gates)</span></span></div>
-    <div class="gate"><span class="box"></span><span class="label">One <code>verify</code> pass by a <b>separate</b> agent/model — the maker NEVER grades its own work (L4 VERIFY)</span></div>
+    <div class="gate"><span class="box"></span><span class="label"><code>mypy src/</code> clean AND <code>pytest</code> green (=80% coverage on changed files) <span class="note">(typecheck + test gates)</span></span></div>
+    <div class="gate"><span class="box"></span><span class="label">One <code>verify</code> pass by a <b>separate</b> agent/model � the maker NEVER grades its own work (L4 VERIFY)</span></div>
     <div class="gate"><span class="box"></span><span class="label">Audit trail covers every agent action. GDPR compliance: data export + right-to-erasure endpoints functional. <span class="note">(governance gate)</span></span></div>
     <p class="note">A milestone is DONE only when every box above is checked by the verifier. Pull each
        gate from the relevant <code>agentic-swe-master</code> phase gate.</p>
   </div>
 
-  <!-- ───────────── IMPLEMENTATION PLAN ───────────── -->
-  <h2>3 · Implementation Plan (the work, sliced into milestones)</h2>
+  <!-- ------------- IMPLEMENTATION PLAN ------------- -->
+  <h2>3 � Implementation Plan (the work, sliced into milestones)</h2>
   <div class="card">
     <table>
       <thead><tr><th>#</th><th>Milestone</th><th>Phase</th><th>Demo command (proves it works)</th><th>Loops</th><th>Status</th></tr></thead>
       <tbody>
 <tr><td>M1</td><td>Tenant Isolation Enforcement</td><td>Phase 11 (Security)</td><td><code>pytest tests/security/test_tenant_isolation.py -v</code></td><td>L1, L4</td><td><span class="pill">todo</span></td></tr>
-        <tr><td>M2</td><td>Test Harness + CI Pipeline</td><td>Phase 18 (CI/CD)</td><td><code>pytest tests/ --cov=src --cov-report=term --cov-fail-under=40 &amp;&amp; mypy src/</code></td><td>L1, L3, L4</td><td><span class="pill">todo</span></td></tr>
+        <tr><td>M2</td><td>Test Harness + CI Pipeline</td><td>Phase 18 (CI/CD)</td><td><code>pytest tests/ --cov=src --cov-report=term --cov-fail-under=40 && mypy src/</code></td><td>L1, L3, L4</td><td><span class="pill ok">done</span></td></tr>
         <tr><td>M3</td><td>Token Encryption Fail-Closed</td><td>Phase 11 (Security)</td><td><code>STARTUP w/o TOKEN_ENCRYPTION_KEY exits non-zero; pytest -k token_encryption</code></td><td>L1, L4</td><td><span class="pill">todo</span></td></tr>
         <tr><td>M4</td><td>LLM Input Sanitization</td><td>Phase 5 (LLM)</td><td><code>pytest tests/security/test_prompt_injection.py -v</code></td><td>L1, L2, L4</td><td><span class="pill">todo</span></td></tr>
         <tr><td>M5</td><td>Docs &amp; Schema Accuracy</td><td>Phase 14 (Data)</td><td><code>diff schema.sql &lt;(pg_dump --schema-only); grep -c '.' .env.example</code></td><td>L1, L4</td><td><span class="pill">todo</span></td></tr>
@@ -77,36 +77,36 @@
         <tr><td>M7</td><td>Remaining Security Controls (Plan/Auth/OAuth/PubSub/CSP/PII)</td><td>Phase 11 (Security)</td><td><code>pytest tests/security/ -v; 5 sub-tracks independently assigned</code></td><td>L1, L4</td><td><span class="pill">todo</span></td></tr>
         <tr><td>M8</td><td>Performance: First Pass</td><td>Phase 3 + 5</td><td><code>pytest tests/perf/ -v -k "dashboard or llm_async"</code></td><td>L1, L3, L4</td><td><span class="pill">todo</span></td></tr>
         <tr><td>M9</td><td>GDPR/CCPA Compliance</td><td>Phase 15 (Compliance)</td><td><code>curl /api/user/data-export; curl -X DELETE /api/user/delete</code></td><td>L1, L2, L4</td><td><span class="pill">todo</span></td></tr>
-        <tr><td>M10</td><td>Memory System → pgvector</td><td>Phase 6 (Memory)</td><td><code>pytest tests/test_memory_recall.py -v -k pgvector</code></td><td>L1, L3, L4</td><td><span class="pill">todo</span></td></tr>
+        <tr><td>M10</td><td>Memory System ? pgvector</td><td>Phase 6 (Memory)</td><td><code>pytest tests/test_memory_recall.py -v -k pgvector</code></td><td>L1, L3, L4</td><td><span class="pill">todo</span></td></tr>
         <tr><td>M11</td><td>Observability Pipeline</td><td>Phase 10 (Observability)</td><td><code>curl /health/traces | jq '.span_count > 1'</code></td><td>L1, L3, L4</td><td><span class="pill">todo</span></td></tr>
-        <tr><td>M12</td><td>Dependency Management Modernization</td><td>Phase 18 (CI/CD)</td><td><code>pip-audit → 0 vulns; poetry build reproducible</code></td><td>L1, L4</td><td><span class="pill">todo</span></td></tr>
+        <tr><td>M12</td><td>Dependency Management Modernization</td><td>Phase 18 (CI/CD)</td><td><code>pip-audit ? 0 vulns; poetry build reproducible</code></td><td>L1, L4</td><td><span class="pill">todo</span></td></tr>
         <tr><td>M13</td><td>Real-Time Features</td><td>Phase 2 (Frontend)</td><td><code>wscat -c ws://localhost:8000/ws/agent-progress</code></td><td>L1, L3, L4</td><td><span class="pill">todo</span></td></tr>
         <tr><td>M14</td><td>Orchestration Framework Evaluations</td><td>Phase 4 (Workflow)</td><td><code>ADR merged in decisions/; spiked &gt;5-step chain</code></td><td>L1, L3, L4</td><td><span class="pill">todo</span></td></tr>
         <tr><td>M15</td><td>External Integrations</td><td>Phase 7 (Tooling)</td><td><code>pytest tests/integrations/ -v -k "jira or asana"</code></td><td>L1, L4</td><td><span class="pill">todo</span></td></tr>
-        <tr><td>M16</td><td>Full CI/CD Pipeline</td><td>Phase 18 (CI/CD)</td><td><code>git push main → deploy staging auto; one-click prod promote</code></td><td>L1, L3, L4</td><td><span class="pill">todo</span></td></tr>
+        <tr><td>M16</td><td>Full CI/CD Pipeline</td><td>Phase 18 (CI/CD)</td><td><code>git push main ? deploy staging auto; one-click prod promote</code></td><td>L1, L3, L4</td><td><span class="pill">todo</span></td></tr>
       </tbody>
     </table>
-    <p class="note">16 milestones across 4 phases. Total token budget = 16 × 50000 = 800k. Update <span class="pill wip">wip</span> /
+    <p class="note">16 milestones across 4 phases. Total token budget = 16 � 50000 = 800k. Update <span class="pill wip">wip</span> /
        <span class="pill ok">done</span> as loops complete. Must stay in sync with <code>PLAN.md</code>.</p>
   </div>
 
-  <!-- ───────────── SKILL LOADING ───────────── -->
-  <h2>4 · Skill Loading Per Milestone</h2>
+  <!-- ------------- SKILL LOADING ------------- -->
+  <h2>4 � Skill Loading Per Milestone</h2>
   <div class="card">
     <table>
       <thead><tr><th>Milestone</th><th>Always-on canon</th><th>Milestone-specific skills</th></tr></thead>
       <tbody>
-        <tr><td>M1–M5</td><td>agentic-swe-master, coding-orchestrator, modular-architecture</td><td>tdd, security-engineering</td></tr>
+        <tr><td>M1�M5</td><td>agentic-swe-master, coding-orchestrator, modular-architecture</td><td>tdd, security-engineering</td></tr>
         <tr><td>M6</td><td>(canon)</td><td>tdd, distributed-systems</td></tr>
         <tr><td>M7</td><td>(canon)</td><td>tdd, security-engineering, llcmops-ai-agents</td></tr>
         <tr><td>M8</td><td>(canon)</td><td>tdd, production-readiness, llcmops-ai-agents</td></tr>
         <tr><td>M9</td><td>(canon)</td><td>tdd, security-engineering, data-systems-engineering</td></tr>
         <tr><td>M10</td><td>(canon)</td><td>tdd, data-systems-engineering, llcmops-ai-agents</td></tr>
         <tr><td>M11</td><td>(canon)</td><td>tdd, production-readiness, llcmops-ai-agents</td></tr>
-        <tr><td>M12–M16</td><td>(canon)</td><td>tdd, production-readiness, per-track assignment</td></tr>
+        <tr><td>M12�M16</td><td>(canon)</td><td>tdd, production-readiness, per-track assignment</td></tr>
       </tbody>
     </table>
-    <p class="note">If a milestone needs a skill not listed, G1 logs "skill X needed but not on the menu — loaded ad hoc" so the choice is visible.</p>
+    <p class="note">If a milestone needs a skill not listed, G1 logs "skill X needed but not on the menu � loaded ad hoc" so the choice is visible.</p>
   </div>
 
 </div>

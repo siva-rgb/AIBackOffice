@@ -2,6 +2,7 @@
 Resend-backed email delivery for invoices, follow-ups, and morning digests.
 Gracefully degrades (logs but doesn't raise) when RESEND_API_KEY is not set.
 """
+
 from __future__ import annotations
 
 import os
@@ -25,6 +26,7 @@ def _resend_client():
         return None
     try:
         import resend  # type: ignore
+
         resend.api_key = api_key
         return resend
     except ImportError:
@@ -52,13 +54,15 @@ def send_invoice_email(
 
     due_line = f"<p>Payment is due by <strong>{due_date}</strong>.</p>" if due_date else ""
     pay_btn = (
-        f'<p><a href="{payment_link}" style="background:#2f6fed;color:#fff;padding:10px 20px;'
-        f'text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block;">'
-        f"Pay Now</a></p>"
-    ) if payment_link else ""
-    pdf_link = (
-        f'<p><a href="{pdf_url}">Download PDF</a></p>'
-    ) if pdf_url else ""
+        (
+            f'<p><a href="{payment_link}" style="background:#2f6fed;color:#fff;padding:10px 20px;'
+            f'text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block;">'
+            f"Pay Now</a></p>"
+        )
+        if payment_link
+        else ""
+    )
+    pdf_link = (f'<p><a href="{pdf_url}">Download PDF</a></p>') if pdf_url else ""
 
     html = f"""
 <html><body style="font-family:sans-serif;color:#14171f;max-width:600px;margin:auto">
@@ -114,13 +118,16 @@ def send_follow_up_email(
 ) -> str | None:
     """Send an AI-drafted follow-up. Returns message_id or None."""
     start = datetime.now(timezone.utc)
-    sym = _currency_sym(currency)
 
     pay_btn = (
-        f'<p><a href="{payment_link}" style="background:#2f6fed;color:#fff;padding:10px 20px;'
-        f'text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block;">'
-        f"Pay Now</a></p>"
-    ) if payment_link else ""
+        (
+            f'<p><a href="{payment_link}" style="background:#2f6fed;color:#fff;padding:10px 20px;'
+            f'text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block;">'
+            f"Pay Now</a></p>"
+        )
+        if payment_link
+        else ""
+    )
 
     html = f"""
 <html><body style="font-family:sans-serif;color:#14171f;max-width:600px;margin:auto">
@@ -210,12 +217,14 @@ def _send(*, from_addr: str, to: list[str], subject: str, html: str) -> str | No
     if r is None:
         return None
     try:
-        resp = r.Emails.send({
-            "from": from_addr,
-            "to": to,
-            "subject": subject,
-            "html": html,
-        })
+        resp = r.Emails.send(
+            {
+                "from": from_addr,
+                "to": to,
+                "subject": subject,
+                "html": html,
+            }
+        )
         return resp.get("id") if isinstance(resp, dict) else getattr(resp, "id", None)
     except Exception:
         return None

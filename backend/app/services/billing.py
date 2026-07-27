@@ -65,9 +65,7 @@ def check_transaction_limit(user_id: str) -> dict:
     if limit is None:
         return {"allowed": True, "limit": None, "used": 0, "remaining": None}
 
-    month_start = datetime.now(timezone.utc).replace(
-        day=1, hour=0, minute=0, second=0, microsecond=0
-    ).isoformat()
+    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
     transactions = store.list_transactions(user_id)
     used = sum(1 for t in transactions if getattr(t, "created_at", "") >= month_start)
 

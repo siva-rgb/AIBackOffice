@@ -26,7 +26,7 @@ def validate_briefing(briefing: dict, source_state: dict, user_id: str) -> dict:
         if name:
             known_clients.add(name.lower())
     if known_clients:
-        for phrase in re.findall(r'\b([A-Z][a-z]+(?: [A-Z][a-z]+)+)\b', text):
+        for phrase in re.findall(r"\b([A-Z][a-z]+(?: [A-Z][a-z]+)+)\b", text):
             if phrase.lower() not in known_clients:
                 issues.append(f"Unknown entity '{phrase}' in briefing")
 
@@ -112,7 +112,7 @@ def _extract_known_amounts(source_state: dict) -> set[float]:
 
 
 def _extract_dollar_amounts(text: str) -> list[float]:
-    matches = re.findall(r'[\$₹£€]\s?([\d,]+(?:\.\d{1,2})?)', text)
+    matches = re.findall(r"[\$₹£€]\s?([\d,]+(?:\.\d{1,2})?)", text)
     result = []
     for m in matches:
         try:

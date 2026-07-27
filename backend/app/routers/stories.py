@@ -45,16 +45,13 @@ async def create_story(payload: StoryCreate, user: User = Depends(get_current_us
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail="Could not create the story. Ensure the 'stories' table exists "
-                   "(run migrations/2026-07-23_add_stories.sql). " + str(exc)[:160],
+            detail="Could not create the story. Ensure the 'stories' table exists " "(run migrations/2026-07-23_add_stories.sql). " + str(exc)[:160],
         )
 
 
 @router.patch("/{story_id}", response_model=Story)
 async def update_story(story_id: str, payload: StoryUpdate, user: User = Depends(get_current_user)):
-    updated = story_ledger.update_story(
-        user.id, story_id, payload.model_dump(by_alias=False, exclude_unset=True)
-    )
+    updated = story_ledger.update_story(user.id, story_id, payload.model_dump(by_alias=False, exclude_unset=True))
     if not updated:
         raise HTTPException(status_code=404, detail="Story not found")
     return updated
@@ -69,10 +66,9 @@ async def delete_story(story_id: str, user: User = Depends(get_current_user)):
 
 # ── Observations ────────────────────────────────────────────────────────────
 
+
 @router.post("/{story_id}/observations", response_model=Story, status_code=201)
-async def add_observation(
-    story_id: str, payload: ObservationCreate, user: User = Depends(get_current_user)
-):
+async def add_observation(story_id: str, payload: ObservationCreate, user: User = Depends(get_current_user)):
     """Attach an evidence-backed observation.
 
     `source_ref` is required by the schema — an observation that cannot be traced
@@ -80,9 +76,12 @@ async def add_observation(
     """
     try:
         updated = story_ledger.add_observation(
-            user.id, story_id,
-            kind=payload.kind, text=payload.text,
-            source=payload.source, source_ref=payload.source_ref,
+            user.id,
+            story_id,
+            kind=payload.kind,
+            text=payload.text,
+            source=payload.source,
+            source_ref=payload.source_ref,
             # Anything arriving through the API is a human acting, so it is
             # protected from being overwritten by the nightly agent refresh.
             user_edited=True,
@@ -96,7 +95,9 @@ async def add_observation(
 
 @router.patch("/{story_id}/observations/{observation_id}", response_model=Story)
 async def edit_observation(
-    story_id: str, observation_id: str, payload: ObservationCreate,
+    story_id: str,
+    observation_id: str,
+    payload: ObservationCreate,
     user: User = Depends(get_current_user),
 ):
     """Correct an observation — flags it so agent refreshes leave it alone."""
@@ -107,9 +108,7 @@ async def edit_observation(
 
 
 @router.delete("/{story_id}/observations/{observation_id}", response_model=Story)
-async def remove_observation(
-    story_id: str, observation_id: str, user: User = Depends(get_current_user)
-):
+async def remove_observation(story_id: str, observation_id: str, user: User = Depends(get_current_user)):
     updated = story_ledger.remove_observation(user.id, story_id, observation_id)
     if not updated:
         raise HTTPException(status_code=404, detail="Story not found")

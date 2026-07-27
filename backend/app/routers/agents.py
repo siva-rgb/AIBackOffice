@@ -29,15 +29,33 @@ async def export_logs(user: User = Depends(get_current_user)):
     logs = store.list_agent_logs(user.id)
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow([
-        "created_at", "agent_type", "action", "triggered_by", "status",
-        "model_used", "tokens_used", "latency_ms", "cost_usd",
-    ])
-    for l in logs:
-        writer.writerow([
-            l.created_at, l.agent_type, l.action, l.triggered_by, l.status,
-            l.model_used, l.tokens_used, l.latency_ms, l.cost_usd,
-        ])
+    writer.writerow(
+        [
+            "created_at",
+            "agent_type",
+            "action",
+            "triggered_by",
+            "status",
+            "model_used",
+            "tokens_used",
+            "latency_ms",
+            "cost_usd",
+        ]
+    )
+    for log_entry in logs:
+        writer.writerow(
+            [
+                log_entry.created_at,
+                log_entry.agent_type,
+                log_entry.action,
+                log_entry.triggered_by,
+                log_entry.status,
+                log_entry.model_used,
+                log_entry.tokens_used,
+                log_entry.latency_ms,
+                log_entry.cost_usd,
+            ]
+        )
     from datetime import date
 
     filename = f"kora-agent-logs-{date.today().isoformat()}.csv"

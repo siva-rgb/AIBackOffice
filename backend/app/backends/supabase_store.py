@@ -177,20 +177,21 @@ def update_invoice_pdf(user_id: str, invoice_id: str, pdf_path: str) -> Invoice 
 
 def update_invoice_email(user_id: str, invoice_id: str, message_id: str) -> Invoice | None:
     from datetime import datetime, timezone
-    return update_invoice(user_id, invoice_id, {
-        "email_message_id": message_id,
-        "sent_at": datetime.now(timezone.utc).isoformat(),
-        "status": "sent",
-    })
+
+    return update_invoice(
+        user_id,
+        invoice_id,
+        {
+            "email_message_id": message_id,
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+            "status": "sent",
+        },
+    )
 
 
 def next_invoice_number(user_id: str) -> str:
     year = datetime.now(timezone.utc).year
-    r = (
-        repo(user_id).select("invoices")
-        .gte("created_at", f"{year}-01-01")
-        .execute()
-    )
+    r = repo(user_id).select("invoices").gte("created_at", f"{year}-01-01").execute()
     return f"INV-{year}-{(r.count or 0) + 1:03d}"
 
 
@@ -223,13 +224,7 @@ def insert_alert(alert: Alert) -> Alert:
 
 def alert_fired_recently(user_id: str, type_: str, within_days: int = 7) -> bool:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=within_days)).isoformat()
-    r = (
-        repo(user_id).select("alerts")
-        .eq("type", type_)
-        .gte("created_at", cutoff)
-        .limit(1)
-        .execute()
-    )
+    r = repo(user_id).select("alerts").eq("type", type_).gte("created_at", cutoff).limit(1).execute()
     return bool(r.data)
 
 
@@ -355,9 +350,9 @@ def update_engagement(user_id: str, engagement_id: str, patch: dict) -> Engageme
 
 
 # ---- Task ledger ------------------------------------------------------------
-def list_tasks(user_id: str, *, client_id: str | None = None,
-               engagement_id: str | None = None, status: str | None = None,
-               statuses: list[str] | None = None) -> list[Task]:
+def list_tasks(
+    user_id: str, *, client_id: str | None = None, engagement_id: str | None = None, status: str | None = None, statuses: list[str] | None = None
+) -> list[Task]:
     q = repo(user_id).select("tasks")
     if client_id is not None:
         q = q.eq("client_id", client_id)
@@ -402,8 +397,7 @@ def delete_task(user_id: str, task_id: str) -> bool:
 
 
 # ---- Story layer (children of tasks) ---------------------------------------
-def list_stories(user_id: str, *, task_id: str | None = None,
-                 client_id: str | None = None, statuses: list[str] | None = None) -> list[Story]:
+def list_stories(user_id: str, *, task_id: str | None = None, client_id: str | None = None, statuses: list[str] | None = None) -> list[Story]:
     q = repo(user_id).select("stories")
     if task_id is not None:
         q = q.eq("task_id", task_id)
@@ -428,10 +422,10 @@ def insert_story(story: Story) -> Story:
 def update_story(user_id: str, story_id: str, patch: dict) -> Story | None:
     # Observations arrive as models when set from the service layer; JSONB needs plain dicts.
     if "observations" in patch:
-        patch = {**patch, "observations": [
-            o.model_dump(by_alias=False, mode="json") if hasattr(o, "model_dump") else o
-            for o in (patch["observations"] or [])
-        ]}
+        patch = {
+            **patch,
+            "observations": [o.model_dump(by_alias=False, mode="json") if hasattr(o, "model_dump") else o for o in (patch["observations"] or [])],
+        }
     r = repo(user_id).update("stories", patch, story_id).execute()
     return Story(**r.data[0]) if r.data else None
 
@@ -448,8 +442,7 @@ def delete_stories_for_task(user_id: str, task_id: str) -> int:
 
 # ---- Butler: client notes --------------------------------------------------
 def list_client_notes(user_id: str, client_id: str) -> list[ClientNote]:
-    r = (repo(user_id).select("client_notes").eq("client_id", client_id)
-         .order("created_at", desc=True).limit(50).execute())
+    r = repo(user_id).select("client_notes").eq("client_id", client_id).order("created_at", desc=True).limit(50).execute()
     return [ClientNote(**row) for row in r.data]
 
 
@@ -540,22 +533,18 @@ def set_butler_memory(user_id: str, memory: dict) -> dict:
 
 # ---- Client view cache (M3 PM agent fan-out) -------------------------------
 def get_client_view(user_id: str, client_id: str) -> dict | None:
-    r = (repo(user_id).select("client_view_cache")
-         .eq("client_id", client_id).limit(1).execute())
+    r = repo(user_id).select("client_view_cache").eq("client_id", client_id).limit(1).execute()
     return r.data[0] if r.data else None
 
 
-def upsert_client_view(user_id: str, client_id: str, view: dict,
-                       token_cost: dict, refreshed_at: str) -> dict:
-    row = {"user_id": user_id, "client_id": client_id, "view": view,
-           "token_cost": token_cost, "refreshed_at": refreshed_at}
+def upsert_client_view(user_id: str, client_id: str, view: dict, token_cost: dict, refreshed_at: str) -> dict:
+    row = {"user_id": user_id, "client_id": client_id, "view": view, "token_cost": token_cost, "refreshed_at": refreshed_at}
     repo(user_id).raw_table("client_view_cache").upsert(row, on_conflict="user_id,client_id").execute()
     return row
 
 
 def delete_client_view(user_id: str, client_id: str) -> bool:
-    r = (repo(user_id).raw_table("client_view_cache").delete()
-         .eq("client_id", client_id).execute())
+    r = repo(user_id).raw_table("client_view_cache").delete().eq("client_id", client_id).execute()
     return bool(r.data)
 
 
@@ -631,31 +620,17 @@ def get_playbook_entries(
 
 
 def get_playbook_corrections(user_id: str) -> list[dict]:
-    r = (
-        repo(user_id).select("business_playbook")
-        .gte("confidence", 1.0)
-        .execute()
-    )
+    r = repo(user_id).select("business_playbook").gte("confidence", 1.0).execute()
     return r.data or []
 
 
 def get_playbook_for_client(user_id: str, client_id: str) -> list[dict]:
-    r = (
-        repo(user_id).select("business_playbook")
-        .eq("client_id", client_id)
-        .order("confidence", desc=True)
-        .execute()
-    )
+    r = repo(user_id).select("business_playbook").eq("client_id", client_id).order("confidence", desc=True).execute()
     return r.data or []
 
 
 def update_playbook_entry(user_id: str, entry_id: str, patch: dict) -> dict | None:
-    r = (
-        repo(user_id).raw_table("business_playbook")
-        .update(patch)
-        .eq("id", entry_id)
-        .execute()
-    )
+    r = repo(user_id).raw_table("business_playbook").update(patch).eq("id", entry_id).execute()
     return r.data[0] if r.data else None
 
 
@@ -668,12 +643,7 @@ def decay_playbook_entries(user_id: str) -> int:
     from datetime import datetime, timedelta, timezone
 
     cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
-    r = (
-        repo(user_id).select("business_playbook")
-        .lt("confidence", 1.0)
-        .lt("last_observed_at", cutoff)
-        .execute()
-    )
+    r = repo(user_id).select("business_playbook").lt("confidence", 1.0).lt("last_observed_at", cutoff).execute()
     rows = r.data or []
     for row in rows:
         new_conf = max(0.0, round(float(row["confidence"]) - 0.1, 4))
@@ -682,6 +652,7 @@ def decay_playbook_entries(user_id: str) -> int:
 
 
 # ---- Stripe Connect --------------------------------------------------------
+
 
 def upsert_stripe_connection(user_id: str, data: dict) -> dict:
     data["user_id"] = user_id
@@ -729,8 +700,10 @@ def delete_notion_connection(user_id: str) -> None:
 # nodes/edges and traverses in Python, so the store stays a thin, backend-symmetric
 # CRUD layer (no recursive CTEs, no OR-of-IN filters).
 
+
 def upsert_kg_node(user_id: str, node: dict) -> dict:
     import uuid
+
     now = datetime.now(timezone.utc).isoformat()
     node_type = node.get("node_type", "")
     entity_id = node.get("entity_id")
@@ -773,17 +746,14 @@ def upsert_kg_node(user_id: str, node: dict) -> dict:
 
 def upsert_kg_edge(user_id: str, edge: dict) -> dict:
     import uuid
+
     now = datetime.now(timezone.utc).isoformat()
     src_id = edge.get("src_id")
     dst_id = edge.get("dst_id")
     rel = edge.get("rel", "")
     incoming_weight = float(edge.get("weight", 1))
 
-    existing_rows = (
-        repo(user_id).select("kg_edges")
-        .eq("src_id", src_id).eq("dst_id", dst_id).eq("rel", rel)
-        .limit(1).execute().data
-    )
+    existing_rows = repo(user_id).select("kg_edges").eq("src_id", src_id).eq("dst_id", dst_id).eq("rel", rel).limit(1).execute().data
     if existing_rows:
         ex = existing_rows[0]
         patch = {
@@ -828,18 +798,16 @@ def delete_kg_for_user(user_id: str) -> None:
 # Same small-per-user assumption as the graph: recall loads a user's candidate
 # rows and scores in Python. Embeddings live in a JSONB column (no pgvector).
 
+
 def upsert_agent_memory(user_id: str, row: dict) -> dict:
     import uuid
+
     now = datetime.now(timezone.utc).isoformat()
     kind = row.get("kind", "")
     ref_id = row.get("ref_id")
 
     if ref_id is not None:
-        existing_rows = (
-            repo(user_id).select("agent_memory")
-            .eq("kind", kind).eq("ref_id", ref_id)
-            .limit(1).execute().data
-        )
+        existing_rows = repo(user_id).select("agent_memory").eq("kind", kind).eq("ref_id", ref_id).limit(1).execute().data
         if existing_rows:
             ex = existing_rows[0]
             patch: dict = {
@@ -878,8 +846,7 @@ def upsert_agent_memory(user_id: str, row: dict) -> dict:
     return insert_r.data[0] if insert_r.data else new_row
 
 
-def get_agent_memory(user_id: str, *, client_id: str | None = None,
-                     kinds: list[str] | None = None, limit: int | None = None) -> list[dict]:
+def get_agent_memory(user_id: str, *, client_id: str | None = None, kinds: list[str] | None = None, limit: int | None = None) -> list[dict]:
     q = repo(user_id).select("agent_memory")
     if client_id is not None:
         q = q.eq("client_id", client_id)
@@ -895,8 +862,7 @@ def delete_agent_memory_for_user(user_id: str) -> None:
     repo(user_id).raw_table("agent_memory").delete().execute()
 
 
-def delete_agent_memory(user_id: str, *, kind: str | None = None,
-                        ref_id_prefix: str | None = None) -> int:
+def delete_agent_memory(user_id: str, *, kind: str | None = None, ref_id_prefix: str | None = None) -> int:
     """Delete a user's agent_memory rows, narrowed by kind and/or ref_id prefix.
 
     The prefix is matched as a literal: `%`/`_`/`\\` are escaped so the SQL LIKE
@@ -907,6 +873,6 @@ def delete_agent_memory(user_id: str, *, kind: str | None = None,
     if kind is not None:
         q = q.eq("kind", kind)
     if ref_id_prefix is not None:
-        literal = (ref_id_prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_"))
+        literal = ref_id_prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         q = q.like("ref_id", f"{literal}%")
     return len(q.execute().data or [])

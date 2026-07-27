@@ -76,12 +76,15 @@ async def sync_stripe_transactions(user_id: str, days_back: int = 30) -> dict:
 
         inserted = store.insert_transactions(candidate)
 
-        store.update_stripe_connection(user_id, {
-            "last_sync_at": now,
-            "last_sync_txn_count": len(inserted),
-            "sync_cursor": starting_after,
-            "last_error": None,
-        })
+        store.update_stripe_connection(
+            user_id,
+            {
+                "last_sync_at": now,
+                "last_sync_txn_count": len(inserted),
+                "sync_cursor": starting_after,
+                "last_error": None,
+            },
+        )
 
         latency_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
         log_action(
@@ -152,26 +155,24 @@ def _normalize(balance_txns: list, account_id: str, platform_key: str) -> list[d
             category = "other_income" if amount > 0 else "other_expense"
 
         created = bt.get("created", 0)
-        date_str = (
-            datetime.fromtimestamp(created, tz=timezone.utc).strftime("%Y-%m-%d")
-            if created
-            else datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        )
+        date_str = datetime.fromtimestamp(created, tz=timezone.utc).strftime("%Y-%m-%d") if created else datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
         # Try to enrich with customer name from the charge object
         customer_name = _get_customer_name(bt, account_id, platform_key)
         if customer_name:
             description = f"{customer_name} — {description}"
 
-        rows.append({
-            "date": date_str,
-            "description": description.strip(),
-            "amount": amount,
-            "type": kora_type,
-            "currency": currency,
-            "category": category,
-            "raw_text": f"Stripe {stripe_type}: {bt.get('description') or ''}",
-        })
+        rows.append(
+            {
+                "date": date_str,
+                "description": description.strip(),
+                "amount": amount,
+                "type": kora_type,
+                "currency": currency,
+                "category": category,
+                "raw_text": f"Stripe {stripe_type}: {bt.get('description') or ''}",
+            }
+        )
 
     return rows
 

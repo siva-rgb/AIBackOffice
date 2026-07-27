@@ -48,11 +48,19 @@ async def create_retainer(body: RetainerCreate, user: User = Depends(get_current
     next_inv = start if start >= date.today() else date.today()
 
     retainer = Retainer(
-        id=store.uid("ret"), user_id=user.id, client_id=client_id,
-        title=safe_sanitize(body.title, max_len=200), amount=body.amount, currency=body.currency,
-        billing_cycle=body.billing_cycle, start_date=body.start_date, end_date=body.end_date,
+        id=store.uid("ret"),
+        user_id=user.id,
+        client_id=client_id,
+        title=safe_sanitize(body.title, max_len=200),
+        amount=body.amount,
+        currency=body.currency,
+        billing_cycle=body.billing_cycle,
+        start_date=body.start_date,
+        end_date=body.end_date,
         next_invoice_date=next_inv.isoformat(),
-        renewal_date=(body.end_date or None), status="active", auto_invoice=body.auto_invoice,
+        renewal_date=(body.end_date or None),
+        status="active",
+        auto_invoice=body.auto_invoice,
         created_at=_now(),
     )
     store.insert_retainer(retainer)
@@ -88,12 +96,21 @@ async def create_retainer_invoice(retainer_id: str, user: User = Depends(get_cur
             client_name, client_email = c.name, (c.email or "")
 
     invoice = Invoice(
-        id=store.uid("inv"), user_id=user.id, invoice_number=store.next_invoice_number(user.id),
-        client_name=client_name, client_email=client_email or "billing@example.com",
+        id=store.uid("inv"),
+        user_id=user.id,
+        invoice_number=store.next_invoice_number(user.id),
+        client_name=client_name,
+        client_email=client_email or "billing@example.com",
         line_items=[LineItem(description=r.title, quantity=1, rate=r.amount, amount=r.amount)],
-        subtotal=r.amount, tax_rate=0, tax_amount=0, total=r.amount, currency=r.currency,
-        status="draft", due_date=(date.today() + timedelta(days=14)).isoformat(),
-        notes=f"Auto-created from retainer ({r.billing_cycle}).", created_at=_now(),
+        subtotal=r.amount,
+        tax_rate=0,
+        tax_amount=0,
+        total=r.amount,
+        currency=r.currency,
+        status="draft",
+        due_date=(date.today() + timedelta(days=14)).isoformat(),
+        notes=f"Auto-created from retainer ({r.billing_cycle}).",
+        created_at=_now(),
     )
     store.insert_invoice(invoice)
 
@@ -104,10 +121,15 @@ async def create_retainer_invoice(retainer_id: str, user: User = Depends(get_cur
         pass
 
     agent_logger.log_action(
-        user_id=user.id, agent_type="butler",
+        user_id=user.id,
+        agent_type="butler",
         action=f"Created retainer invoice for {client_name} ({r.title})",
-        input={"retainerId": r.id}, output={"invoiceId": invoice.id, "amount": r.amount},
-        triggered_by="user", source_record_type="retainer", source_record_id=r.id)
+        input={"retainerId": r.id},
+        output={"invoiceId": invoice.id, "amount": r.amount},
+        triggered_by="user",
+        source_record_type="retainer",
+        source_record_id=r.id,
+    )
     if r.client_id:
         butler.touch_client(user.id, r.client_id)
     return {"invoiceId": invoice.id, "invoiceNumber": invoice.invoice_number}

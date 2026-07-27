@@ -8,6 +8,7 @@ Usage:
     rows = repo(user_id).select("invoices").execute().data
     repo(user_id).insert("invoices", row).execute()
 """
+
 from __future__ import annotations
 
 from supabase import Client
@@ -35,21 +36,11 @@ class TenantQuery:
 
     def update(self, table: str, patch: dict, record_id: str, id_col: str = "id"):
         """Update a single record owned by this tenant."""
-        return (
-            self._client.table(table)
-            .update(patch)
-            .eq(id_col, record_id)
-            .eq("user_id", self._user_id)
-        )
+        return self._client.table(table).update(patch).eq(id_col, record_id).eq("user_id", self._user_id)
 
     def delete(self, table: str, record_id: str, id_col: str = "id"):
         """Delete a single record owned by this tenant."""
-        return (
-            self._client.table(table)
-            .delete()
-            .eq(id_col, record_id)
-            .eq("user_id", self._user_id)
-        )
+        return self._client.table(table).delete().eq(id_col, record_id).eq("user_id", self._user_id)
 
     def upsert(self, table: str, row: dict, on_conflict: str):
         """Upsert a row; raises ValueError if row omits or mismatches user_id."""
@@ -68,10 +59,7 @@ class TenantQuery:
 
     def _check_user_id(self, row: dict) -> None:
         if row.get("user_id") not in (None, self._user_id):
-            raise ValueError(
-                f"Cross-tenant write blocked: row.user_id={row['user_id']!r} "
-                f"!= tenant={self._user_id!r}"
-            )
+            raise ValueError(f"Cross-tenant write blocked: row.user_id={row['user_id']!r} " f"!= tenant={self._user_id!r}")
         row["user_id"] = self._user_id
 
 

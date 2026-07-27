@@ -19,6 +19,7 @@ _MAX_FILE_SIZE = 2 * 1024 * 1024  # 2 MB
 
 def _db():
     from supabase import create_client
+
     return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
 
@@ -53,9 +54,13 @@ async def list_meetings(
     if not settings.SUPABASE_URL:
         return []
     db = _db()
-    q = db.table("meetings").select(
-        "*, clients(name), meeting_action_items(id, description, status, owner)"
-    ).eq("user_id", user.id).order("meeting_date", desc=True).limit(limit)
+    q = (
+        db.table("meetings")
+        .select("*, clients(name), meeting_action_items(id, description, status, owner)")
+        .eq("user_id", user.id)
+        .order("meeting_date", desc=True)
+        .limit(limit)
+    )
     if client_id:
         q = q.eq("client_id", client_id)
     return camelize(q.execute().data)
@@ -71,9 +76,7 @@ async def list_all_action_items(
     if not settings.SUPABASE_URL:
         return []
     db = _db()
-    q = db.table("meeting_action_items").select(
-        "*, meetings(title, meeting_date, client_id, clients(name))"
-    ).eq("user_id", user.id)
+    q = db.table("meeting_action_items").select("*, meetings(title, meeting_date, client_id, clients(name))").eq("user_id", user.id)
     if status and status != "all":
         q = q.eq("status", status)
     return camelize(q.order("due_date", desc=False).execute().data)
@@ -113,19 +116,21 @@ async def upload_transcript(
 
     db = _db()
     # Verify ownership before writing
-    row = db.table("meetings").select("id").eq("id", meeting_id).eq(
-        "user_id", user.id).single().execute().data
+    row = db.table("meetings").select("id").eq("id", meeting_id).eq("user_id", user.id).single().execute().data
     if not row:
         raise HTTPException(404, "Meeting not found")
 
-    db.table("meetings").update({
-        "raw_transcript": transcript_text[:10000],
-        "source": "transcript_upload",
-        "parse_status": "pending",
-    }).eq("id", meeting_id).eq("user_id", user.id).execute()
+    db.table("meetings").update(
+        {
+            "raw_transcript": transcript_text[:10000],
+            "source": "transcript_upload",
+            "parse_status": "pending",
+        }
+    ).eq(
+        "id", meeting_id
+    ).eq("user_id", user.id).execute()
 
-    background_tasks.add_task(process_transcript, user.id, meeting_id,
-                               transcript_text, "transcript_upload")
+    background_tasks.add_task(process_transcript, user.id, meeting_id, transcript_text, "transcript_upload")
     return {"meeting_id": meeting_id, "status": "processing", "chars": len(transcript_text)}
 
 
@@ -141,20 +146,25 @@ async def create_quick_meeting_note(
 
     safe_notes = sanitize_prompt_input(body.notes, max_len=3000)
     db = _db()
-    res = db.table("meetings").insert({
-        "user_id": user.id,
-        "client_id": body.client_id,
-        "title": body.title or "Meeting note",
-        "meeting_date": body.meeting_date or _now(),
-        "meeting_type": "call",
-        "raw_notes": safe_notes,
-        "source": "quick_capture",
-        "parse_status": "pending",
-    }).execute()
+    res = (
+        db.table("meetings")
+        .insert(
+            {
+                "user_id": user.id,
+                "client_id": body.client_id,
+                "title": body.title or "Meeting note",
+                "meeting_date": body.meeting_date or _now(),
+                "meeting_type": "call",
+                "raw_notes": safe_notes,
+                "source": "quick_capture",
+                "parse_status": "pending",
+            }
+        )
+        .execute()
+    )
     meeting_id = res.data[0]["id"]
 
-    background_tasks.add_task(process_transcript, user.id, meeting_id,
-                               safe_notes, "quick_capture")
+    background_tasks.add_task(process_transcript, user.id, meeting_id, safe_notes, "quick_capture")
     return {"meeting_id": meeting_id, "status": "processing"}
 
 
@@ -165,6 +175,7 @@ async def draft_meeting_followup(
 ):
     """Draft + queue a post-meeting follow-up email for the owner's approval."""
     from ..services.meeting_agent import queue_followup_for_meeting
+
     result = queue_followup_for_meeting(user.id, meeting_id)
     if not result.get("queued"):
         raise HTTPException(400, result.get("reason", "Could not queue follow-up"))
@@ -180,8 +191,7 @@ async def list_action_items(
     if not settings.SUPABASE_URL:
         return []
     db = _db()
-    return camelize(db.table("meeting_action_items").select("*").eq(
-        "meeting_id", meeting_id).eq("user_id", user.id).execute().data)
+    return camelize(db.table("meeting_action_items").select("*").eq("meeting_id", meeting_id).eq("user_id", user.id).execute().data)
 
 
 @router.patch("/{meeting_id}/action-items/{item_id}")
@@ -199,8 +209,7 @@ async def update_action_item(
     if not update:
         raise HTTPException(400, "No valid fields to update")
     db = _db()
-    res = db.table("meeting_action_items").update(update).eq(
-        "id", item_id).eq("user_id", user.id).execute()
+    res = db.table("meeting_action_items").update(update).eq("id", item_id).eq("user_id", user.id).execute()
     if not res.data:
         raise HTTPException(404, "Action item not found")
     return res.data[0]

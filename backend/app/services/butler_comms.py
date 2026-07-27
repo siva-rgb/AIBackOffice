@@ -9,6 +9,7 @@ Two steps so the owner can review/edit before anything is queued:
   draft_client_email()  → returns {subject, body_text, body_html} (no side effects)
   queue_client_email()  → queues an (optionally edited) draft for approval
 """
+
 from __future__ import annotations
 
 import json
@@ -26,10 +27,16 @@ def _email_context(user_id: str, client_id: str) -> dict:
         return {}
     try:
         from supabase import create_client
+
         db = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
-        rows = db.table("email_intel_cache").select(
-            "summary, commitments_pending, open_questions"
-        ).eq("user_id", user_id).eq("client_id", client_id).execute().data
+        rows = (
+            db.table("email_intel_cache")
+            .select("summary, commitments_pending, open_questions")
+            .eq("user_id", user_id)
+            .eq("client_id", client_id)
+            .execute()
+            .data
+        )
         return rows[0] if rows else {}
     except Exception:
         return {}
@@ -38,6 +45,7 @@ def _email_context(user_id: str, client_id: str) -> dict:
 def _graph_history(user_id: str, client_name: str) -> str:
     try:
         from .graph_memory import query_subgraph
+
         sub = query_subgraph(user_id, client_name)
         rels = sub.get("relations", [])
         return "; ".join(f"{r['rel']} {r.get('label')}" for r in rels[:8])
@@ -50,6 +58,7 @@ def _recall_context(user_id: str, client_id: str, client_name: str, intent: str)
     the email in what actually happened, beyond the structured graph edges."""
     try:
         from .memory_recall import recall
+
         hits = recall(user_id, f"{client_name} {intent}", k=4, client_id=client_id)
         # Fall back to an unscoped recall if nothing is tagged to this client.
         if not hits:
@@ -66,10 +75,16 @@ def draft_client_email(user_id: str, client_id: str, intent: str, tone: str = "p
     if not client:
         raise ValueError("Client not found")
     user = store.get_user(user_id)
-    profile_brief = build_profile_brief(
-        getattr(user, "profile", None), "email_draft",
-        business_name=getattr(user, "business_name", None), max_chars=400,
-    ) if user else ""
+    profile_brief = (
+        build_profile_brief(
+            getattr(user, "profile", None),
+            "email_draft",
+            business_name=getattr(user, "business_name", None),
+            max_chars=400,
+        )
+        if user
+        else ""
+    )
     email_ctx = _email_context(user_id, client_id)
     graph = _graph_history(user_id, client.name)
     recalled = _recall_context(user_id, client_id, client.name, intent)
@@ -99,17 +114,16 @@ Rules: address the client by first name, one clear call to action, under 160 wor
     # Guardrail: strip hallucinated figures against known invoice amounts.
     try:
         from .validation import validate_email_draft
+
         invoices = store.list_invoices(user_id)
-        known_amounts = [float(inv.total) for inv in invoices
-                         if getattr(inv, "client_id", None) == client_id and inv.total]
+        known_amounts = [float(inv.total) for inv in invoices if getattr(inv, "client_id", None) == client_id and inv.total]
         draft = validate_email_draft(draft, client.name, known_amounts, user_id)
     except Exception:
         pass
     return draft
 
 
-def queue_client_email(user_id: str, client_id: str, subject: str,
-                       body_text: str, body_html: str = "") -> dict:
+def queue_client_email(user_id: str, client_id: str, subject: str, body_text: str, body_html: str = "") -> dict:
     """Queue an (optionally edited) draft for the owner's approval. Sends only
     after approval via execute_gmail_send. Degrades gracefully."""
     client = store.get_client(user_id, client_id)
@@ -119,8 +133,7 @@ def queue_client_email(user_id: str, client_id: str, subject: str,
     if not to_email:
         return {"queued": False, "note": "No email address on file for this client."}
     if not is_gmail_connected(user_id):
-        return {"queued": False,
-                "note": "Connect Gmail in Settings so the Butler can send on your behalf."}
+        return {"queued": False, "note": "Connect Gmail in Settings so the Butler can send on your behalf."}
     queue_gmail_send(
         user_id=user_id,
         to_email=to_email,
@@ -131,5 +144,4 @@ def queue_client_email(user_id: str, client_id: str, subject: str,
         context=f"Butler drafted a message to {client.name} on your behalf.",
         related_client_id=client_id,
     )
-    return {"queued": True,
-            "note": f"Queued for your approval — sends to {to_email} once you approve in the Business Manager."}
+    return {"queued": True, "note": f"Queued for your approval — sends to {to_email} once you approve in the Business Manager."}

@@ -14,6 +14,7 @@ Two properties matter and are tested:
  * **Provenance.** Every row carries `source="notion"` and the page id + URL in
    metadata, so a recalled fact can always be traced back to its Notion page.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -22,7 +23,7 @@ from .. import store
 from . import memory_recall, notion_connector
 
 MEMORY_KIND = "notion"
-_CHUNK_CHARS = 1500       # keep each memory row well under the 2000-char store cap
+_CHUNK_CHARS = 1500  # keep each memory row well under the 2000-char store cap
 _MAX_CHUNKS_PER_PAGE = 8  # bound one giant page's footprint
 
 
@@ -80,17 +81,20 @@ def ingest(user_id: str) -> dict:
 
         for i, chunk in enumerate(_chunk(body)):
             memory_recall.remember(
-                user_id, MEMORY_KIND, chunk,
-                ref_type="notion_page", ref_id=f"{page_id}#{i}",
-                salience=0.6, source="notion",
+                user_id,
+                MEMORY_KIND,
+                chunk,
+                ref_type="notion_page",
+                ref_id=f"{page_id}#{i}",
+                salience=0.6,
+                source="notion",
                 metadata={"pageId": page_id, "title": title, "url": url},
             )
             chunks_written += 1
         pages_done += 1
 
     try:
-        store.update_notion_connection(user_id, {"last_ingest_at": _now(), "updated_at": _now(),
-                                                 "last_error": None})
+        store.update_notion_connection(user_id, {"last_ingest_at": _now(), "updated_at": _now(), "last_error": None})
     except Exception:
         pass
 

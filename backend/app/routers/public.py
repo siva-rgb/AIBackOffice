@@ -19,19 +19,15 @@ async def public_stats():
     week_ago = now - timedelta(days=7)
     month_ago = now - timedelta(days=30)
 
-    def _dt(l):
+    def _dt(log_entry):
         try:
-            return datetime.fromisoformat(l.created_at)
+            return datetime.fromisoformat(log_entry.created_at)
         except ValueError:
             return now
 
     return {
-        "actionsToday": sum(1 for l in logs if l.created_at[:10] >= today),
-        "followUpsSentThisWeek": sum(
-            1 for l in logs if l.agent_type == "invoice_follow_up" and _dt(l) >= week_ago
-        ),
-        "contractsThisMonth": sum(
-            1 for l in logs if l.agent_type == "contract_generator" and _dt(l) >= month_ago
-        ),
+        "actionsToday": sum(1 for log_entry in logs if log_entry.created_at[:10] >= today),
+        "followUpsSentThisWeek": sum(1 for log_entry in logs if log_entry.agent_type == "invoice_follow_up" and _dt(log_entry) >= week_ago),
+        "contractsThisMonth": sum(1 for log_entry in logs if log_entry.agent_type == "contract_generator" and _dt(log_entry) >= month_ago),
         "totalActions": len(logs),
     }

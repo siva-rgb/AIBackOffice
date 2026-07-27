@@ -35,15 +35,20 @@ Depends: none
 ### M2 — Mandatory Test Harness + CI  `CRITICAL` · Track: `ci-infra`
 Depends: none (parallel with M1)
 
-- [ ] M2.1 Stand up `pytest` for backend (`supabase_store`, `token_encryption`, `validation`
+- [x] M2.1 Stand up `pytest` for backend (`supabase_store`, `token_encryption`, `validation`
       as first targets) and `jest` for frontend.
-- [ ] M2.2 Add GitHub Actions workflow: lint (`flake8`, `black`), typecheck (`mypy`), test run,
+- [x] M2.2 Add GitHub Actions workflow: lint (`flake8`, `black`), typecheck (`mypy`), test run,
       on every PR — separate from the existing `cron.yml`.
-- [ ] M2.3 Require the workflow as a required status check before merge.
-- [ ] M2.4 Add coverage reporting; set an initial floor (e.g. 40%) that ratchets up over time.
+- [~] M2.3 Require the workflow as a required status check before merge. _(file-level done; pending human confirmation that GitHub branch-protection has `Tests` set as a required check on `main`)_
+- [x] M2.4 Add coverage reporting; set an initial floor (e.g. 40%) that ratchets up over time.
 
 **Gate:** PR against a scratch branch shows the new workflow running and blocking merge on
 failure.
+
+**Status (2026-07-28):** `[x]` — L4 APPROVE (separate model, fresh context). All gates green;
+M2.3 stays `[~]` only because GitHub branch-protection requires a human to set the
+required-check toggle (file artifact already wires the workflow into the PR decision).
+See `.genesis/checkpoints/M2.md` for the L1 → L4 audit trail and quiz-me Q+A.
 
 ---
 

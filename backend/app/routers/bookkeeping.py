@@ -35,6 +35,7 @@ async def patch_transaction_category(
     user: User = Depends(get_current_user),
 ):
     from ..services.playbook import observe_correction
+
     txn = next((t for t in store.list_transactions(user.id) if t.id == transaction_id), None)
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")

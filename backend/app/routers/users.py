@@ -43,6 +43,7 @@ async def update_me(patch: ProfileUpdate, user: User = Depends(get_current_user)
         raise HTTPException(status_code=404, detail="User not found")
     if patch.onboarding_completed and not user.onboarding_completed:
         from ..services.playbook import seed_from_onboarding
+
         try:
             profile_dict = updated.profile.model_dump(by_alias=False) if updated.profile else {}
             seed_from_onboarding(user.id, profile_dict)
@@ -111,8 +112,7 @@ async def update_profile(patch: BusinessProfile, request: Request, user: User = 
     except Exception as exc:  # most likely: migration not applied
         raise HTTPException(
             status_code=500,
-            detail="Could not save profile. Ensure the 'profile' column exists "
-                   "(run migrations/2026-05-31_add_user_profile.sql). " + str(exc)[:160],
+            detail="Could not save profile. Ensure the 'profile' column exists " "(run migrations/2026-05-31_add_user_profile.sql). " + str(exc)[:160],
         )
     if not updated:
         raise HTTPException(status_code=404, detail="User not found")

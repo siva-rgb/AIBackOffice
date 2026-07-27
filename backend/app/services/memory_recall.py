@@ -19,6 +19,7 @@ Per-user memory is small (100s–1000s of rows), so we load the candidate rows a
 score in Python — the same design as `graph_memory`. A pgvector ANN index is a
 drop-in optimization later without changing this interface.
 """
+
 from __future__ import annotations
 
 import math
@@ -30,9 +31,36 @@ from . import embeddings
 
 _TOKEN = re.compile(r"[a-z0-9]+")
 _STOP = {
-    "the", "a", "an", "and", "or", "of", "to", "for", "in", "on", "is", "are",
-    "with", "this", "that", "it", "at", "by", "be", "as", "we", "our", "you",
-    "your", "was", "has", "have", "had", "will", "about",
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "of",
+    "to",
+    "for",
+    "in",
+    "on",
+    "is",
+    "are",
+    "with",
+    "this",
+    "that",
+    "it",
+    "at",
+    "by",
+    "be",
+    "as",
+    "we",
+    "our",
+    "you",
+    "your",
+    "was",
+    "has",
+    "have",
+    "had",
+    "will",
+    "about",
 }
 
 # Kinds recalled by default (all). Callers can narrow with `kinds=`.
@@ -62,7 +90,7 @@ def _lexical(q_tokens: set[str], text: str) -> float:
     t = _tokens(text)
     if not t:
         return 0.0
-    return len(q_tokens & t) / len(q_tokens)   # recall of the query's terms
+    return len(q_tokens & t) / len(q_tokens)  # recall of the query's terms
 
 
 def _recency(iso: str | None) -> float:
@@ -75,14 +103,23 @@ def _recency(iso: str | None) -> float:
         days = max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() / 86400.0)
     except Exception:
         return 0.5
-    return 0.5 ** (days / 30.0)   # 30-day half-life
+    return 0.5 ** (days / 30.0)  # 30-day half-life
 
 
 # ── Write ───────────────────────────────────────────────────────────────────
-def remember(user_id: str, kind: str, content: str, *, client_id: str | None = None,
-             ref_type: str | None = None, ref_id: str | None = None,
-             salience: float = 0.5, source: str | None = None,
-             metadata: dict | None = None, defer_embed: bool = False) -> None:
+def remember(
+    user_id: str,
+    kind: str,
+    content: str,
+    *,
+    client_id: str | None = None,
+    ref_type: str | None = None,
+    ref_id: str | None = None,
+    salience: float = 0.5,
+    source: str | None = None,
+    metadata: dict | None = None,
+    defer_embed: bool = False,
+) -> None:
     """Persist a recallable memory. Best-effort — never raises.
 
     Embeds the content when the provider is available (skip with defer_embed=True
@@ -94,18 +131,26 @@ def remember(user_id: str, kind: str, content: str, *, client_id: str | None = N
         return
     try:
         vec = None if defer_embed else embeddings.embed(content)
-        store.upsert_agent_memory(user_id, {
-            "kind": kind, "client_id": client_id, "ref_type": ref_type, "ref_id": ref_id,
-            "content": content[:2000], "embedding": vec, "salience": float(salience),
-            "source": source, "metadata": metadata or {},
-        })
+        store.upsert_agent_memory(
+            user_id,
+            {
+                "kind": kind,
+                "client_id": client_id,
+                "ref_type": ref_type,
+                "ref_id": ref_id,
+                "content": content[:2000],
+                "embedding": vec,
+                "salience": float(salience),
+                "source": source,
+                "metadata": metadata or {},
+            },
+        )
     except Exception as exc:
         print(f"[memory] remember failed: {exc}")
 
 
 # ── Read ────────────────────────────────────────────────────────────────────
-def recall(user_id: str, query: str, *, k: int = 6, client_id: str | None = None,
-           kinds: list[str] | None = None, min_score: float = 0.05) -> list[dict]:
+def recall(user_id: str, query: str, *, k: int = 6, client_id: str | None = None, kinds: list[str] | None = None, min_score: float = 0.05) -> list[dict]:
     """Top-k memories most relevant to `query`, hybrid-ranked. Each result carries
     the original row plus `_score`, `_sim` (None if lexical-only) and `_lex`."""
     query = (query or "").strip()
@@ -116,7 +161,7 @@ def recall(user_id: str, query: str, *, k: int = 6, client_id: str | None = None
         return []
 
     q_tokens = _tokens(query)
-    q_vec = embeddings.embed(query)   # None → lexical-only ranking
+    q_vec = embeddings.embed(query)  # None → lexical-only ranking
 
     scored: list[dict] = []
     for r in rows:
@@ -130,18 +175,19 @@ def recall(user_id: str, query: str, *, k: int = 6, client_id: str | None = None
         else:
             score = 0.70 * lex + 0.18 * sal + 0.12 * rec
         if score >= min_score:
-            scored.append({
-                **r, "_score": round(score, 4),
-                "_sim": round(sim, 4) if sim is not None else None,
-                "_lex": round(lex, 4),
-            })
+            scored.append(
+                {
+                    **r,
+                    "_score": round(score, 4),
+                    "_sim": round(sim, 4) if sim is not None else None,
+                    "_lex": round(lex, 4),
+                }
+            )
     scored.sort(key=lambda x: x["_score"], reverse=True)
     return scored[:k]
 
 
-def build_recall_brief(user_id: str, query: str, *, k: int = 5,
-                       client_id: str | None = None, kinds: list[str] | None = None,
-                       max_chars: int = 500) -> str:
+def build_recall_brief(user_id: str, query: str, *, k: int = 5, client_id: str | None = None, kinds: list[str] | None = None, max_chars: int = 500) -> str:
     """Serialize the top recalled memories into a prompt-injection block, or ""."""
     hits = recall(user_id, query, k=k, client_id=client_id, kinds=kinds)
     if not hits:
@@ -168,11 +214,17 @@ def reindex(user_id: str, *, embed_missing: bool = True) -> dict:
             summ = (e.get("summary") or "").strip()
             if not summ:
                 continue
-            remember(user_id, "playbook", summ,
-                     client_id=e.get("client_id"), ref_type="playbook",
-                     ref_id=str(e.get("id") or e.get("key") or summ[:60]),
-                     salience=float(e.get("confidence", 0.5) or 0.5),
-                     source=e.get("source"), defer_embed=True)
+            remember(
+                user_id,
+                "playbook",
+                summ,
+                client_id=e.get("client_id"),
+                ref_type="playbook",
+                ref_id=str(e.get("id") or e.get("key") or summ[:60]),
+                salience=float(e.get("confidence", 0.5) or 0.5),
+                source=e.get("source"),
+                defer_embed=True,
+            )
             counts["playbook"] += 1
     except Exception as exc:
         print(f"[memory] reindex playbook failed: {exc}")
@@ -184,9 +236,15 @@ def reindex(user_id: str, *, embed_missing: bool = True) -> dict:
                 continue
             label = (n.get("label") or "").strip()
             if label:
-                remember(user_id, "graph_fact", label, ref_type="kg_node",
-                         ref_id=str(n.get("id")),
-                         salience=float(n.get("salience", 0.6) or 0.6), defer_embed=True)
+                remember(
+                    user_id,
+                    "graph_fact",
+                    label,
+                    ref_type="kg_node",
+                    ref_id=str(n.get("id")),
+                    salience=float(n.get("salience", 0.6) or 0.6),
+                    defer_embed=True,
+                )
                 counts["graph_fact"] += 1
     except Exception as exc:
         print(f"[memory] reindex graph failed: {exc}")
@@ -194,19 +252,26 @@ def reindex(user_id: str, *, embed_missing: bool = True) -> dict:
     # Email intel summaries (Supabase only; best-effort).
     try:
         from ..config import settings
+
         if settings.SUPABASE_URL:
             from supabase import create_client
+
             db = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
-            rows = db.table("email_intel_cache").select(
-                "client_id, client_name, summary").eq("user_id", user_id).execute().data or []
+            rows = db.table("email_intel_cache").select("client_id, client_name, summary").eq("user_id", user_id).execute().data or []
             for row in rows:
                 summ = (row.get("summary") or "").strip()
                 if summ:
-                    remember(user_id, "email_intel",
-                             f"{row.get('client_name', '')}: {summ}".strip(": "),
-                             client_id=row.get("client_id"), ref_type="email_intel_cache",
-                             ref_id=str(row.get("client_id")), salience=0.6,
-                             source="email", defer_embed=True)
+                    remember(
+                        user_id,
+                        "email_intel",
+                        f"{row.get('client_name', '')}: {summ}".strip(": "),
+                        client_id=row.get("client_id"),
+                        ref_type="email_intel_cache",
+                        ref_id=str(row.get("client_id")),
+                        salience=0.6,
+                        source="email",
+                        defer_embed=True,
+                    )
                     counts["email_intel"] += 1
     except Exception as exc:
         print(f"[memory] reindex email failed: {exc}")

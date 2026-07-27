@@ -416,7 +416,7 @@ export default function AboutPage() {
       <section>
         <h2 className="text-lg font-bold text-gray-900">How the agents talk to each other</h2>
         <p className="mt-1 text-sm text-gray-500">
-          The agents don't call each other directly. They share a common data store — and that's intentional.
+          The agents don&apos;t call each other directly. They share a common data store — and that&apos;s intentional.
         </p>
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
           <Card className="p-5">
@@ -443,7 +443,7 @@ export default function AboutPage() {
             <p className="text-xs leading-relaxed text-gray-600">
               The Butler runs independently and focuses entirely on client relationships. It reads the same data
               store (clients, invoices, engagements, meetings, email intel) but produces a different perspective —
-              a client-centric briefing. It doesn't report to the Manager; they share data, not a chain of command.
+              a client-centric briefing. It doesn&apos;t report to the Manager; they share data, not a chain of command.
             </p>
             <div className="mt-3 flex flex-wrap gap-1.5">
               {['Gmail Intel', 'Calendar Intel', 'Meeting Agent', 'Quick Capture'].map((a) => (
@@ -458,7 +458,7 @@ export default function AboutPage() {
             </div>
             <p className="text-xs leading-relaxed text-gray-600">
               The Playbook is not an agent but a shared memory layer all agents read from. Every agent call injects
-              a "Business Context" block from the Playbook — your preferences, corrections, business rules, and
+              a &ldquo;Business Context&rdquo; block from the Playbook — your preferences, corrections, business rules, and
               client facts. On day one this block is empty. After a month of use it contains dozens of personalized
               facts that make every AI response more accurate and relevant to your specific business.
             </p>
@@ -542,7 +542,7 @@ export default function AboutPage() {
       <section>
         <h2 className="text-lg font-bold text-gray-900">How Kora gets smarter about your business over time</h2>
         <p className="mt-1 text-sm text-gray-500">
-          The Playbook turns usage into personalization. Here's the progression:
+          The Playbook turns usage into personalization. Here&apos;s the progression:
         </p>
         <div className="mt-5 grid gap-4 sm:grid-cols-3">
           {[

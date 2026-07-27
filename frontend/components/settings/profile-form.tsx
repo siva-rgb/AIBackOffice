@@ -232,7 +232,7 @@ export function ProfileForm({ me }: { me: Me }) {
           <div className="h-full rounded-full bg-kora-500 transition-all" style={{ width: `${completeness.percent}%` }} />
         </div>
         <p className="mt-2 text-xs text-gray-400">
-          The more you fill in, the sharper your AI agents' drafts, decisions, and briefings become.
+          The more you fill in, the sharper your AI agents&apos; drafts, decisions, and briefings become.
         </p>
       </div>
 

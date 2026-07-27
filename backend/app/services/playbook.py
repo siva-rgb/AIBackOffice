@@ -6,11 +6,12 @@ payments) and stores what it learns. Later, assemble_context() retrieves the
 most relevant learned facts and injects them into LLM prompts so every agent
 gets personalized context for free.
 """
+
 from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from .. import store
 from . import agent_logger
@@ -20,6 +21,7 @@ from . import agent_logger
 # OBSERVER 1: Approve / Dismiss decisions
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def observe_decision(user_id: str, task: dict, action: str) -> None:
     """Record a manager task approve/dismiss. Builds approval-rate entries and
     detects business rules from repeated dismiss patterns.
@@ -27,49 +29,45 @@ def observe_decision(user_id: str, task: dict, action: str) -> None:
     Wire: routers/manager.py → approve() and dismiss() after supervisor call.
     """
     kind = task.get("kind", "")
-    client_id = (
-        task.get("payload", {}).get("client_id")
-        or task.get("payload", {}).get("related_client_id")
-    )
+    client_id = task.get("payload", {}).get("client_id") or task.get("payload", {}).get("related_client_id")
 
-    store.upsert_playbook_entry(user_id, {
-        "category": "user_preference",
-        "client_id": client_id,
-        "key": f"decision_{kind}_{action}",
-        "value": {"kind": kind, "action": action, "task_title": task.get("title", "")},
-        "summary": f"User {action} a '{kind}' action" + (" for client" if client_id else ""),
-        "source": "observation",
-        "confidence": 0.3,
-    })
+    store.upsert_playbook_entry(
+        user_id,
+        {
+            "category": "user_preference",
+            "client_id": client_id,
+            "key": f"decision_{kind}_{action}",
+            "value": {"kind": kind, "action": action, "task_title": task.get("title", "")},
+            "summary": f"User {action} a '{kind}' action" + (" for client" if client_id else ""),
+            "source": "observation",
+            "confidence": 0.3,
+        },
+    )
 
     # Detect business rules from repeated dismissals (3+)
     if action == "dismissed":
         history = store.get_playbook_entries(user_id, category="user_preference", client_id=client_id)
-        dismiss_count = sum(
-            1 for e in history
-            if e.get("key", "").startswith(f"decision_{kind}_dismissed")
-            and e.get("observation_count", 0) >= 3
-        )
+        dismiss_count = sum(1 for e in history if e.get("key", "").startswith(f"decision_{kind}_dismissed") and e.get("observation_count", 0) >= 3)
         if dismiss_count > 0:
             rule_key = f"skip_{kind}" + (f"_client_{client_id}" if client_id else "")
-            store.upsert_playbook_entry(user_id, {
-                "category": "business_rule",
-                "client_id": client_id,
-                "key": rule_key,
-                "value": {"kind": kind, "reason": "repeatedly dismissed"},
-                "summary": (
-                    f"User consistently dismisses '{kind}' actions"
-                    + (" for this client" if client_id else "")
-                    + " — consider not proposing"
-                ),
-                "source": "observation",
-                "confidence": 0.7,
-            })
+            store.upsert_playbook_entry(
+                user_id,
+                {
+                    "category": "business_rule",
+                    "client_id": client_id,
+                    "key": rule_key,
+                    "value": {"kind": kind, "reason": "repeatedly dismissed"},
+                    "summary": (f"User consistently dismisses '{kind}' actions" + (" for this client" if client_id else "") + " — consider not proposing"),
+                    "source": "observation",
+                    "confidence": 0.7,
+                },
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # OBSERVER 2: Category corrections (bookkeeping)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def observe_correction(
     user_id: str,
@@ -87,20 +85,23 @@ def observe_correction(
         return
 
     desc_key = _normalize_description(description)
-    store.upsert_playbook_entry(user_id, {
-        "category": "correction",
-        "client_id": None,
-        "key": f"category_override_{desc_key}",
-        "value": {
-            "description_pattern": desc_key,
-            "original_description": description,
-            "old_category": old_category,
-            "new_category": new_category,
+    store.upsert_playbook_entry(
+        user_id,
+        {
+            "category": "correction",
+            "client_id": None,
+            "key": f"category_override_{desc_key}",
+            "value": {
+                "description_pattern": desc_key,
+                "original_description": description,
+                "old_category": old_category,
+                "new_category": new_category,
+            },
+            "summary": f'"{desc_key}" should be categorized as {new_category} (corrected from {old_category})',
+            "source": "correction",
+            "confidence": 1.0,
         },
-        "summary": f'"{desc_key}" should be categorized as {new_category} (corrected from {old_category})',
-        "source": "correction",
-        "confidence": 1.0,
-    })
+    )
 
     try:
         agent_logger.log_action(
@@ -127,6 +128,7 @@ def _normalize_description(desc: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 # OBSERVER 3: Email draft edits
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def observe_email_edit(
     user_id: str,
@@ -177,15 +179,18 @@ def observe_email_edit(
     if not signals:
         return
 
-    store.upsert_playbook_entry(user_id, {
-        "category": "user_preference",
-        "client_id": client_id,
-        "key": "email_style" + (f"_client_{client_id}" if client_id else ""),
-        "value": signals,
-        "summary": _build_style_summary(signals),
-        "source": "observation",
-        "confidence": 0.4,
-    })
+    store.upsert_playbook_entry(
+        user_id,
+        {
+            "category": "user_preference",
+            "client_id": client_id,
+            "key": "email_style" + (f"_client_{client_id}" if client_id else ""),
+            "value": signals,
+            "summary": _build_style_summary(signals),
+            "source": "observation",
+            "confidence": 0.4,
+        },
+    )
 
 
 def _build_style_summary(signals: dict) -> str:
@@ -202,6 +207,7 @@ def _build_style_summary(signals: dict) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 # OBSERVER 4: Payment reconciliation → client payment speed
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def observe_payment(user_id: str, invoice: dict, transaction: dict) -> None:
     """Record client payment speed after invoice reconciliation.
@@ -224,41 +230,42 @@ def observe_payment(user_id: str, invoice: dict, transaction: dict) -> None:
             pass
 
     clients = store.list_clients(user_id)
-    matched = next(
-        (c for c in clients if c.name.lower() == client_name.lower()), None
-    )
+    matched = next((c for c in clients if c.name.lower() == client_name.lower()), None)
     client_id = matched.id if matched else None
 
     speed = (
-        "early" if days_to_pay is not None and days_to_pay < 0
-        else "on_time" if days_to_pay is not None and days_to_pay <= 3
-        else "late" if days_to_pay is not None
-        else "unknown"
+        "early"
+        if days_to_pay is not None and days_to_pay < 0
+        else "on_time" if days_to_pay is not None and days_to_pay <= 3 else "late" if days_to_pay is not None else "unknown"
     )
 
-    store.upsert_playbook_entry(user_id, {
-        "category": "client_intelligence",
-        "client_id": client_id,
-        "key": "payment_speed",
-        "value": {
-            "client_name": client_name,
-            "days_to_pay": days_to_pay,
-            "speed": speed,
-            "invoice_amount": invoice.get("total"),
-            "follow_up_count": invoice.get("follow_up_count", 0),
+    store.upsert_playbook_entry(
+        user_id,
+        {
+            "category": "client_intelligence",
+            "client_id": client_id,
+            "key": "payment_speed",
+            "value": {
+                "client_name": client_name,
+                "days_to_pay": days_to_pay,
+                "speed": speed,
+                "invoice_amount": invoice.get("total"),
+                "follow_up_count": invoice.get("follow_up_count", 0),
+            },
+            "summary": (
+                f"{client_name} paid {'early' if speed == 'early' else f'{days_to_pay} days after due date'}"
+                + (f" after {invoice.get('follow_up_count', 0)} reminder(s)" if invoice.get("follow_up_count") else "")
+            ),
+            "source": "observation",
+            "confidence": 0.5,
         },
-        "summary": (
-            f"{client_name} paid {'early' if speed == 'early' else f'{days_to_pay} days after due date'}"
-            + (f" after {invoice.get('follow_up_count', 0)} reminder(s)" if invoice.get("follow_up_count") else "")
-        ),
-        "source": "observation",
-        "confidence": 0.5,
-    })
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # OBSERVER 5: Gmail intel bridge (Phase 2)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def observe_email_intel(user_id: str, client_id: str, intel: dict) -> None:
     """Bridge gmail_intel_cache data into the Playbook.
@@ -269,59 +276,68 @@ def observe_email_intel(user_id: str, client_id: str, intel: dict) -> None:
 
     for mention in intel.get("financial_mentions", []):
         if mention.get("amount") and mention.get("type"):
-            store.upsert_playbook_entry(user_id, {
-                "category": "extracted_fact",
-                "client_id": client_id,
-                "key": f"financial_mention_{mention['type']}",
-                "value": mention,
-                "summary": (
-                    f"{client_name}: {mention['type']} of ${mention['amount']:,.0f} mentioned in email"
-                    if isinstance(mention.get("amount"), (int, float))
-                    else f"{client_name}: {mention.get('context', '')}"
-                ),
-                "source": "extraction",
-                "confidence": 0.6,
-            })
+            store.upsert_playbook_entry(
+                user_id,
+                {
+                    "category": "extracted_fact",
+                    "client_id": client_id,
+                    "key": f"financial_mention_{mention['type']}",
+                    "value": mention,
+                    "summary": (
+                        f"{client_name}: {mention['type']} of ${mention['amount']:,.0f} mentioned in email"
+                        if isinstance(mention.get("amount"), (int, float))
+                        else f"{client_name}: {mention.get('context', '')}"
+                    ),
+                    "source": "extraction",
+                    "confidence": 0.6,
+                },
+            )
 
     for commitment in intel.get("commitments_pending", []):
         who = commitment.get("who", "")
         what = commitment.get("what", "")
         if what:
-            store.upsert_playbook_entry(user_id, {
-                "category": "extracted_fact",
-                "client_id": client_id,
-                "key": f"commitment_{who}",
-                "value": commitment,
-                "summary": (
-                    f"{client_name}: {who} committed to '{what}'"
-                    + (f" by {commitment['mentioned_date']}" if commitment.get("mentioned_date") else "")
-                ),
-                "source": "extraction",
-                "confidence": 0.55,
-            })
+            store.upsert_playbook_entry(
+                user_id,
+                {
+                    "category": "extracted_fact",
+                    "client_id": client_id,
+                    "key": f"commitment_{who}",
+                    "value": commitment,
+                    "summary": (
+                        f"{client_name}: {who} committed to '{what}'" + (f" by {commitment['mentioned_date']}" if commitment.get("mentioned_date") else "")
+                    ),
+                    "source": "extraction",
+                    "confidence": 0.55,
+                },
+            )
 
     if intel.get("relationship_health") and intel["relationship_health"] != "unknown":
-        store.upsert_playbook_entry(user_id, {
-            "category": "client_intelligence",
-            "client_id": client_id,
-            "key": "email_relationship_health",
-            "value": {
-                "health": intel["relationship_health"],
-                "sentiment": intel.get("sentiment"),
-                "last_contact_days": intel.get("last_contact_days"),
+        store.upsert_playbook_entry(
+            user_id,
+            {
+                "category": "client_intelligence",
+                "client_id": client_id,
+                "key": "email_relationship_health",
+                "value": {
+                    "health": intel["relationship_health"],
+                    "sentiment": intel.get("sentiment"),
+                    "last_contact_days": intel.get("last_contact_days"),
+                },
+                "summary": (
+                    f"{client_name}: email relationship is {intel['relationship_health']}"
+                    + (f" (sentiment: {intel['sentiment']})" if intel.get("sentiment") else "")
+                ),
+                "source": "extraction",
+                "confidence": 0.6,
             },
-            "summary": (
-                f"{client_name}: email relationship is {intel['relationship_health']}"
-                + (f" (sentiment: {intel['sentiment']})" if intel.get("sentiment") else "")
-            ),
-            "source": "extraction",
-            "confidence": 0.6,
-        })
+        )
 
     # Task ledger — pending commitments become tracked work so nothing promised
     # over email is dropped. Idempotent per (client, who, what).
     try:
         from .task_ledger import auto_capture_from_email
+
         auto_capture_from_email(user_id, client_id, intel)
     except Exception:
         pass
@@ -329,14 +345,13 @@ def observe_email_intel(user_id: str, client_id: str, intel: dict) -> None:
     # Graph memory bridge — make learned email facts traversable per client.
     try:
         from .graph_memory import ingest_client_fact
+
         for commitment in intel.get("commitments_pending", []):
             what = commitment.get("what")
             if what:
-                ingest_client_fact(user_id, client_id, client_name,
-                                   f"{commitment.get('who', '')} committed to '{what}'".strip(), source="email")
+                ingest_client_fact(user_id, client_id, client_name, f"{commitment.get('who', '')} committed to '{what}'".strip(), source="email")
         if intel.get("relationship_health") and intel["relationship_health"] != "unknown":
-            ingest_client_fact(user_id, client_id, client_name,
-                               f"Email relationship: {intel['relationship_health']}", rel="RELATED_TO", source="email")
+            ingest_client_fact(user_id, client_id, client_name, f"Email relationship: {intel['relationship_health']}", rel="RELATED_TO", source="email")
     except Exception:
         pass
 
@@ -344,6 +359,7 @@ def observe_email_intel(user_id: str, client_id: str, intel: dict) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 # OBSERVER 6: Meeting agent bridge (Phase 2)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def observe_meeting(user_id: str, client_id: str | None, extracted: dict) -> None:
     """Bridge meeting MOM data into the Playbook.
@@ -355,41 +371,44 @@ def observe_meeting(user_id: str, client_id: str | None, extracted: dict) -> Non
 
     for mention in extracted.get("financial_mentions", []):
         if mention.get("amount"):
-            store.upsert_playbook_entry(user_id, {
-                "category": "extracted_fact",
-                "client_id": client_id,
-                "key": f"meeting_financial_{mention.get('type', 'unknown')}",
-                "value": mention,
-                "summary": (
-                    f"Meeting mentioned: {mention.get('type', '')} ${mention['amount']:,.0f}"
-                    + (f" — {mention.get('context', '')}" if mention.get("context") else "")
-                ),
-                "source": "extraction",
-                "confidence": 0.65,
-            })
+            store.upsert_playbook_entry(
+                user_id,
+                {
+                    "category": "extracted_fact",
+                    "client_id": client_id,
+                    "key": f"meeting_financial_{mention.get('type', 'unknown')}",
+                    "value": mention,
+                    "summary": (
+                        f"Meeting mentioned: {mention.get('type', '')} ${mention['amount']:,.0f}"
+                        + (f" — {mention.get('context', '')}" if mention.get("context") else "")
+                    ),
+                    "source": "extraction",
+                    "confidence": 0.65,
+                },
+            )
 
     for commitment in extracted.get("commitments", []):
         if commitment.get("who") == "client" and commitment.get("what"):
-            store.upsert_playbook_entry(user_id, {
-                "category": "extracted_fact",
-                "client_id": client_id,
-                "key": "client_commitment",
-                "value": commitment,
-                "summary": (
-                    f"Client committed: {commitment['what']}"
-                    + (f" by {commitment['by_when']}" if commitment.get("by_when") else "")
-                ),
-                "source": "extraction",
-                "confidence": 0.7,
-            })
+            store.upsert_playbook_entry(
+                user_id,
+                {
+                    "category": "extracted_fact",
+                    "client_id": client_id,
+                    "key": "client_commitment",
+                    "value": commitment,
+                    "summary": (f"Client committed: {commitment['what']}" + (f" by {commitment['by_when']}" if commitment.get("by_when") else "")),
+                    "source": "extraction",
+                    "confidence": 0.7,
+                },
+            )
 
     # Graph memory bridge — meeting commitments become traversable client facts.
     try:
         from .graph_memory import ingest_client_fact
+
         for commitment in extracted.get("commitments", []):
             if commitment.get("who") == "client" and commitment.get("what"):
-                ingest_client_fact(user_id, client_id, None,
-                                   f"Committed in meeting: {commitment['what']}", rel="MET_ABOUT", source="meeting")
+                ingest_client_fact(user_id, client_id, None, f"Committed in meeting: {commitment['what']}", rel="MET_ABOUT", source="meeting")
     except Exception:
         pass
 
@@ -397,6 +416,7 @@ def observe_meeting(user_id: str, client_id: str | None, extracted: dict) -> Non
 # ═══════════════════════════════════════════════════════════════════════════
 # OBSERVER 7: Onboarding seed
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def seed_from_onboarding(user_id: str, profile: dict) -> None:
     """Seed the Playbook with initial business context from the onboarding profile.
@@ -407,109 +427,148 @@ def seed_from_onboarding(user_id: str, profile: dict) -> None:
         return
 
     if profile.get("business_type"):
-        store.upsert_playbook_entry(user_id, {
-            "category": "extracted_fact",
-            "key": "business_type",
-            "value": {"type": profile["business_type"]},
-            "summary": f"Business type: {profile['business_type']}",
-            "source": "onboarding",
-            "confidence": 1.0,
-        })
+        store.upsert_playbook_entry(
+            user_id,
+            {
+                "category": "extracted_fact",
+                "key": "business_type",
+                "value": {"type": profile["business_type"]},
+                "summary": f"Business type: {profile['business_type']}",
+                "source": "onboarding",
+                "confidence": 1.0,
+            },
+        )
 
     if profile.get("industry"):
-        store.upsert_playbook_entry(user_id, {
-            "category": "extracted_fact",
-            "key": "industry",
-            "value": {"industry": profile["industry"]},
-            "summary": f"Industry: {profile['industry']}",
-            "source": "onboarding",
-            "confidence": 1.0,
-        })
+        store.upsert_playbook_entry(
+            user_id,
+            {
+                "category": "extracted_fact",
+                "key": "industry",
+                "value": {"industry": profile["industry"]},
+                "summary": f"Industry: {profile['industry']}",
+                "source": "onboarding",
+                "confidence": 1.0,
+            },
+        )
 
     if profile.get("monthly_revenue_goal"):
-        store.upsert_playbook_entry(user_id, {
-            "category": "business_pattern",
-            "key": "monthly_revenue_goal",
-            "value": {"goal": profile["monthly_revenue_goal"]},
-            "summary": f"Monthly revenue goal: ${profile['monthly_revenue_goal']:,.0f}",
-            "source": "onboarding",
-            "confidence": 1.0,
-        })
+        store.upsert_playbook_entry(
+            user_id,
+            {
+                "category": "business_pattern",
+                "key": "monthly_revenue_goal",
+                "value": {"goal": profile["monthly_revenue_goal"]},
+                "summary": f"Monthly revenue goal: ${profile['monthly_revenue_goal']:,.0f}",
+                "source": "onboarding",
+                "confidence": 1.0,
+            },
+        )
 
     if profile.get("default_payment_terms_days"):
-        store.upsert_playbook_entry(user_id, {
-            "category": "user_preference",
-            "key": "default_payment_terms",
-            "value": {"terms_days": profile["default_payment_terms_days"]},
-            "summary": f"Default payment terms: Net {profile['default_payment_terms_days']}",
-            "source": "onboarding",
-            "confidence": 0.9,
-        })
+        store.upsert_playbook_entry(
+            user_id,
+            {
+                "category": "user_preference",
+                "key": "default_payment_terms",
+                "value": {"terms_days": profile["default_payment_terms_days"]},
+                "summary": f"Default payment terms: Net {profile['default_payment_terms_days']}",
+                "source": "onboarding",
+                "confidence": 0.9,
+            },
+        )
 
     if profile.get("default_hourly_rate"):
-        store.upsert_playbook_entry(user_id, {
-            "category": "extracted_fact",
-            "key": "hourly_rate",
-            "value": {"rate": profile["default_hourly_rate"], "currency": profile.get("currency", "USD")},
-            "summary": f"Standard hourly rate: ${profile['default_hourly_rate']}/hour",
-            "source": "onboarding",
-            "confidence": 0.9,
-        })
+        store.upsert_playbook_entry(
+            user_id,
+            {
+                "category": "extracted_fact",
+                "key": "hourly_rate",
+                "value": {"rate": profile["default_hourly_rate"], "currency": profile.get("currency", "USD")},
+                "summary": f"Standard hourly rate: ${profile['default_hourly_rate']}/hour",
+                "source": "onboarding",
+                "confidence": 0.9,
+            },
+        )
 
     if profile.get("brand_tone"):
-        store.upsert_playbook_entry(user_id, {
-            "category": "user_preference",
-            "key": "brand_tone",
-            "value": {"tone": profile["brand_tone"]},
-            "summary": f"Communication tone: {profile['brand_tone']}",
-            "source": "onboarding",
-            "confidence": 0.9,
-        })
+        store.upsert_playbook_entry(
+            user_id,
+            {
+                "category": "user_preference",
+                "key": "brand_tone",
+                "value": {"tone": profile["brand_tone"]},
+                "summary": f"Communication tone: {profile['brand_tone']}",
+                "source": "onboarding",
+                "confidence": 0.9,
+            },
+        )
 
     # Rich six-domain profile → high-signal facts (v2 profile).
     brand = profile.get("brand") or {}
     if isinstance(brand, dict):
         if brand.get("voice"):
-            store.upsert_playbook_entry(user_id, {
-                "category": "user_preference", "key": "brand_voice",
-                "value": {"voice": brand["voice"]},
-                "summary": f"Brand voice: {brand['voice']}",
-                "source": "onboarding", "confidence": 0.9,
-            })
+            store.upsert_playbook_entry(
+                user_id,
+                {
+                    "category": "user_preference",
+                    "key": "brand_voice",
+                    "value": {"voice": brand["voice"]},
+                    "summary": f"Brand voice: {brand['voice']}",
+                    "source": "onboarding",
+                    "confidence": 0.9,
+                },
+            )
         if brand.get("usp"):
-            store.upsert_playbook_entry(user_id, {
-                "category": "extracted_fact", "key": "usp",
-                "value": {"usp": brand["usp"]},
-                "summary": f"Unique selling proposition: {brand['usp']}",
-                "source": "onboarding", "confidence": 0.9,
-            })
+            store.upsert_playbook_entry(
+                user_id,
+                {
+                    "category": "extracted_fact",
+                    "key": "usp",
+                    "value": {"usp": brand["usp"]},
+                    "summary": f"Unique selling proposition: {brand['usp']}",
+                    "source": "onboarding",
+                    "confidence": 0.9,
+                },
+            )
 
     offerings = profile.get("offerings") or []
     if isinstance(offerings, list) and offerings:
         first = offerings[0] if isinstance(offerings[0], dict) else {}
         if first.get("name"):
             price = f" ({first['pricing']})" if first.get("pricing") else ""
-            store.upsert_playbook_entry(user_id, {
-                "category": "extracted_fact", "key": "primary_offering",
-                "value": {"name": first["name"], "pricing": first.get("pricing")},
-                "summary": f"Primary offering: {first['name']}{price}",
-                "source": "onboarding", "confidence": 0.85,
-            })
+            store.upsert_playbook_entry(
+                user_id,
+                {
+                    "category": "extracted_fact",
+                    "key": "primary_offering",
+                    "value": {"name": first["name"], "pricing": first.get("pricing")},
+                    "summary": f"Primary offering: {first['name']}{price}",
+                    "source": "onboarding",
+                    "confidence": 0.85,
+                },
+            )
 
     customers = profile.get("customers") or {}
     personas = customers.get("buyer_personas") if isinstance(customers, dict) else None
     if isinstance(personas, list) and personas and isinstance(personas[0], dict) and personas[0].get("name"):
-        store.upsert_playbook_entry(user_id, {
-            "category": "client_intelligence", "key": "primary_persona",
-            "value": {"name": personas[0]["name"], "description": personas[0].get("description")},
-            "summary": f"Primary customer persona: {personas[0]['name']}",
-            "source": "onboarding", "confidence": 0.8,
-        })
+        store.upsert_playbook_entry(
+            user_id,
+            {
+                "category": "client_intelligence",
+                "key": "primary_persona",
+                "value": {"name": personas[0]["name"], "description": personas[0].get("description")},
+                "summary": f"Primary customer persona: {personas[0]['name']}",
+                "source": "onboarding",
+                "confidence": 0.8,
+            },
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CONTEXT ASSEMBLER
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def assemble_context(
     user_id: str,
@@ -530,6 +589,7 @@ def assemble_context(
     user = store.get_user(user_id)
     if user:
         from .profile_context import build_profile_brief
+
         brief = build_profile_brief(
             user.profile,
             task_type,
@@ -630,6 +690,7 @@ def assemble_context(
     if task_type in ("briefing", "chat", "email_draft", "follow_up_decision", "contract", "proposal"):
         try:
             from .graph_memory import build_graph_brief
+
             graph_brief = build_graph_brief(user_id, task_type, client_id=client_id, max_chars=500)
             if graph_brief:
                 parts.append(graph_brief)
@@ -642,6 +703,7 @@ def assemble_context(
     if task_type in ("briefing", "chat", "email_draft", "follow_up_decision", "proposal"):
         try:
             from .task_ledger import build_task_brief
+
             task_brief = build_task_brief(user_id, client_id=client_id, max_chars=450)
             if task_brief:
                 parts.append(task_brief)
@@ -655,6 +717,7 @@ def assemble_context(
     if task_type in ("briefing", "chat", "email_draft", "follow_up_decision", "contract", "proposal"):
         try:
             from .memory_recall import build_recall_brief
+
             q_bits = [task_type.replace("_", " ")]
             if client_id:
                 cc = store.get_client(user_id, client_id)
@@ -663,7 +726,10 @@ def assemble_context(
             elif task_type in ("briefing", "chat"):
                 q_bits.append("priorities risks overdue payments client relationships")
             recall_brief = build_recall_brief(
-                user_id, " ".join(q_bits), client_id=client_id, max_chars=400,
+                user_id,
+                " ".join(q_bits),
+                client_id=client_id,
+                max_chars=400,
             )
             if recall_brief:
                 parts.append(recall_brief)
@@ -764,6 +830,7 @@ def compress_playbook_to_memory(user_id: str) -> dict:
 # ═══════════════════════════════════════════════════════════════════════════
 # PATTERN DETECTION (on-demand)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def detect_patterns(user_id: str) -> list[dict]:
     """Analyze transaction and client history for patterns.
@@ -909,7 +976,7 @@ def _detect_communication_frequency(user_id: str) -> list[dict]:
     except Exception:
         return patterns
 
-    for item in (cache or []):
+    for item in cache or []:
         client_name = item.get("client_name", "")
         client_id = item.get("client_id")
         last_contact_days = item.get("last_contact_days")
@@ -931,8 +998,7 @@ def _detect_communication_frequency(user_id: str) -> list[dict]:
             "category": "client_intelligence",
             "client_id": client_id,
             "key": "communication_frequency",
-            "value": {"frequency": freq, "last_contact_days": last_contact_days,
-                      "direction": item.get("last_contact_direction", "unknown")},
+            "value": {"frequency": freq, "last_contact_days": last_contact_days, "direction": item.get("last_contact_direction", "unknown")},
             "summary": f"{client_name}: communication is {freq_label}",
             "source": "pattern_detection",
             "confidence": 0.6,

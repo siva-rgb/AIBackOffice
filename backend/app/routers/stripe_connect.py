@@ -67,9 +67,7 @@ async def stripe_connect_callback(
             data = resp.json()
 
         if "error" in data:
-            return RedirectResponse(
-                f"{frontend_url}/settings?stripe_connect_error={data['error']}"
-            )
+            return RedirectResponse(f"{frontend_url}/settings?stripe_connect_error={data['error']}")
 
         access_token: str = data.get("access_token", "")
         refresh_token: str = data.get("refresh_token", "")
@@ -89,16 +87,19 @@ async def stripe_connect_callback(
         except Exception:
             pass
 
-        store.upsert_stripe_connection(user_id, {
-            "stripe_account_id": stripe_account_id,
-            "stripe_email": stripe_email,
-            "access_token_enc": encrypt_token(access_token),
-            "refresh_token_enc": encrypt_token(refresh_token) if refresh_token else None,
-            "token_scope": scope,
-            "livemode": livemode,
-            "connected": True,
-            "last_error": None,
-        })
+        store.upsert_stripe_connection(
+            user_id,
+            {
+                "stripe_account_id": stripe_account_id,
+                "stripe_email": stripe_email,
+                "access_token_enc": encrypt_token(access_token),
+                "refresh_token_enc": encrypt_token(refresh_token) if refresh_token else None,
+                "token_scope": scope,
+                "livemode": livemode,
+                "connected": True,
+                "last_error": None,
+            },
+        )
 
         log_action(
             user_id=user_id,
@@ -112,9 +113,7 @@ async def stripe_connect_callback(
 
     except Exception as exc:
         print(f"[stripe-connect] callback error: {exc}")
-        return RedirectResponse(
-            f"{frontend_url}/settings?stripe_connect_error=token_exchange_failed"
-        )
+        return RedirectResponse(f"{frontend_url}/settings?stripe_connect_error=token_exchange_failed")
 
 
 @router.get("/status")
@@ -137,6 +136,7 @@ async def stripe_connect_status(user=Depends(get_current_user)):
 async def trigger_sync(user=Depends(get_current_user)):
     """Manually pull transactions from the connected Stripe account."""
     from app.services.stripe_sync import sync_stripe_transactions
+
     result = await sync_stripe_transactions(user.id)
     if "error" in result and not result.get("synced_count"):
         raise HTTPException(400, result["error"])

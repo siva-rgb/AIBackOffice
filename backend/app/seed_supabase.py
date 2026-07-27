@@ -9,6 +9,7 @@ Run (defaults to demo@kora.app):
 Seed a custom user:
     python -m app.seed_supabase <email> <password> ["Full Name"] ["Business Name"]
 """
+
 from __future__ import annotations
 
 import sys
@@ -21,11 +22,22 @@ sb = sbs._sb
 DEMO_EMAIL = "demo@kora.app"
 DEMO_PASSWORD = "Kora-Demo-2026!"
 # Order matters for FK deletes — children before parents.
-_CHILD_TABLES = ["agent_logs", "alerts", "invoices",
-                 # Butler tables (delete before contracts/clients they reference)
-                 "client_notes", "engagements", "proposals", "retainers", "quick_captures",
-                 "clients",
-                 "contracts", "transactions", "reports", "cashflow_forecasts"]
+_CHILD_TABLES = [
+    "agent_logs",
+    "alerts",
+    "invoices",
+    # Butler tables (delete before contracts/clients they reference)
+    "client_notes",
+    "engagements",
+    "proposals",
+    "retainers",
+    "quick_captures",
+    "clients",
+    "contracts",
+    "transactions",
+    "reports",
+    "cashflow_forecasts",
+]
 
 
 def get_or_create_user(email: str, password: str, full_name: str) -> str:
@@ -37,12 +49,14 @@ def get_or_create_user(email: str, password: str, full_name: str) -> str:
     except Exception as exc:  # pragma: no cover
         print("  (list_users failed, will try create):", str(exc)[:120])
 
-    res = sb.auth.admin.create_user({
-        "email": email,
-        "password": password,
-        "email_confirm": True,
-        "user_metadata": {"full_name": full_name},
-    })
+    res = sb.auth.admin.create_user(
+        {
+            "email": email,
+            "password": password,
+            "email_confirm": True,
+            "user_metadata": {"full_name": full_name},
+        }
+    )
     return res.user.id
 
 
@@ -56,11 +70,18 @@ def seed_business(email: str, password: str, full_name: str, business_name: str)
         except Exception as exc:
             print(f"  clear {t}: {str(exc)[:80]}")
 
-    sb.table("users").upsert({
-        "id": uid, "email": email, "full_name": full_name,
-        "business_name": business_name, "country": "US", "currency": "USD",
-        "plan": "pro", "onboarding_completed": True,
-    }).execute()
+    sb.table("users").upsert(
+        {
+            "id": uid,
+            "email": email,
+            "full_name": full_name,
+            "business_name": business_name,
+            "country": "US",
+            "currency": "USD",
+            "plan": "pro",
+            "onboarding_completed": True,
+        }
+    ).execute()
 
     data = build_seed(uid)
     ins = sbs.insert_transactions(data["transactions"])
@@ -78,13 +99,17 @@ def seed_business(email: str, password: str, full_name: str, business_name: str)
     # FK order: clients → engagements (ref contracts) → notes → proposals → retainers.
     butler_counts = _seed_butler(data)
 
-    print(f"  inserted: {len(ins)} transactions, {len(data['invoices'])} invoices, "
-          f"{len(data['contracts'])} contracts, {len(data['agent_logs'])} agent logs, "
-          f"{len(data['alerts'])} alerts")
+    print(
+        f"  inserted: {len(ins)} transactions, {len(data['invoices'])} invoices, "
+        f"{len(data['contracts'])} contracts, {len(data['agent_logs'])} agent logs, "
+        f"{len(data['alerts'])} alerts"
+    )
     if butler_counts:
-        print(f"  butler:   {butler_counts['clients']} clients, {butler_counts['engagements']} engagements, "
-              f"{butler_counts['notes']} notes, {butler_counts['proposals']} proposals, "
-              f"{butler_counts['retainers']} retainers")
+        print(
+            f"  butler:   {butler_counts['clients']} clients, {butler_counts['engagements']} engagements, "
+            f"{butler_counts['notes']} notes, {butler_counts['proposals']} proposals, "
+            f"{butler_counts['retainers']} retainers"
+        )
     return uid
 
 
@@ -103,8 +128,7 @@ def _seed_butler(data: dict) -> dict | None:
         for r in data.get("retainers", []):
             sbs.insert_retainer(r)
     except Exception as exc:
-        print("  butler:   SKIPPED — apply migrations/2026-06-02_add_butler.sql first "
-              f"({str(exc)[:100]})")
+        print("  butler:   SKIPPED — apply migrations/2026-06-02_add_butler.sql first " f"({str(exc)[:100]})")
         return None
     return {
         "clients": len(data.get("clients", [])),
@@ -123,8 +147,7 @@ def main() -> None:
         full_name = args[2] if len(args) > 2 else email.split("@")[0].title()
         business_name = args[3] if len(args) > 3 else f"{full_name} Studio"
     else:
-        email, password, full_name, business_name = (
-            DEMO_EMAIL, DEMO_PASSWORD, "Alex Rivera", "Rivera Studio")
+        email, password, full_name, business_name = (DEMO_EMAIL, DEMO_PASSWORD, "Alex Rivera", "Rivera Studio")
 
     print(f"Seeding Supabase business for {email} ...")
     seed_business(email, password, full_name, business_name)

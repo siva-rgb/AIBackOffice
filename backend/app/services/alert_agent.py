@@ -47,14 +47,19 @@ def run_digest(user_id: str, triggered_by: str = "user") -> dict:
     try:
         call = generate_with_retry(lambda: ai.generate_alerts(snapshot))
         raw_alerts = call.data if isinstance(call.data, list) else []
-        model_used, tokens, latency, cost, status = (
-            call.model_used, call.tokens_used, call.latency_ms, call.cost_usd, "success")
+        model_used, tokens, latency, cost, status = (call.model_used, call.tokens_used, call.latency_ms, call.cost_usd, "success")
     except Exception as exc:
         raw_alerts, model_used, tokens, latency, cost, status = [], "deterministic", None, None, None, "error"
         agent_logger.log_action(
-            user_id=user_id, agent_type="alert_generator",
-            action="Daily digest failed", input=snapshot, output={"error": str(exc)},
-            status="error", error_message=str(exc), triggered_by=triggered_by)
+            user_id=user_id,
+            agent_type="alert_generator",
+            action="Daily digest failed",
+            input=snapshot,
+            output={"error": str(exc)},
+            status="error",
+            error_message=str(exc),
+            triggered_by=triggered_by,
+        )
 
     created: list[Alert] = []
     for a in raw_alerts:
@@ -65,21 +70,32 @@ def run_digest(user_id: str, triggered_by: str = "user") -> dict:
         if sev not in _VALID_SEVERITY:
             sev = "info"
         alert = Alert(
-            id=store.uid("alert"), user_id=user_id, type=a_type, severity=sev,
-            title=str(a.get("title", "Alert"))[:120], body=str(a.get("body", ""))[:400],
-            action_label=a.get("action_label"), action_url=a.get("action_url"),
-            read=False, created_at=datetime.now(timezone.utc).isoformat(),
+            id=store.uid("alert"),
+            user_id=user_id,
+            type=a_type,
+            severity=sev,
+            title=str(a.get("title", "Alert"))[:120],
+            body=str(a.get("body", ""))[:400],
+            action_label=a.get("action_label"),
+            action_url=a.get("action_url"),
+            read=False,
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
         store.insert_alert(alert)
         created.append(alert)
 
     agent_logger.log_action(
-        user_id=user_id, agent_type="alert_generator",
+        user_id=user_id,
+        agent_type="alert_generator",
         action=f"Generated daily digest — {len(created)} new alert(s)",
         input={"snapshot": snapshot},
         output={"alerts": [a.type for a in created]},
-        model_used=model_used, tokens_used=tokens, latency_ms=latency, cost_usd=cost,
-        status=status if status == "error" else "success", triggered_by=triggered_by,
+        model_used=model_used,
+        tokens_used=tokens,
+        latency_ms=latency,
+        cost_usd=cost,
+        status=status if status == "error" else "success",
+        triggered_by=triggered_by,
     )
     return {"created": len(created), "alerts": [a.model_dump(by_alias=True) for a in created]}
 
@@ -119,18 +135,14 @@ def build_digest_email(user_id: str) -> dict:
 
     if alerts:
         lines = [f"- [{a.severity.upper()}] {a.title}: {a.body}".rstrip(": ") for a in alerts]
-        body_text = (f"Your KORA digest for {day}\n\n"
-                     f"{len(alerts)} thing(s) need your attention:\n\n" + "\n".join(lines))
+        body_text = f"Your KORA digest for {day}\n\n" f"{len(alerts)} thing(s) need your attention:\n\n" + "\n".join(lines)
         html_items = "".join(f"<li><strong>{a.title}</strong> — {a.body}</li>" for a in alerts)
-        body_html = (f"<h2>Your KORA digest for {day}</h2>"
-                     f"<p>{len(alerts)} thing(s) need your attention:</p><ul>{html_items}</ul>")
+        body_html = f"<h2>Your KORA digest for {day}</h2>" f"<p>{len(alerts)} thing(s) need your attention:</p><ul>{html_items}</ul>"
     else:
         body_text = f"Your KORA digest for {day}\n\nAll clear — nothing needs your attention today."
-        body_html = (f"<h2>Your KORA digest for {day}</h2>"
-                     f"<p>All clear — nothing needs your attention today.</p>")
+        body_html = f"<h2>Your KORA digest for {day}</h2>" f"<p>All clear — nothing needs your attention today.</p>"
 
-    return {"subject": f"KORA daily digest — {day}", "bodyText": body_text,
-            "bodyHtml": body_html, "alertCount": len(alerts)}
+    return {"subject": f"KORA daily digest — {day}", "bodyText": body_text, "bodyHtml": body_html, "alertCount": len(alerts)}
 
 
 def queue_digest_email(user_id: str, *, triggered_by: str = "user") -> dict:
@@ -147,37 +159,56 @@ def queue_digest_email(user_id: str, *, triggered_by: str = "user") -> dict:
         return {"ok": False, "delivered": False, "note": "No email address on file for this account."}
 
     from . import gmail_agent  # local import avoids a module-load cycle
+
     if not gmail_agent.is_gmail_connected(user_id):
-        return {"ok": True, "delivered": False, "draftOnly": True,
-                "note": "Gmail isn't connected — the digest is available in-app as alerts; "
-                        "nothing was emailed."}
+        return {
+            "ok": True,
+            "delivered": False,
+            "draftOnly": True,
+            "note": "Gmail isn't connected — the digest is available in-app as alerts; " "nothing was emailed.",
+        }
 
     src = _digest_source_id(date.today().isoformat())
     existing = store.find_open_manager_task(user_id, DIGEST_KIND, src)
     if existing:
-        return {"ok": True, "delivered": False, "queued": True, "taskId": existing.id,
-                "note": "Today's digest is already awaiting your approval."}
+        return {"ok": True, "delivered": False, "queued": True, "taskId": existing.id, "note": "Today's digest is already awaiting your approval."}
 
     email = build_digest_email(user_id)
     task = ManagerTask(
-        id=store.uid("task"), user_id=user_id, kind=DIGEST_KIND,
+        id=store.uid("task"),
+        user_id=user_id,
+        kind=DIGEST_KIND,
         title=f"Email you the daily digest: {email['subject']}",
         rationale="Daily digest email — approve to send it to yourself.",
-        severity="info", status="proposed",
+        severity="info",
+        status="proposed",
         payload={
-            "to_email": to_email, "to_name": getattr(user, "full_name", None) or "there",
-            "subject": email["subject"], "body_text": email["bodyText"],
-            "body_html": email["bodyHtml"], "digest": True,
+            "to_email": to_email,
+            "to_name": getattr(user, "full_name", None) or "there",
+            "subject": email["subject"],
+            "body_text": email["bodyText"],
+            "body_html": email["bodyHtml"],
+            "digest": True,
         },
-        source_record_type="digest", source_record_id=src,
+        source_record_type="digest",
+        source_record_id=src,
         created_at=_now(),
     )
     store.insert_manager_task(task)
     agent_logger.log_action(
-        user_id=user_id, agent_type="alert_generator",
+        user_id=user_id,
+        agent_type="alert_generator",
         action="Queued daily digest email for approval",
-        input={"alertCount": email["alertCount"]}, output={"taskId": task.id},
-        triggered_by=triggered_by, source_record_type="digest", source_record_id=src,
+        input={"alertCount": email["alertCount"]},
+        output={"taskId": task.id},
+        triggered_by=triggered_by,
+        source_record_type="digest",
+        source_record_id=src,
     )
-    return {"ok": True, "delivered": False, "queued": True, "taskId": task.id,
-            "note": "Digest queued — approve it in the Business Manager to send it to your inbox."}
+    return {
+        "ok": True,
+        "delivered": False,
+        "queued": True,
+        "taskId": task.id,
+        "note": "Digest queued — approve it in the Business Manager to send it to your inbox.",
+    }

@@ -52,6 +52,7 @@ def generate_proposal(user: User, req: ProposalGenerateRequest) -> Proposal:
     }
     try:
         from .playbook import assemble_context
+
         business_context = assemble_context(user.id, "proposal")
         if business_context:
             payload["business_context"] = business_context
@@ -61,32 +62,49 @@ def generate_proposal(user: User, req: ProposalGenerateRequest) -> Proposal:
     content_md = call.data.get("content_md")
 
     proposal = Proposal(
-        id=store.uid("prop"), user_id=user.id, client_id=client_id,
-        title=req.title, proposal_number=_proposal_number(user.id),
-        scope_md=req.scope_description, deliverables_md=req.deliverables_raw,
-        timeline_md=req.timeline_description, content_md=content_md,
+        id=store.uid("prop"),
+        user_id=user.id,
+        client_id=client_id,
+        title=req.title,
+        proposal_number=_proposal_number(user.id),
+        scope_md=req.scope_description,
+        deliverables_md=req.deliverables_raw,
+        timeline_md=req.timeline_description,
+        content_md=content_md,
         section_explanations=call.data.get("section_explanations", {}),
-        total_amount=req.total_amount, currency=req.currency, pricing_type=req.pricing_type,
-        payment_terms=req.payment_terms, status="draft", valid_until=valid_until,
+        total_amount=req.total_amount,
+        currency=req.currency,
+        pricing_type=req.pricing_type,
+        payment_terms=req.payment_terms,
+        status="draft",
+        valid_until=valid_until,
         created_at=_now(),
     )
     store.insert_proposal(proposal)
 
     agent_logger.log_action(
-        user_id=user.id, agent_type="butler",
+        user_id=user.id,
+        agent_type="butler",
         action=f"Generated proposal '{req.title}' for {client_name}",
         input={"title": req.title, "total": req.total_amount, "clientId": client_id},
         output={"proposalId": proposal.id, "number": proposal.proposal_number},
-        model_used=call.model_used, tokens_used=call.tokens_used, latency_ms=call.latency_ms,
-        cost_usd=call.cost_usd, triggered_by="user", source_record_type="proposal",
-        source_record_id=proposal.id)
+        model_used=call.model_used,
+        tokens_used=call.tokens_used,
+        latency_ms=call.latency_ms,
+        cost_usd=call.cost_usd,
+        triggered_by="user",
+        source_record_type="proposal",
+        source_record_id=proposal.id,
+    )
     return proposal
 
 
 # --- Proposal type → contract type mapping ----------------------------------
 _PRICING_TO_CONTRACT = {
-    "fixed": "freelance_agreement", "hourly": "service_contract",
-    "retainer": "service_contract", "milestone": "freelance_agreement",
+    "fixed": "freelance_agreement",
+    "hourly": "service_contract",
+    "retainer": "service_contract",
+    "milestone": "freelance_agreement",
 }
 
 
@@ -111,8 +129,11 @@ def proposal_to_contract(user: User, proposal_id: str) -> dict:
 
     ctype = _PRICING_TO_CONTRACT.get(proposal.pricing_type, "freelance_agreement")
     req = GenerateContractRequest(
-        type=ctype, client_name=client_name, client_email=client_email,
-        provider_name=user.business_name or user.full_name, jurisdiction=jurisdiction,
+        type=ctype,
+        client_name=client_name,
+        client_email=client_email,
+        provider_name=user.business_name or user.full_name,
+        jurisdiction=jurisdiction,
         terms={
             "project_description": proposal.scope_md or proposal.title,
             "deliverables": proposal.deliverables_md or "",
@@ -124,15 +145,18 @@ def proposal_to_contract(user: User, proposal_id: str) -> dict:
     )
     contract: Contract = generate_contract(user_obj or user, req)
 
-    store.update_proposal(user.id, proposal.id, {
-        "status": "accepted", "accepted_at": _now(), "contract_id": contract.id})
+    store.update_proposal(user.id, proposal.id, {"status": "accepted", "accepted_at": _now(), "contract_id": contract.id})
 
     agent_logger.log_action(
-        user_id=user.id, agent_type="butler",
+        user_id=user.id,
+        agent_type="butler",
         action=f"Accepted proposal {proposal.proposal_number} → generated contract",
         input={"proposalId": proposal.id},
         output={"contractId": contract.id, "contractType": ctype},
-        model_used="cross_module", triggered_by="cross_module",
-        source_record_type="proposal", source_record_id=proposal.id)
+        model_used="cross_module",
+        triggered_by="cross_module",
+        source_record_type="proposal",
+        source_record_id=proposal.id,
+    )
 
     return {"proposalId": proposal.id, "contractId": contract.id, "contractType": ctype}

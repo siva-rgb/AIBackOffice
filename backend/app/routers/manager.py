@@ -51,9 +51,11 @@ async def run_manager(
         # Email the owner their daily digest (Gmail → Resend → no-op).
         try:
             from ..services import owner_notify
+
             owner_notify.send_daily_digest(uid, result)
         except Exception as exc:
             import logging
+
             logging.getLogger("kora").warning("daily digest email failed: %s", exc)
         return result
     user = await get_current_user(authorization)
@@ -77,6 +79,7 @@ async def chat(body: ChatRequest, user: User = Depends(get_current_user)):
 @router.post("/tasks/{task_id}/approve")
 async def approve(task_id: str, user: User = Depends(get_current_user)):
     from ..services.playbook import observe_decision, observe_email_edit
+
     task = store.get_manager_task(user.id, task_id)
     try:
         result = supervisor.approve_task(user.id, task_id)
@@ -102,6 +105,7 @@ async def approve(task_id: str, user: User = Depends(get_current_user)):
 @router.post("/tasks/{task_id}/dismiss")
 async def dismiss(task_id: str, user: User = Depends(get_current_user)):
     from ..services.playbook import observe_decision
+
     task = store.get_manager_task(user.id, task_id)
     try:
         result = supervisor.dismiss_task(user.id, task_id)

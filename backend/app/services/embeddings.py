@@ -8,6 +8,7 @@ lexical-only recall. Never raises.
 An in-process cache keyed on the content hash avoids re-embedding identical text
 within a run (observers re-emit the same summary; reindex re-scans rows).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -39,9 +40,7 @@ def embed(text: str) -> list[float] | None:
     if cached is not None:
         return cached
     try:
-        resp = llm._get_client().embeddings.create(
-            model=settings.EMBEDDING_MODEL, input=text[:_MAX_INPUT_CHARS]
-        )
+        resp = llm._get_client().embeddings.create(model=settings.EMBEDDING_MODEL, input=text[:_MAX_INPUT_CHARS])
         vec = list(resp.data[0].embedding)
     except Exception as exc:
         print(f"[embeddings] embed failed ({settings.EMBEDDING_MODEL}): {exc}")

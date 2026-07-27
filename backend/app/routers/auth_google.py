@@ -35,6 +35,7 @@ _SCOPES = [
 
 def _build_flow(state: str | None = None):
     from google_auth_oauthlib.flow import Flow
+
     return Flow.from_client_config(
         client_config={
             "web": {
@@ -58,6 +59,7 @@ def _build_flow(state: str | None = None):
 
 def _db():
     from supabase import create_client
+
     return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
 
@@ -97,6 +99,7 @@ async def google_callback(
         credentials = flow.credentials
 
         from googleapiclient.discovery import build as google_build
+
         ui_svc = google_build("oauth2", "v2", credentials=credentials)
         google_user = ui_svc.userinfo().get().execute()
         google_email = google_user.get("email", "")
@@ -105,28 +108,32 @@ async def google_callback(
         now = datetime.now(timezone.utc).isoformat()
 
         access_enc = encrypt_token(credentials.token or "")
-        refresh_enc = (encrypt_token(credentials.refresh_token)
-                       if credentials.refresh_token else None)
+        refresh_enc = encrypt_token(credentials.refresh_token) if credentials.refresh_token else None
 
         db = _db()
-        db.table("google_connections").upsert({
-            "user_id": user_id,
-            "access_token_enc": access_enc,
-            "refresh_token_enc": refresh_enc,
-            "google_email": google_email,
-            "scopes_granted": granted_scopes,
-            "token_expiry": credentials.expiry.isoformat() if credentials.expiry else None,
-            "connected": True,
-            "consent_given_at": now,
-            "consent_version": "2026-06-01",
-            "last_error": None,
-            "updated_at": now,
-        }, on_conflict="user_id").execute()
+        db.table("google_connections").upsert(
+            {
+                "user_id": user_id,
+                "access_token_enc": access_enc,
+                "refresh_token_enc": refresh_enc,
+                "google_email": google_email,
+                "scopes_granted": granted_scopes,
+                "token_expiry": credentials.expiry.isoformat() if credentials.expiry else None,
+                "connected": True,
+                "consent_given_at": now,
+                "consent_version": "2026-06-01",
+                "last_error": None,
+                "updated_at": now,
+            },
+            on_conflict="user_id",
+        ).execute()
 
-        db.table("users").update({
-            "google_connected": True,
-            "google_email": google_email,
-        }).eq("id", user_id).execute()
+        db.table("users").update(
+            {
+                "google_connected": True,
+                "google_email": google_email,
+            }
+        ).eq("id", user_id).execute()
 
         return RedirectResponse(f"{frontend_url}/settings?google_connected=true")
 
@@ -141,9 +148,7 @@ async def google_status(user: User = Depends(get_current_user)):
     if not settings.SUPABASE_URL:
         return {"connected": False}
     db = _db()
-    rows = db.table("google_connections").select(
-        "google_email, scopes_granted, connected, last_used_at"
-    ).eq("user_id", user.id).execute().data
+    rows = db.table("google_connections").select("google_email, scopes_granted, connected, last_used_at").eq("user_id", user.id).execute().data
     if rows and rows[0].get("connected"):
         return {
             "connected": True,
@@ -160,18 +165,18 @@ async def disconnect_google(user: User = Depends(get_current_user)):
     if not settings.SUPABASE_URL:
         return {"disconnected": True}
     db = _db()
-    rows = db.table("google_connections").select(
-        "access_token_enc"
-    ).eq("user_id", user.id).execute().data
+    rows = db.table("google_connections").select("access_token_enc").eq("user_id", user.id).execute().data
 
     if rows and rows[0].get("access_token_enc"):
         try:
             import httpx
+
             token = decrypt_token(rows[0]["access_token_enc"])
             async with httpx.AsyncClient() as client:
                 await client.post(
                     "https://oauth2.googleapis.com/revoke",
-                    params={"token": token}, timeout=5.0,
+                    params={"token": token},
+                    timeout=5.0,
                 )
         except Exception:
             pass
@@ -185,9 +190,11 @@ async def disconnect_google(user: User = Depends(get_current_user)):
         except Exception:
             pass
 
-    db.table("users").update({
-        "google_connected": False,
-        "google_email": None,
-    }).eq("id", user.id).execute()
+    db.table("users").update(
+        {
+            "google_connected": False,
+            "google_email": None,
+        }
+    ).eq("id", user.id).execute()
 
     return {"disconnected": True}

@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from app import entitlements as E
@@ -19,6 +20,26 @@ from app.main import app
 from app.models import User
 
 client = TestClient(app)
+
+
+def _all_api_routes():
+    """Iterate every APIRoute registered on the app.
+
+    `app.routes` only surfaces the `_IncludedRouter` wrappers added by
+    `include_router(...)`, not the inner APIRoute objects. Inspecting those
+    wrappers for `dependant` / `path` returns nothing, which silently neutralises
+    the policy-vs-routes drift test. Walk through `original_router.routes` to
+    reach the real route objects.
+    """
+    for route in app.routes:
+        if isinstance(route, APIRoute):
+            yield route
+            continue
+        inner = getattr(route, "original_router", None)
+        if inner is not None and hasattr(inner, "routes"):
+            for sub in inner.routes:
+                if isinstance(sub, APIRoute):
+                    yield sub
 
 
 def _user(plan: str) -> User:
@@ -80,7 +101,7 @@ def test_starter_clears_starter_gates_but_not_pro_gates():
 def _gated_routes() -> set[tuple[str, str]]:
     """Every (method, path) whose route carries the enforce_plan dependency."""
     found: set[tuple[str, str]] = set()
-    for route in app.routes:
+    for route in _all_api_routes():
         dependant = getattr(route, "dependant", None)
         if not dependant:
             continue
@@ -102,8 +123,8 @@ def test_every_gated_route_is_in_policy_and_vice_versa():
 
 
 def test_every_policy_route_actually_exists():
-    registered = {(m, r.path) for r in app.routes
-                  if hasattr(r, "path") for m in (getattr(r, "methods", None) or [])}
+    registered = {(m, r.path) for r in _all_api_routes()
+                  for m in (getattr(r, "methods", None) or [])}
     missing = set(E.POLICY) - registered
     assert missing == set(), f"POLICY references non-existent routes: {missing}"
 

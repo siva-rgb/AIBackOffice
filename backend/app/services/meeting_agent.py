@@ -13,6 +13,7 @@ from .vertex_ai import generate_with_retry, get_ai
 
 def _db():
     from supabase import create_client
+
     return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
 
@@ -21,6 +22,7 @@ def _now() -> str:
 
 
 # ─── Main entry point ────────────────────────────────────────────────────────
+
 
 def process_transcript(
     user_id: str,
@@ -39,9 +41,7 @@ def process_transcript(
     start = datetime.now(timezone.utc)
     db = _db()
 
-    meeting = db.table("meetings").select(
-        "*, clients(name, what_we_do), engagements(title, status)"
-    ).eq("id", meeting_id).single().execute().data
+    meeting = db.table("meetings").select("*, clients(name, what_we_do), engagements(title, status)").eq("id", meeting_id).single().execute().data
     if not meeting:
         return
 
@@ -56,37 +56,39 @@ def process_transcript(
 
         ai = get_ai()
         call = generate_with_retry(lambda: ai.extract_meeting_mom({"prompt": prompt}))
-        latency_ms = int(
-            (datetime.now(timezone.utc) - start).total_seconds() * 1000
-        )
+        latency_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
         raw = call.data if isinstance(call.data, str) else json.dumps(call.data)
         extracted = _parse_mom_response(raw)
 
-        db.table("meetings").update({
-            "parse_status": "parsed",
-            "summary": extracted.get("summary"),
-            "decisions": extracted.get("decisions", []),
-            "commitments": extracted.get("commitments", []),
-            "risks_flagged": extracted.get("risks", []),
-            "next_steps": extracted.get("next_steps", []),
-            "sentiment": extracted.get("sentiment", "neutral"),
-            "ai_confidence": extracted.get("confidence", 0.8),
-            "updated_at": _now(),
-        }).eq("id", meeting_id).execute()
+        db.table("meetings").update(
+            {
+                "parse_status": "parsed",
+                "summary": extracted.get("summary"),
+                "decisions": extracted.get("decisions", []),
+                "commitments": extracted.get("commitments", []),
+                "risks_flagged": extracted.get("risks", []),
+                "next_steps": extracted.get("next_steps", []),
+                "sentiment": extracted.get("sentiment", "neutral"),
+                "ai_confidence": extracted.get("confidence", 0.8),
+                "updated_at": _now(),
+            }
+        ).eq("id", meeting_id).execute()
         try:
             from .playbook import observe_meeting
+
             observe_meeting(user_id, meeting.get("client_id"), extracted)
         except Exception:
             pass
 
-        _create_action_items(user_id, meeting_id, meeting.get("client_id"),
-                             extracted.get("next_steps", []), db)
+        _create_action_items(user_id, meeting_id, meeting.get("client_id"), extracted.get("next_steps", []), db)
         _create_meeting_note(user_id, meeting, extracted, db)
 
         if meeting.get("client_id"):
-            db.table("clients").update({
-                "last_activity_at": _now(),
-            }).eq("id", meeting["client_id"]).execute()
+            db.table("clients").update(
+                {
+                    "last_activity_at": _now(),
+                }
+            ).eq("id", meeting["client_id"]).execute()
 
         if extracted.get("commitments") or extracted.get("next_steps"):
             _queue_meeting_followup(user_id, meeting, extracted, db)
@@ -95,8 +97,7 @@ def process_transcript(
             user_id=user_id,
             agent_type="meeting_agent",
             action=f"Processed transcript: {meeting.get('title', 'Untitled')}",
-            input={"meetingId": meeting_id, "source": source,
-                   "chars": len(transcript_text)},
+            input={"meetingId": meeting_id, "source": source, "chars": len(transcript_text)},
             output={
                 "decisions": len(extracted.get("decisions", [])),
                 "actionItems": len(extracted.get("next_steps", [])),
@@ -113,10 +114,12 @@ def process_transcript(
 
     except Exception as exc:
         print(f"[meeting-agent] transcript processing failed: {exc}")
-        db.table("meetings").update({
-            "parse_status": "failed",
-            "updated_at": _now(),
-        }).eq("id", meeting_id).execute()
+        db.table("meetings").update(
+            {
+                "parse_status": "failed",
+                "updated_at": _now(),
+            }
+        ).eq("id", meeting_id).execute()
 
 
 def _build_mom_prompt(transcript: str, client_context: str) -> str:
@@ -155,34 +158,38 @@ def _parse_mom_response(raw: str) -> dict:
             "summary": raw[:300],
             "sentiment": "neutral",
             "confidence": 0.3,
-            "decisions": [], "commitments": [], "risks": [],
-            "next_steps": [], "financial_mentions": [],
+            "decisions": [],
+            "commitments": [],
+            "risks": [],
+            "next_steps": [],
+            "financial_mentions": [],
         }
 
 
-def _create_action_items(
-    user_id: str, meeting_id: str, client_id: str | None, next_steps: list, db
-) -> None:
+def _create_action_items(user_id: str, meeting_id: str, client_id: str | None, next_steps: list, db) -> None:
     # Task ledger — every action item also becomes tracked work, so a commitment
     # made in a meeting can't be lost. Idempotent per (meeting, action).
     try:
         from .task_ledger import auto_capture_from_meeting
+
         auto_capture_from_meeting(user_id, client_id, next_steps, meeting_id)
     except Exception as exc:
         print(f"[meetings] task capture skipped: {exc}")
 
     for step in next_steps:
         try:
-            db.table("meeting_action_items").insert({
-                "user_id": user_id,
-                "meeting_id": meeting_id,
-                "client_id": client_id,
-                "description": step.get("action", ""),
-                "owner": step.get("owner", "me"),
-                "due_date": step.get("by_when"),
-                "priority": step.get("priority", "medium"),
-                "status": "open",
-            }).execute()
+            db.table("meeting_action_items").insert(
+                {
+                    "user_id": user_id,
+                    "meeting_id": meeting_id,
+                    "client_id": client_id,
+                    "description": step.get("action", ""),
+                    "owner": step.get("owner", "me"),
+                    "due_date": step.get("by_when"),
+                    "priority": step.get("priority", "medium"),
+                    "status": "open",
+                }
+            ).execute()
         except Exception as exc:
             print(f"[meeting-agent] action item insert failed: {exc}")
 
@@ -190,8 +197,7 @@ def _create_action_items(
 def _create_meeting_note(user_id: str, meeting: dict, extracted: dict, db) -> None:
     if not meeting.get("client_id") or not extracted.get("summary"):
         return
-    parts = [f"**Meeting:** {meeting.get('title', 'Call')}\n",
-             f"**Summary:** {extracted['summary']}\n"]
+    parts = [f"**Meeting:** {meeting.get('title', 'Call')}\n", f"**Summary:** {extracted['summary']}\n"]
     if extracted.get("decisions"):
         parts.append("\n**Decisions:**")
         for d in extracted["decisions"]:
@@ -208,15 +214,17 @@ def _create_meeting_note(user_id: str, meeting: dict, extracted: dict, db) -> No
             by_when = f" → {n['by_when']}" if n.get("by_when") else ""
             parts.append(f"- [{lbl}] {n['action']}{by_when}")
     try:
-        db.table("client_notes").insert({
-            "user_id": user_id,
-            "client_id": meeting["client_id"],
-            "engagement_id": meeting.get("engagement_id"),
-            "meeting_id": meeting["id"],
-            "note_type": "meeting",
-            "content_md": "\n".join(parts),
-            "is_ai_generated": True,
-        }).execute()
+        db.table("client_notes").insert(
+            {
+                "user_id": user_id,
+                "client_id": meeting["client_id"],
+                "engagement_id": meeting.get("engagement_id"),
+                "meeting_id": meeting["id"],
+                "note_type": "meeting",
+                "content_md": "\n".join(parts),
+                "is_ai_generated": True,
+            }
+        ).execute()
     except Exception as exc:
         print(f"[meeting-agent] note insert failed: {exc}")
 
@@ -228,27 +236,20 @@ def queue_followup_for_meeting(user_id: str, meeting_id: str) -> dict:
     if not settings.SUPABASE_URL:
         return {"queued": False, "reason": "storage unavailable"}
     db = _db()
-    meeting = db.table("meetings").select("*").eq(
-        "id", meeting_id).eq("user_id", user_id).single().execute().data
+    meeting = db.table("meetings").select("*").eq("id", meeting_id).eq("user_id", user_id).single().execute().data
     if not meeting:
         return {"queued": False, "reason": "meeting not found"}
     if not meeting.get("client_id"):
         return {"queued": False, "reason": "Link this meeting to a client first."}
 
-    client = db.table("clients").select("name, email").eq(
-        "id", meeting["client_id"]).single().execute().data
+    client = db.table("clients").select("name, email").eq("id", meeting["client_id"]).single().execute().data
     if not client or not client.get("email"):
         return {"queued": False, "reason": "This client has no email on file."}
 
-    items = db.table("meeting_action_items").select(
-        "description, owner, due_date").eq("meeting_id", meeting_id).execute().data or []
+    items = db.table("meeting_action_items").select("description, owner, due_date").eq("meeting_id", meeting_id).execute().data or []
     extracted = {
         "decisions": [],
-        "commitments": [
-            {"who": it.get("owner", "me"), "what": it.get("description", ""),
-             "by_when": it.get("due_date")}
-            for it in items
-        ],
+        "commitments": [{"who": it.get("owner", "me"), "what": it.get("description", ""), "by_when": it.get("due_date")} for it in items],
         "next_steps": items,
     }
     _queue_meeting_followup(user_id, meeting, extracted, db)
@@ -258,8 +259,7 @@ def queue_followup_for_meeting(user_id: str, meeting_id: str) -> dict:
 def _queue_meeting_followup(user_id: str, meeting: dict, extracted: dict, db) -> None:
     if not meeting.get("client_id"):
         return
-    client_rows = db.table("clients").select("name, email").eq(
-        "id", meeting["client_id"]).single().execute().data
+    client_rows = db.table("clients").select("name, email").eq("id", meeting["client_id"]).single().execute().data
     if not client_rows or not client_rows.get("email"):
         return
     client = client_rows
@@ -285,18 +285,16 @@ def _queue_meeting_followup(user_id: str, meeting: dict, extracted: dict, db) ->
         related_meeting_id=meeting["id"],
         db=db,
     )
-    db.table("meetings").update({
-        "followup_queued_at": _now(),
-    }).eq("id", meeting["id"]).execute()
+    db.table("meetings").update(
+        {
+            "followup_queued_at": _now(),
+        }
+    ).eq("id", meeting["id"]).execute()
 
 
-def _build_followup_email(
-    client_name: str, meeting_title: str, extracted: dict
-) -> dict:
-    text_lines = [f"Hi {client_name},\n",
-                  "Thanks for the time today. Here's a quick summary of what we covered:\n"]
-    html_lines = [f"<p>Hi {client_name},</p>",
-                  "<p>Thanks for the time today. Here's a quick summary of what we covered:</p>"]
+def _build_followup_email(client_name: str, meeting_title: str, extracted: dict) -> dict:
+    text_lines = [f"Hi {client_name},\n", "Thanks for the time today. Here's a quick summary of what we covered:\n"]
+    html_lines = [f"<p>Hi {client_name},</p>", "<p>Thanks for the time today. Here's a quick summary of what we covered:</p>"]
 
     if extracted.get("decisions"):
         text_lines.append("What we decided:")
@@ -333,39 +331,51 @@ def _build_followup_email(
 
 
 def _queue_gmail_send_sync(
-    user_id: str, to_email: str, to_name: str, subject: str,
-    body_html: str, body_text: str, context: str,
-    related_client_id: str | None, related_meeting_id: str | None, db
+    user_id: str,
+    to_email: str,
+    to_name: str,
+    subject: str,
+    body_html: str,
+    body_text: str,
+    context: str,
+    related_client_id: str | None,
+    related_meeting_id: str | None,
+    db,
 ) -> None:
     """Insert a send_email_gmail manager_task (sync, no await needed)."""
     if not settings.SUPABASE_URL:
         return
-    conn_rows = db.table("google_connections").select("google_email").eq(
-        "user_id", user_id).execute().data
+    conn_rows = db.table("google_connections").select("google_email").eq("user_id", user_id).execute().data
     from_email = conn_rows[0]["google_email"] if conn_rows else "your Gmail"
     try:
-        db.table("manager_tasks").insert({
-            "user_id": user_id,
-            "kind": "send_email_gmail",
-            "title": f"Send email to {to_name}: {subject}",
-            "rationale": context,
-            "severity": "info",
-            "status": "proposed",
-            "payload": {
-                "to_email": to_email, "to_name": to_name,
-                "subject": subject, "body_html": body_html,
-                "body_text": body_text, "from_email": from_email,
-                "related_client_id": related_client_id,
-                "related_meeting_id": related_meeting_id,
-            },
-            "source_record_type": "meeting" if related_meeting_id else "client",
-            "source_record_id": related_meeting_id or related_client_id,
-        }).execute()
+        db.table("manager_tasks").insert(
+            {
+                "user_id": user_id,
+                "kind": "send_email_gmail",
+                "title": f"Send email to {to_name}: {subject}",
+                "rationale": context,
+                "severity": "info",
+                "status": "proposed",
+                "payload": {
+                    "to_email": to_email,
+                    "to_name": to_name,
+                    "subject": subject,
+                    "body_html": body_html,
+                    "body_text": body_text,
+                    "from_email": from_email,
+                    "related_client_id": related_client_id,
+                    "related_meeting_id": related_meeting_id,
+                },
+                "source_record_type": "meeting" if related_meeting_id else "client",
+                "source_record_id": related_meeting_id or related_client_id,
+            }
+        ).execute()
     except Exception as exc:
         print(f"[meeting-agent] queue gmail send failed: {exc}")
 
 
 # ─── Transcript text extraction (multi-format) ───────────────────────────────
+
 
 def extract_transcript_text(content: bytes, filename: str) -> str:
     """Extract plain text from .txt/.vtt/.srt/.pdf/.docx transcript files."""
@@ -387,6 +397,7 @@ def extract_transcript_text(content: bytes, filename: str) -> str:
     if ext == "pdf":
         try:
             from pypdf import PdfReader
+
             reader = PdfReader(io.BytesIO(content))
             return "\n".join(page.extract_text() or "" for page in reader.pages)
         except Exception:
@@ -395,6 +406,7 @@ def extract_transcript_text(content: bytes, filename: str) -> str:
     if ext == "docx":
         try:
             import docx as _docx
+
             doc = _docx.Document(io.BytesIO(content))
             return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
         except Exception:

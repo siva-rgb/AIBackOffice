@@ -449,7 +449,7 @@ export function MeetingsView({ meetings: initialMeetings }: Props) {
 
       {activeTab === 'tasks' && (
         <div className="space-y-3">
-          <p className="text-sm text-gray-500">Open action items across all meetings — check one off when it's done.</p>
+          <p className="text-sm text-gray-500">Open action items across all meetings — check one off when it&apos;s done.</p>
           {tasks === null ? (
             <Card className="p-5 text-sm text-gray-400">Loading tasks…</Card>
           ) : tasks.length === 0 ? (

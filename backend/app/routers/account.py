@@ -29,11 +29,13 @@ async def delete_account(user: User = Depends(get_current_user)):
         if rows and rows[0].get("access_token_enc"):
             from ..services.token_encryption import decrypt_token
             import httpx
+
             token = decrypt_token(rows[0]["access_token_enc"])
             async with httpx.AsyncClient() as client:
                 await client.post(
                     "https://oauth2.googleapis.com/revoke",
-                    params={"token": token}, timeout=5.0,
+                    params={"token": token},
+                    timeout=5.0,
                 )
     except Exception:
         pass
@@ -45,6 +47,7 @@ async def delete_account(user: User = Depends(get_current_user)):
         if stripe_sub_id:
             import stripe
             import os
+
             stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
             stripe.Subscription.cancel(stripe_sub_id)
     except Exception:
@@ -54,17 +57,33 @@ async def delete_account(user: User = Depends(get_current_user)):
     files_deleted = 0
     try:
         from ..services.storage import delete_user_data
+
         files_deleted = delete_user_data(user_id)
     except Exception:
         pass
 
     # 4. Delete DB records (in dependency order)
     tables = [
-        "business_playbook", "email_intel_cache", "drive_doc_cache",
-        "meeting_action_items", "meetings", "client_notes", "quick_captures",
-        "manager_tasks", "agent_logs", "alerts", "cashflow_forecasts",
-        "engagements", "proposals", "retainers", "google_connections",
-        "invoices", "contracts", "transactions", "reports", "clients",
+        "business_playbook",
+        "email_intel_cache",
+        "drive_doc_cache",
+        "meeting_action_items",
+        "meetings",
+        "client_notes",
+        "quick_captures",
+        "manager_tasks",
+        "agent_logs",
+        "alerts",
+        "cashflow_forecasts",
+        "engagements",
+        "proposals",
+        "retainers",
+        "google_connections",
+        "invoices",
+        "contracts",
+        "transactions",
+        "reports",
+        "clients",
     ]
     for table in tables:
         try:
@@ -86,11 +105,13 @@ async def delete_account(user: User = Depends(get_current_user)):
 
     # 7. Audit log — no PII, just a timestamp
     try:
-        db.table("deletion_log").insert({
-            "deleted_at": datetime.now(timezone.utc).isoformat(),
-            "files_deleted": files_deleted,
-            "reason": "user_request",
-        }).execute()
+        db.table("deletion_log").insert(
+            {
+                "deleted_at": datetime.now(timezone.utc).isoformat(),
+                "files_deleted": files_deleted,
+                "reason": "user_request",
+            }
+        ).execute()
     except Exception:
         pass
 

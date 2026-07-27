@@ -46,6 +46,7 @@ def generate_contract(user: User, req: GenerateContractRequest) -> Contract:
     }
     try:
         from .playbook import assemble_context
+
         business_context = assemble_context(user.id, "contract")
         if business_context:
             payload["business_context"] = business_context
@@ -60,8 +61,7 @@ def generate_contract(user: User, req: GenerateContractRequest) -> Contract:
     terms = dict(req.terms or {})
     if content_md:
         try:
-            review = review_contract(user, text=content_md, source="kora",
-                                     title=f"{_TITLES.get(req.type, 'Agreement')} — {req.client_name}")
+            review = review_contract(user, text=content_md, source="kora", title=f"{_TITLES.get(req.type, 'Agreement')} — {req.client_name}")
             terms["_review"] = review.model_dump(by_alias=True)
         except Exception as exc:
             print(f"[contract] auto-review skipped: {exc}")
@@ -130,13 +130,16 @@ def _normalize_review(data: dict, *, source: str, title: str | None) -> Contract
         title_f = str(f.get("title") or f.get("clause") or "Clause").strip()
         if not issue:
             continue
-        findings.append(ReviewFinding(
-            title=title_f[:200], severity=sev,
-            category=(str(f["category"]).lower()[:40] if f.get("category") else None),
-            issue=issue,
-            recommendation=(str(f["recommendation"]).strip() if f.get("recommendation") else None),
-            clause_reference=(str(f["clause_reference"]).strip()[:80] if f.get("clause_reference") else None),
-        ))
+        findings.append(
+            ReviewFinding(
+                title=title_f[:200],
+                severity=sev,
+                category=(str(f["category"]).lower()[:40] if f.get("category") else None),
+                issue=issue,
+                recommendation=(str(f["recommendation"]).strip() if f.get("recommendation") else None),
+                clause_reference=(str(f["clause_reference"]).strip()[:80] if f.get("clause_reference") else None),
+            )
+        )
 
     # Highest finding severity should not undercut the overall risk.
     if any(f.severity == "high" for f in findings):
@@ -155,17 +158,26 @@ def _normalize_review(data: dict, *, source: str, title: str | None) -> Contract
 
 
 def review_contract(
-    user: User, *, text: str, source: str, contract_id: str | None = None, title: str | None = None,
+    user: User,
+    *,
+    text: str,
+    source: str,
+    contract_id: str | None = None,
+    title: str | None = None,
 ) -> ContractReview:
     """Run the AI risk review over contract text (a Kora contract or one the user
     received) and log it. Returns a normalized ContractReview."""
     clean = (text or "").replace("\x00", "").strip()[:_MAX_REVIEW_CHARS]
     ai = get_ai()
-    call = generate_with_retry(lambda: ai.review_contract({
-        "text": clean,
-        "business_name": user.business_name or user.full_name,
-        "title": title,
-    }))
+    call = generate_with_retry(
+        lambda: ai.review_contract(
+            {
+                "text": clean,
+                "business_name": user.business_name or user.full_name,
+                "title": title,
+            }
+        )
+    )
     review = _normalize_review(call.data if isinstance(call.data, dict) else {}, source=source, title=title)
 
     agent_logger.log_action(
@@ -175,8 +187,12 @@ def review_contract(
         agent_type="contract_generator",
         action=f"Reviewed contract — {review.overall_risk} risk ({title or source})",
         input={"source": source, "chars": len(clean), "contractId": contract_id, "title": title},
-        output={"overallRisk": review.overall_risk, "findings": len(review.findings),
-                "missingClauses": len(review.missing_clauses), "summary": review.summary[:300]},
+        output={
+            "overallRisk": review.overall_risk,
+            "findings": len(review.findings),
+            "missingClauses": len(review.missing_clauses),
+            "summary": review.summary[:300],
+        },
         model_used=call.model_used,
         tokens_used=call.tokens_used,
         latency_ms=call.latency_ms,
@@ -248,31 +264,41 @@ def save_received_contract(
             print(f"[contract] received-file upload skipped: {exc}")
 
     contract = Contract(
-        id=contract_id, user_id=user.id, type="service_contract",
+        id=contract_id,
+        user_id=user.id,
+        type="service_contract",
         title=title or f"Received contract — {resolved_name}",
-        client_name=resolved_name, provider_name=user.business_name or user.full_name,
-        jurisdiction=user.country or "US", terms=terms, content_md=text,
+        client_name=resolved_name,
+        provider_name=user.business_name or user.full_name,
+        jurisdiction=user.country or "US",
+        terms=terms,
+        content_md=text,
         # 'sent' (allowed by the schema CHECK) = received from the client, not yet
         # signed by the owner; pairs with the supervisor's "awaiting signature" view.
-        status="sent", created_at=_now_iso(),
+        status="sent",
+        created_at=_now_iso(),
     )
     try:
         store.insert_contract(contract)
     except Exception as exc:
         print(f"[contract] received-contract persist failed: {exc}")
-        return {"contractId": None, "clientId": client.id if client else None,
-                "engagementId": None, "savedFile": saved_file}
+        return {"contractId": None, "clientId": client.id if client else None, "engagementId": None, "savedFile": saved_file}
 
     # When linked to a client, create an engagement so the Butler tracks the work.
     engagement_id = None
     if client:
         try:
             eng = Engagement(
-                id=store.uid("eng"), user_id=user.id, client_id=client.id,
+                id=store.uid("eng"),
+                user_id=user.id,
+                client_id=client.id,
                 title=(title or f"{resolved_name} contract")[:200],
                 description_md=(review.summary or "Work governed by a received contract.")[:2000],
-                engagement_type="project", status="active",
-                contract_id=contract_id, created_at=_now_iso(), updated_at=_now_iso(),
+                engagement_type="project",
+                status="active",
+                contract_id=contract_id,
+                created_at=_now_iso(),
+                updated_at=_now_iso(),
             )
             store.insert_engagement(eng)
             engagement_id = eng.id
@@ -281,14 +307,17 @@ def save_received_contract(
             print(f"[contract] received-contract engagement skipped: {exc}")
 
     agent_logger.log_action(
-        user_id=user.id, agent_type="butler",
+        user_id=user.id,
+        agent_type="butler",
         action=f"Saved received contract from {resolved_name} ({review.overall_risk} risk)",
         input={"source": source, "clientId": client.id if client else None, "savedFile": saved_file},
         output={"contractId": contract_id, "engagementId": engagement_id},
-        triggered_by="user", source_record_type="contract", source_record_id=contract_id)
+        triggered_by="user",
+        source_record_type="contract",
+        source_record_id=contract_id,
+    )
 
-    return {"contractId": contract_id, "clientId": client.id if client else None,
-            "engagementId": engagement_id, "savedFile": saved_file}
+    return {"contractId": contract_id, "clientId": client.id if client else None, "engagementId": engagement_id, "savedFile": saved_file}
 
 
 def _now_iso() -> str:

@@ -12,7 +12,7 @@ def _make_fernet() -> Fernet:
     if not key:
         raise RuntimeError(
             "TOKEN_ENCRYPTION_KEY is not set. Generate one with: "
-            "python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+            'python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
         )
     return Fernet(key.encode() if isinstance(key, str) else key)
 
@@ -28,10 +28,7 @@ except RuntimeError:
 
 def _get_fernet() -> Fernet:
     if _fernet is None:
-        raise RuntimeError(
-            "TOKEN_ENCRYPTION_KEY is not set — encryption is unavailable. "
-            "Set the key to enable Google OAuth token encryption."
-        )
+        raise RuntimeError("TOKEN_ENCRYPTION_KEY is not set — encryption is unavailable. " "Set the key to enable Google OAuth token encryption.")
     return _fernet
 
 

@@ -57,11 +57,10 @@ async def get_drive_cache(
     if not settings.SUPABASE_URL:
         return []
     from supabase import create_client
+
     db = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
     try:
-        q = db.table("drive_doc_cache").select(
-            "drive_file_id, file_name, doc_type, mime_type, processed_at, meeting_id, client_id"
-        ).eq("user_id", user.id)
+        q = db.table("drive_doc_cache").select("drive_file_id, file_name, doc_type, mime_type, processed_at, meeting_id, client_id").eq("user_id", user.id)
         if client_id:
             q = q.eq("client_id", client_id)
         return camelize(q.order("processed_at", desc=True).limit(50).execute().data)
@@ -71,7 +70,13 @@ async def get_drive_cache(
         # a per-client request simply has nothing to show until it's applied.
         if client_id:
             return []
-        rows = db.table("drive_doc_cache").select(
-            "drive_file_id, file_name, doc_type, mime_type, processed_at, meeting_id"
-        ).eq("user_id", user.id).order("processed_at", desc=True).limit(50).execute().data
+        rows = (
+            db.table("drive_doc_cache")
+            .select("drive_file_id, file_name, doc_type, mime_type, processed_at, meeting_id")
+            .eq("user_id", user.id)
+            .order("processed_at", desc=True)
+            .limit(50)
+            .execute()
+            .data
+        )
         return camelize(rows)

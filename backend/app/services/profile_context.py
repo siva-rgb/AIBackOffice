@@ -9,6 +9,7 @@ is the single place that decides *what of the profile the model sees*, so agents
 stay consistent. Consumed by `playbook.assemble_context` (Tier 1) and the
 generation agents (invoice/contract/proposal/gmail).
 """
+
 from __future__ import annotations
 
 from typing import Any

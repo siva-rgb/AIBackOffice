@@ -52,8 +52,7 @@ def _financials(invoices) -> dict:
     invoiced = sum(i.total for i in invoices)
     paid = sum(i.total for i in invoices if i.status == "paid")
     outstanding = sum(i.total for i in invoices if i.status in ("sent", "viewed", "overdue"))
-    overdue = [i for i in invoices if i.status == "overdue" or
-               (i.status in ("sent", "viewed") and _days_overdue(i.due_date) > 0)]
+    overdue = [i for i in invoices if i.status == "overdue" or (i.status in ("sent", "viewed") and _days_overdue(i.due_date) > 0)]
     return {
         "invoiced": round(invoiced, 2),
         "paid": round(paid, 2),
@@ -119,14 +118,19 @@ def compute_client_health(user_id: str, client: Client, *, persist: bool = True)
 
     if persist:
         try:
-            store.update_client(user_id, client.id, {
-                "health_score": score, "health_label": label, "health_updated_at": _now(),
-            })
+            store.update_client(
+                user_id,
+                client.id,
+                {
+                    "health_score": score,
+                    "health_label": label,
+                    "health_updated_at": _now(),
+                },
+            )
         except Exception as exc:  # pragma: no cover
             print(f"[butler] health persist skipped: {exc}")
 
-    return {"healthScore": score, "healthLabel": label, "risks": risks, "positiveSignals": positives,
-            "financials": fin, "delivery": delivery}
+    return {"healthScore": score, "healthLabel": label, "risks": risks, "positiveSignals": positives, "financials": fin, "delivery": delivery}
 
 
 # --- Client list + detail (for the frontend) --------------------------------
@@ -158,30 +162,36 @@ def get_client_detail(user_id: str, client_id: str) -> dict | None:
     health = compute_client_health(user_id, c, persist=True)
     c = store.get_client(user_id, client_id) or c  # re-read with fresh health
     detail = c.model_dump(by_alias=True)
-    detail.update({
-        "financials": health["financials"],
-        "healthRisks": health["risks"],
-        "healthPositives": health["positiveSignals"],
-        "daysSinceActivity": _days_since(c.last_activity_at),
-        "engagements": [e.model_dump(by_alias=True) for e in engagements],
-        "notes": [n.model_dump(by_alias=True) for n in notes],
-        "invoices": [{"id": i.id, "invoiceNumber": i.invoice_number, "total": i.total,
-                      "status": i.status, "dueDate": i.due_date} for i in invoices],
-        "contracts": [{"id": ct.id, "title": ct.title, "type": ct.type, "status": ct.status}
-                      for ct in contracts],
-        "proposals": [{"id": p.id, "title": p.title, "totalAmount": p.total_amount,
-                       "status": p.status} for p in proposals],
-        "retainers": [{"id": r.id, "title": r.title, "amount": r.amount,
-                       "billingCycle": r.billing_cycle, "status": r.status} for r in retainers],
-    })
+    detail.update(
+        {
+            "financials": health["financials"],
+            "healthRisks": health["risks"],
+            "healthPositives": health["positiveSignals"],
+            "daysSinceActivity": _days_since(c.last_activity_at),
+            "engagements": [e.model_dump(by_alias=True) for e in engagements],
+            "notes": [n.model_dump(by_alias=True) for n in notes],
+            "invoices": [{"id": i.id, "invoiceNumber": i.invoice_number, "total": i.total, "status": i.status, "dueDate": i.due_date} for i in invoices],
+            "contracts": [{"id": ct.id, "title": ct.title, "type": ct.type, "status": ct.status} for ct in contracts],
+            "proposals": [{"id": p.id, "title": p.title, "totalAmount": p.total_amount, "status": p.status} for p in proposals],
+            "retainers": [{"id": r.id, "title": r.title, "amount": r.amount, "billingCycle": r.billing_cycle, "status": r.status} for r in retainers],
+        }
+    )
     # Task ledger — the open work owed on this relationship.
     try:
         from .task_ledger import is_overdue
+
         tasks = store.list_tasks(user_id, client_id=c.id)
         detail["tasks"] = [
-            {"id": t.id, "title": t.title, "status": t.status, "priority": t.priority,
-             "dueDate": t.due_date, "owner": t.owner, "source": t.source,
-             "overdue": is_overdue(t)}
+            {
+                "id": t.id,
+                "title": t.title,
+                "status": t.status,
+                "priority": t.priority,
+                "dueDate": t.due_date,
+                "owner": t.owner,
+                "source": t.source,
+                "overdue": is_overdue(t),
+            }
             for t in tasks
         ]
         detail["openTaskCount"] = sum(1 for t in tasks if t.status in ("todo", "in_progress", "blocked"))
@@ -194,11 +204,9 @@ def get_client_detail(user_id: str, client_id: str) -> dict | None:
     # (email/meeting commitments etc.) that only live in the graph.
     try:
         from .graph_memory import query_subgraph
+
         sub = query_subgraph(user_id, c.name)
-        detail["graphFacts"] = [
-            {"rel": r["rel"], "label": r["label"]}
-            for r in sub.get("relations", []) if r.get("type") == "fact"
-        ]
+        detail["graphFacts"] = [{"rel": r["rel"], "label": r["label"]} for r in sub.get("relations", []) if r.get("type") == "fact"]
     except Exception:
         detail["graphFacts"] = []
     return detail
@@ -225,29 +233,39 @@ def parse_capture(user_id: str, capture_id: str, raw_text: str) -> QuickCapture 
         confidence = float(parsed.get("confidence", 0.5) or 0.5)
         actions = _apply_capture_actions(user_id, capture_id, entities, confidence, clients)
         status = "parsed" if confidence >= 0.5 else "partial"
-        updated = store.update_capture(user_id, capture_id, {
-            "parse_status": status,
-            "parsed_intent": str(parsed.get("intent", "unknown"))[:40],
-            "parsed_entities": entities,
-            "ai_confidence": round(confidence, 2),
-            "actions_taken": actions,
-            "requires_review": confidence < 0.7,
-            "parsed_at": _now(),
-        })
+        updated = store.update_capture(
+            user_id,
+            capture_id,
+            {
+                "parse_status": status,
+                "parsed_intent": str(parsed.get("intent", "unknown"))[:40],
+                "parsed_entities": entities,
+                "ai_confidence": round(confidence, 2),
+                "actions_taken": actions,
+                "requires_review": confidence < 0.7,
+                "parsed_at": _now(),
+            },
+        )
         agent_logger.log_action(
-            user_id=user_id, agent_type="butler",
+            user_id=user_id,
+            agent_type="butler",
             action=f"Parsed quick capture: {parsed.get('intent', 'unknown')}",
             input={"captureId": capture_id, "chars": len(raw_text)},
             output={"intent": parsed.get("intent"), "confidence": confidence, "actions": len(actions)},
-            model_used=call.model_used, tokens_used=call.tokens_used, latency_ms=call.latency_ms,
-            cost_usd=call.cost_usd, triggered_by="user", source_record_type="quick_capture",
-            source_record_id=capture_id)
+            model_used=call.model_used,
+            tokens_used=call.tokens_used,
+            latency_ms=call.latency_ms,
+            cost_usd=call.cost_usd,
+            triggered_by="user",
+            source_record_type="quick_capture",
+            source_record_id=capture_id,
+        )
         return updated
     except Exception as exc:
         print(f"[butler] capture parse failed: {exc}")
-        return store.update_capture(user_id, capture_id, {
-            "parse_status": "failed", "requires_review": True,
-            "parsed_entities": {"error": str(exc)[:200]}, "parsed_at": _now()})
+        return store.update_capture(
+            user_id, capture_id, {"parse_status": "failed", "requires_review": True, "parsed_entities": {"error": str(exc)[:200]}, "parsed_at": _now()}
+        )
 
 
 def _apply_capture_actions(user_id, capture_id, entities, confidence, clients) -> list[dict]:
@@ -259,10 +277,18 @@ def _apply_capture_actions(user_id, capture_id, entities, confidence, clients) -
     note_content = (entities.get("note_content") or "").strip()
     if client and note_content:
         try:
-            store.insert_client_note(ClientNote(
-                id=store.uid("note"), user_id=user_id, client_id=client.id,
-                quick_capture_id=capture_id, note_type="update",
-                content_md=note_content, is_ai_generated=True, created_at=_now()))
+            store.insert_client_note(
+                ClientNote(
+                    id=store.uid("note"),
+                    user_id=user_id,
+                    client_id=client.id,
+                    quick_capture_id=capture_id,
+                    note_type="update",
+                    content_md=note_content,
+                    is_ai_generated=True,
+                    created_at=_now(),
+                )
+            )
             touch_client(user_id, client.id)
             actions.append({"type": "created_note", "clientId": client.id})
         except Exception as exc:
@@ -289,21 +315,19 @@ def _gather_state(user_id: str) -> dict:
     profile = user.profile if user else None
     clients = store.list_clients(user_id, status="active")
     all_clients = store.list_clients(user_id)
-    engagements = [e for e in store.list_engagements(user_id)
-                   if e.status in ("active", "on_track", "at_risk", "planning")]
+    engagements = [e for e in store.list_engagements(user_id) if e.status in ("active", "on_track", "at_risk", "planning")]
     invoices = store.list_invoices(user_id)
-    overdue = [i for i in invoices if i.status == "overdue" or
-               (i.status in ("sent", "viewed") and _days_overdue(i.due_date) > 0)]
+    overdue = [i for i in invoices if i.status == "overdue" or (i.status in ("sent", "viewed") and _days_overdue(i.due_date) > 0)]
     txns = store.list_transactions(user_id)
     ym = datetime.now(timezone.utc).date().isoformat()[:7]
     income_30d = round(sum(abs(t.amount) for t in txns if t.type == "income" and t.date[:7] == ym), 2)
     pending = store.list_manager_tasks(user_id, status="proposed")
     captures_review = store.list_captures(user_id, requires_review=True)
-    silent = [c.name for c in all_clients
-              if (_days_since(c.last_activity_at) or 0) > _SILENT_DAYS][:3]
+    silent = [c.name for c in all_clients if (_days_since(c.last_activity_at) or 0) > _SILENT_DAYS][:3]
 
     state = {
-        "user": user, "profile": profile,
+        "user": user,
+        "profile": profile,
         "currency": (user.currency if user else "USD"),
         "client_count": len(clients),
         "active_engagement_count": len(engagements),
@@ -333,57 +357,49 @@ def _gather_state(user_id: str) -> dict:
 def _enrich_with_google_state(user_id: str, state: dict) -> None:
     """Pull Google-connected intelligence into the state dict (best-effort)."""
     from ..config import settings as _settings
+
     if not _settings.SUPABASE_URL:
         return
     try:
         from supabase import create_client
+
         db = create_client(_settings.SUPABASE_URL, _settings.SUPABASE_SERVICE_ROLE_KEY)
 
-        conn_rows = db.table("google_connections").select("connected").eq(
-            "user_id", user_id).execute().data
+        conn_rows = db.table("google_connections").select("connected").eq("user_id", user_id).execute().data
         if not conn_rows or not conn_rows[0].get("connected"):
             return
         state["google_connected"] = True
 
         # Email intel from cache
-        email_cache = db.table("email_intel_cache").select(
-            "client_name, sentiment, action_needed, last_contact_days, last_contact_direction"
-        ).eq("user_id", user_id).execute().data
+        email_cache = (
+            db.table("email_intel_cache")
+            .select("client_name, sentiment, action_needed, last_contact_days, last_contact_direction")
+            .eq("user_id", user_id)
+            .execute()
+            .data
+        )
         state["clients_needing_reply"] = [
-            e["client_name"] for e in email_cache
-            if e.get("action_needed") and e.get("last_contact_direction") == "from_client"
+            e["client_name"] for e in email_cache if e.get("action_needed") and e.get("last_contact_direction") == "from_client"
         ][:3]
-        state["silent_clients_email"] = [
-            e["client_name"] for e in email_cache
-            if (e.get("last_contact_days") or 0) > 14
-        ][:3]
-        state["strained_relationships"] = [
-            e["client_name"] for e in email_cache
-            if e.get("sentiment") in ("cautious", "strained")
-        ][:3]
+        state["silent_clients_email"] = [e["client_name"] for e in email_cache if (e.get("last_contact_days") or 0) > 14][:3]
+        state["strained_relationships"] = [e["client_name"] for e in email_cache if e.get("sentiment") in ("cautious", "strained")][:3]
 
         # Calendar (live, lightweight)
         from .calendar_intel import (
             get_todays_meetings_with_clients,
             get_unlogged_past_meetings,
         )
+
         todays = get_todays_meetings_with_clients(user_id)
-        state["todays_client_meetings"] = [
-            e["title"] for e in todays if e.get("is_client_meeting")
-        ]
+        state["todays_client_meetings"] = [e["title"] for e in todays if e.get("is_client_meeting")]
         unlogged = get_unlogged_past_meetings(user_id)
         state["unlogged_meetings_count"] = len(unlogged)
 
         # Meeting action items
         today_iso = datetime.now(timezone.utc).date().isoformat()
-        open_actions = db.table("meeting_action_items").select(
-            "id, due_date"
-        ).eq("user_id", user_id).eq("status", "open").execute().data
+        open_actions = db.table("meeting_action_items").select("id, due_date").eq("user_id", user_id).eq("status", "open").execute().data
         state["open_action_items"] = len(open_actions)
-        state["overdue_action_items"] = sum(
-            1 for a in open_actions
-            if a.get("due_date") and a["due_date"] < today_iso
-        )
+        state["overdue_action_items"] = sum(1 for a in open_actions if a.get("due_date") and a["due_date"] < today_iso)
     except Exception as exc:
         print(f"[butler] google state enrich failed: {exc}")
 
@@ -391,24 +407,26 @@ def _enrich_with_google_state(user_id: str, state: dict) -> None:
 def _assess(state: dict) -> list[dict]:
     findings: list[dict] = []
     if state["overdue_total"]:
-        findings.append({"type": "overdue_invoices",
-                         "severity": "critical" if state["overdue_total"] > 1000 else "warning",
-                         "detail": f"{state['overdue_count']} invoices overdue totalling {state['overdue_total']:,.0f}"})
+        findings.append(
+            {
+                "type": "overdue_invoices",
+                "severity": "critical" if state["overdue_total"] > 1000 else "warning",
+                "detail": f"{state['overdue_count']} invoices overdue totalling {state['overdue_total']:,.0f}",
+            }
+        )
     if state["at_risk_engagements"]:
-        findings.append({"type": "at_risk_engagements", "severity": "warning",
-                         "detail": f"{state['at_risk_engagements']} engagement(s) at risk"})
+        findings.append({"type": "at_risk_engagements", "severity": "warning", "detail": f"{state['at_risk_engagements']} engagement(s) at risk"})
     if state["silent_clients"]:
-        findings.append({"type": "silent_clients", "severity": "info",
-                         "detail": f"No activity for {', '.join(state['silent_clients'])} in {_SILENT_DAYS}+ days"})
+        findings.append(
+            {"type": "silent_clients", "severity": "info", "detail": f"No activity for {', '.join(state['silent_clients'])} in {_SILENT_DAYS}+ days"}
+        )
     goal = state["monthly_goal"]
     if goal:
         pct = (state["income_30d"] / goal) * 100 if goal else 0
         if pct < 50:
-            findings.append({"type": "goal_behind", "severity": "warning",
-                             "detail": f"At {pct:.0f}% of the monthly goal"})
+            findings.append({"type": "goal_behind", "severity": "warning", "detail": f"At {pct:.0f}% of the monthly goal"})
     if state["pending_decisions"]:
-        findings.append({"type": "pending_decisions", "severity": "info",
-                         "detail": f"{state['pending_decisions']} action(s) awaiting approval"})
+        findings.append({"type": "pending_decisions", "severity": "info", "detail": f"{state['pending_decisions']} action(s) awaiting approval"})
     return findings
 
 
@@ -456,11 +474,7 @@ def generate_morning_briefing(user_id: str, triggered_by: str = "user") -> dict:
         # Supervisor cross-run memory injected so butler can reference escalations
         "supervisor_last_run": supervisor_memory.get("lastRunAt"),
         "supervisor_status_line": supervisor_memory.get("lastBriefing", {}).get("statusLine"),
-        "recent_escalations": [
-            {"invoiceId": k, **v}
-            for k, v in (supervisor_memory.get("escalationState") or {}).items()
-            if v.get("lastAction")
-        ][:5],
+        "recent_escalations": [{"invoiceId": k, **v} for k, v in (supervisor_memory.get("escalationState") or {}).items() if v.get("lastAction")][:5],
         "slow_payers": [
             {"clientName": v["clientName"], "avgDaysToPayment": v["avgDaysToPayment"]}
             for v in (supervisor_memory.get("paymentPatterns") or {}).values()
@@ -478,6 +492,7 @@ def generate_morning_briefing(user_id: str, triggered_by: str = "user") -> dict:
     }
     try:
         from .playbook import assemble_context
+
         business_context = assemble_context(user_id, "briefing")
         if business_context:
             payload["business_context"] = business_context
@@ -496,6 +511,7 @@ def generate_morning_briefing(user_id: str, triggered_by: str = "user") -> dict:
     briefing = _normalize_briefing(raw)
     try:
         from .validation import validate_briefing
+
         briefing = validate_briefing(briefing, state, user_id)
     except Exception:
         pass
@@ -504,32 +520,52 @@ def generate_morning_briefing(user_id: str, triggered_by: str = "user") -> dict:
     # Persist as an alert for the dashboard (deduped to once/day).
     try:
         if not store.alert_fired_recently(user_id, "morning_briefing", within_days=1):
-            store.insert_alert(Alert(
-                id=store.uid("alert"), user_id=user_id, type="morning_briefing", severity="info",
-                title="Morning briefing", body=briefing["headline"],
-                action_label="Open Butler", action_url="/butler", read=False, created_at=ran_at))
+            store.insert_alert(
+                Alert(
+                    id=store.uid("alert"),
+                    user_id=user_id,
+                    type="morning_briefing",
+                    severity="info",
+                    title="Morning briefing",
+                    body=briefing["headline"],
+                    action_label="Open Butler",
+                    action_url="/butler",
+                    read=False,
+                    created_at=ran_at,
+                )
+            )
     except Exception:
         pass
 
     # Persist butler memory (rolling continuity).
     try:
         insights = ([briefing["keyInsight"]] + (prev.get("rollingInsights") or []))[:5] if briefing["keyInsight"] else (prev.get("rollingInsights") or [])
-        store.set_butler_memory(user_id, {
-            "lastBriefingAt": ran_at,
-            "lastBriefing": briefing,
-            "clientCount": state["client_count"],
-            "activeEngagementCount": state["active_engagement_count"],
-            "rollingInsights": insights,
-        })
+        store.set_butler_memory(
+            user_id,
+            {
+                "lastBriefingAt": ran_at,
+                "lastBriefing": briefing,
+                "clientCount": state["client_count"],
+                "activeEngagementCount": state["active_engagement_count"],
+                "rollingInsights": insights,
+            },
+        )
     except Exception as exc:
         print(f"[butler] memory not saved: {exc}")
 
     agent_logger.log_action(
-        user_id=user_id, agent_type="butler", action="Generated morning briefing",
+        user_id=user_id,
+        agent_type="butler",
+        action="Generated morning briefing",
         input={"clients": state["client_count"], "findings": len(findings)},
         output={"headline": briefing["headline"]},
-        model_used=model or "deterministic", tokens_used=tokens, latency_ms=latency, cost_usd=cost,
-        triggered_by=triggered_by, source_record_type="butler")
+        model_used=model or "deterministic",
+        tokens_used=tokens,
+        latency_ms=latency,
+        cost_usd=cost,
+        triggered_by=triggered_by,
+        source_record_type="butler",
+    )
 
     return {"briefing": briefing, "ranAt": ran_at}
 
@@ -541,6 +577,7 @@ def _normalize_briefing(raw: dict) -> dict:
             if isinstance(v, str) and v.strip():
                 return v.strip()
         return ""
+
     focus = raw.get("focus_today") or raw.get("focusToday") or []
     focus = [str(f).strip() for f in focus if isinstance(f, (str,)) and str(f).strip()][:3]
     return {

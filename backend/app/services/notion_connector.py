@@ -17,6 +17,7 @@ internal integration (single workspace / self-host). Everything degrades
 gracefully: when Notion isn't connected, reads report "not connected" rather
 than raising.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -29,8 +30,17 @@ _API = "https://api.notion.com/v1"
 
 # Block types whose rich_text we treat as readable prose when ingesting a page.
 _TEXT_BLOCKS = (
-    "paragraph", "heading_1", "heading_2", "heading_3", "quote", "callout",
-    "bulleted_list_item", "numbered_list_item", "to_do", "toggle", "code",
+    "paragraph",
+    "heading_1",
+    "heading_2",
+    "heading_3",
+    "quote",
+    "callout",
+    "bulleted_list_item",
+    "numbered_list_item",
+    "to_do",
+    "toggle",
+    "code",
 )
 
 
@@ -88,12 +98,7 @@ def status(user_id: str) -> dict:
         # must authorize their own workspace, so the shared NOTION_API_KEY is
         # inert for anyone who hasn't connected — claiming "api_key" there would
         # be a lie. Mirrors the isolation rule in `_token`.
-        "authMode": (
-            "oauth" if conn.get("access_token")
-            else None if is_multi_tenant()
-            else "api_key" if settings.NOTION_API_KEY
-            else None
-        ),
+        "authMode": ("oauth" if conn.get("access_token") else None if is_multi_tenant() else "api_key" if settings.NOTION_API_KEY else None),
         "workspaceName": conn.get("workspace_name"),
         "selectedPageIds": list(conn.get("ingest_page_ids") or []),
         "selectedPageCount": len(conn.get("ingest_page_ids") or []),
@@ -107,9 +112,14 @@ def set_ingest_pages(user_id: str, page_ids: list[str]) -> dict:
     """Persist the user's chosen pages/databases to read. Read-only selection —
     nothing is written to Notion."""
     clean = [str(p) for p in (page_ids or []) if str(p).strip()]
-    store.upsert_notion_connection(user_id, {
-        "ingest_page_ids": clean, "updated_at": _now(), "last_error": None,
-    })
+    store.upsert_notion_connection(
+        user_id,
+        {
+            "ingest_page_ids": clean,
+            "updated_at": _now(),
+            "last_error": None,
+        },
+    )
     return {"ok": True, "selectedPageCount": len(clean)}
 
 
@@ -132,6 +142,7 @@ def _headers(token: str) -> dict:
 def _request(method: str, path: str, token: str, payload: dict | None = None) -> dict:
     """One Notion API call. Raises RuntimeError with a readable message on failure."""
     import httpx
+
     url = f"{_API}{path}"
     try:
         with httpx.Client(timeout=30.0) as c:
@@ -183,10 +194,15 @@ def list_parent_pages(user_id: str, limit: int = 50) -> dict:
     if not token:
         return {"ok": False, "error": "Notion is not connected.", "pages": []}
     try:
-        res = _request("POST", "/search", token, {
-            "filter": {"property": "object", "value": "page"},
-            "page_size": limit,
-        })
+        res = _request(
+            "POST",
+            "/search",
+            token,
+            {
+                "filter": {"property": "object", "value": "page"},
+                "page_size": limit,
+            },
+        )
     except RuntimeError as exc:
         _record_error(user_id, str(exc))
         return {"ok": False, "error": str(exc), "pages": []}
@@ -253,13 +269,16 @@ def oauth_authorize_url(state: str = "") -> str | None:
     if not settings.NOTION_OAUTH_CLIENT_ID:
         return None
     from urllib.parse import urlencode
-    q = urlencode({
-        "client_id": settings.NOTION_OAUTH_CLIENT_ID,
-        "response_type": "code",
-        "owner": "user",
-        "redirect_uri": settings.NOTION_OAUTH_REDIRECT_URI,
-        **({"state": state} if state else {}),
-    })
+
+    q = urlencode(
+        {
+            "client_id": settings.NOTION_OAUTH_CLIENT_ID,
+            "response_type": "code",
+            "owner": "user",
+            "redirect_uri": settings.NOTION_OAUTH_REDIRECT_URI,
+            **({"state": state} if state else {}),
+        }
+    )
     return f"https://api.notion.com/v1/oauth/authorize?{q}"
 
 
@@ -269,17 +288,15 @@ def exchange_code(user_id: str, code: str) -> dict:
         return {"ok": False, "error": "Notion OAuth is not configured."}
     import base64
     import httpx
-    basic = base64.b64encode(
-        f"{settings.NOTION_OAUTH_CLIENT_ID}:{settings.NOTION_OAUTH_CLIENT_SECRET}".encode()
-    ).decode()
+
+    basic = base64.b64encode(f"{settings.NOTION_OAUTH_CLIENT_ID}:{settings.NOTION_OAUTH_CLIENT_SECRET}".encode()).decode()
     try:
         with httpx.Client(timeout=30.0) as c:
-            r = c.post(f"{_API}/oauth/token",
-                       headers={"Authorization": f"Basic {basic}",
-                                "Content-Type": "application/json",
-                                "Notion-Version": settings.NOTION_VERSION},
-                       json={"grant_type": "authorization_code", "code": code,
-                             "redirect_uri": settings.NOTION_OAUTH_REDIRECT_URI})
+            r = c.post(
+                f"{_API}/oauth/token",
+                headers={"Authorization": f"Basic {basic}", "Content-Type": "application/json", "Notion-Version": settings.NOTION_VERSION},
+                json={"grant_type": "authorization_code", "code": code, "redirect_uri": settings.NOTION_OAUTH_REDIRECT_URI},
+            )
         if r.status_code >= 400:
             return {"ok": False, "error": f"Notion OAuth {r.status_code}: {r.text[:200]}"}
         data = r.json()
@@ -291,14 +308,17 @@ def exchange_code(user_id: str, code: str) -> dict:
         stored = encrypt_token(token)
     except Exception:
         stored = token
-    store.upsert_notion_connection(user_id, {
-        "access_token": stored,
-        "workspace_id": data.get("workspace_id"),
-        "workspace_name": data.get("workspace_name"),
-        "bot_id": data.get("bot_id"),
-        "connected": True,
-        "last_error": None,
-        "created_at": _now(),
-        "updated_at": _now(),
-    })
+    store.upsert_notion_connection(
+        user_id,
+        {
+            "access_token": stored,
+            "workspace_id": data.get("workspace_id"),
+            "workspace_name": data.get("workspace_name"),
+            "bot_id": data.get("bot_id"),
+            "connected": True,
+            "last_error": None,
+            "created_at": _now(),
+            "updated_at": _now(),
+        },
+    )
     return {"ok": True, "workspaceName": data.get("workspace_name")}

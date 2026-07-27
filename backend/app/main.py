@@ -49,11 +49,24 @@ if settings.SENTRY_DSN:
     def _scrub_sensitive_data(event, hint):
         if event.get("extra"):
             for key in list(event["extra"].keys()):
-                if any(s in key.lower() for s in [
-                    "amount", "total", "income", "expense", "balance",
-                    "transaction", "bank", "token", "secret", "password",
-                    "email_body", "transcript", "raw_text",
-                ]):
+                if any(
+                    s in key.lower()
+                    for s in [
+                        "amount",
+                        "total",
+                        "income",
+                        "expense",
+                        "balance",
+                        "transaction",
+                        "bank",
+                        "token",
+                        "secret",
+                        "password",
+                        "email_body",
+                        "transcript",
+                        "raw_text",
+                    ]
+                ):
                     event["extra"][key] = "[REDACTED]"
         request = event.get("request", {})
         if request.get("data"):
@@ -82,8 +95,10 @@ app.add_middleware(SecurityHeadersMiddleware)
 _cors_origins = [settings.FRONTEND_ORIGIN]
 if settings.ENVIRONMENT != "production":
     _cors_origins += [
-        "http://localhost:3000", "http://127.0.0.1:3000",
-        "http://localhost:3001", "http://127.0.0.1:3001",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
     ]
 app.add_middleware(
     CORSMiddleware,

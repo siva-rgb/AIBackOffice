@@ -6,6 +6,7 @@ camelCase (the app convention via CamelModel). `camelize()` bridges the two so
 those responses actually render. Idempotent on already-camel keys (no `_` → no
 change), so it's safe to apply broadly.
 """
+
 from __future__ import annotations
 
 from typing import Any

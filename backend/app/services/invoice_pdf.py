@@ -2,6 +2,7 @@
 Generate professional invoice PDFs using ReportLab.
 Matches the existing pdf_generator.py patterns.
 """
+
 from __future__ import annotations
 
 import io
@@ -104,24 +105,23 @@ def _render(inv, user, profile: dict) -> bytes:
     """Render invoice to PDF bytes using ReportLab."""
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        leftMargin=18 * mm, rightMargin=18 * mm,
-        topMargin=18 * mm, bottomMargin=18 * mm,
+        buf,
+        pagesize=A4,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=18 * mm,
+        bottomMargin=18 * mm,
         title=f"Invoice {inv.invoice_number}",
     )
 
     styles = getSampleStyleSheet()
     h_title = ParagraphStyle("h_title", parent=styles["Title"], textColor=INK, fontSize=24, spaceAfter=2)
-    h_label = ParagraphStyle("h_label", parent=styles["Normal"], textColor=MUTED, fontSize=8,
-                              spaceAfter=0, leading=10)
-    h_value = ParagraphStyle("h_value", parent=styles["Normal"], textColor=INK, fontSize=11,
-                              spaceAfter=2, leading=13)
-    h_brand = ParagraphStyle("h_brand", parent=styles["Heading1"], textColor=BRAND, fontSize=16,
-                               spaceAfter=2)
+    h_label = ParagraphStyle("h_label", parent=styles["Normal"], textColor=MUTED, fontSize=8, spaceAfter=0, leading=10)
+    h_value = ParagraphStyle("h_value", parent=styles["Normal"], textColor=INK, fontSize=11, spaceAfter=2, leading=13)
+    h_brand = ParagraphStyle("h_brand", parent=styles["Heading1"], textColor=BRAND, fontSize=16, spaceAfter=2)
     normal = ParagraphStyle("normal", parent=styles["Normal"], textColor=INK, fontSize=10, leading=14)
     small = ParagraphStyle("small", parent=styles["Normal"], textColor=MUTED, fontSize=9, leading=12)
-    footer_style = ParagraphStyle("footer_s", parent=styles["Normal"], textColor=MUTED,
-                                   fontSize=8, leading=11)
+    footer_style = ParagraphStyle("footer_s", parent=styles["Normal"], textColor=MUTED, fontSize=8, leading=11)
 
     currency = inv.currency or "USD"
     sym = _sym(currency)
@@ -130,11 +130,7 @@ def _render(inv, user, profile: dict) -> bytes:
         status = status.value
 
     sender_name = profile.get("business_name") or (user.business_name if user else "") or ""
-    sender_address = (
-        profile.get("business_address")
-        or profile.get("address")
-        or ""
-    )
+    sender_address = profile.get("business_address") or profile.get("address") or ""
     sender_email = user.email if user else ""
     sender_tax_id = profile.get("tax_id") or ""
     invoice_footer = profile.get("invoice_footer") or ""
@@ -145,21 +141,25 @@ def _render(inv, user, profile: dict) -> bytes:
         result = []
         for it in items:
             if hasattr(it, "description"):
-                result.append({
-                    "description": it.description,
-                    "qty": it.quantity,
-                    "rate": it.rate,
-                    "amount": it.amount or round(it.quantity * it.rate, 2),
-                })
+                result.append(
+                    {
+                        "description": it.description,
+                        "qty": it.quantity,
+                        "rate": it.rate,
+                        "amount": it.amount or round(it.quantity * it.rate, 2),
+                    }
+                )
             elif isinstance(it, dict):
                 qty = it.get("qty") or it.get("quantity", 1)
                 rate = it.get("rate") or it.get("unit_price", 0)
-                result.append({
-                    "description": it.get("description", ""),
-                    "qty": qty,
-                    "rate": rate,
-                    "amount": it.get("amount") or round(float(qty) * float(rate), 2),
-                })
+                result.append(
+                    {
+                        "description": it.get("description", ""),
+                        "qty": qty,
+                        "rate": rate,
+                        "amount": it.get("amount") or round(float(qty) * float(rate), 2),
+                    }
+                )
             elif isinstance(it, str):
                 try:
                     parsed = json.loads(it)
@@ -186,38 +186,41 @@ def _render(inv, user, profile: dict) -> bytes:
         sender_lines.append(Paragraph(f"Tax ID: {sender_tax_id}", small))
 
     invoice_date_str = inv.invoice_date or (inv.created_at[:10] if inv.created_at else "")
-    invoice_meta = [
+    invoice_meta = [  # noqa: F841
         [Paragraph("INVOICE", h_title)],
-        [Paragraph(f"#{inv.invoice_number}", ParagraphStyle("inv_num", parent=styles["Normal"],
-                                                             textColor=MUTED, fontSize=12))],
-        [Paragraph(f'<font color="#{_hex(status_color)}">{status.upper()}</font>',
-                   ParagraphStyle("status", parent=styles["Normal"], fontSize=10, leading=14))],
+        [Paragraph(f"#{inv.invoice_number}", ParagraphStyle("inv_num", parent=styles["Normal"], textColor=MUTED, fontSize=12))],
+        [
+            Paragraph(
+                f'<font color="#{_hex(status_color)}">{status.upper()}</font>', ParagraphStyle("status", parent=styles["Normal"], fontSize=10, leading=14)
+            )
+        ],
     ]
 
-    header_data = [[
-        sender_lines or [Paragraph("", normal)],
-        [t[0] for t in invoice_meta],
-    ]]
     # Render header as two-column table
-    from reportlab.platypus import KeepTogether
     left_col = []
-    for p in (sender_lines or [Paragraph("", normal)]):
+    for p in sender_lines or [Paragraph("", normal)]:
         left_col.append(p)
-    right_col = [Paragraph("INVOICE", h_title),
-                 Paragraph(f"#{inv.invoice_number}", ParagraphStyle("inv_num", parent=styles["Normal"],
-                                                                      textColor=MUTED, fontSize=12)),
-                 Paragraph(f'<font color="#{_hex(status_color)}">{status.upper()}</font>',
-                            ParagraphStyle("status", parent=styles["Normal"], fontSize=10, leading=14))]
+    right_col = [
+        Paragraph("INVOICE", h_title),
+        Paragraph(f"#{inv.invoice_number}", ParagraphStyle("inv_num", parent=styles["Normal"], textColor=MUTED, fontSize=12)),
+        Paragraph(
+            f'<font color="#{_hex(status_color)}">{status.upper()}</font>', ParagraphStyle("status", parent=styles["Normal"], fontSize=10, leading=14)
+        ),
+    ]
 
     header_table = Table(
         [[left_col, right_col]],
         colWidths=[105 * mm, 60 * mm],
     )
-    header_table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-    ]))
+    header_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
     story.append(header_table)
     story.append(Spacer(1, 10 * mm))
 
@@ -259,84 +262,89 @@ def _render(inv, user, profile: dict) -> bytes:
         [[client_lines, date_lines]],
         colWidths=[105 * mm, 60 * mm],
     )
-    parties_table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-    ]))
+    parties_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
     story.append(parties_table)
     story.append(Spacer(1, 8 * mm))
 
     # ── Line items table ─────────────────────────────────────────────────────
     col_w = [10 * mm, 85 * mm, 20 * mm, 25 * mm, 25 * mm]
     header_row = [
-        Paragraph("#", ParagraphStyle("th", parent=styles["Normal"], textColor=colors.white,
-                                       fontSize=9, fontName="Helvetica-Bold")),
-        Paragraph("Description", ParagraphStyle("th", parent=styles["Normal"], textColor=colors.white,
-                                                  fontSize=9, fontName="Helvetica-Bold")),
-        Paragraph("Qty", ParagraphStyle("th", parent=styles["Normal"], textColor=colors.white,
-                                         fontSize=9, fontName="Helvetica-Bold", alignment=1)),
-        Paragraph("Rate", ParagraphStyle("th", parent=styles["Normal"], textColor=colors.white,
-                                          fontSize=9, fontName="Helvetica-Bold", alignment=2)),
-        Paragraph("Amount", ParagraphStyle("th", parent=styles["Normal"], textColor=colors.white,
-                                            fontSize=9, fontName="Helvetica-Bold", alignment=2)),
+        Paragraph("#", ParagraphStyle("th", parent=styles["Normal"], textColor=colors.white, fontSize=9, fontName="Helvetica-Bold")),
+        Paragraph("Description", ParagraphStyle("th", parent=styles["Normal"], textColor=colors.white, fontSize=9, fontName="Helvetica-Bold")),
+        Paragraph("Qty", ParagraphStyle("th", parent=styles["Normal"], textColor=colors.white, fontSize=9, fontName="Helvetica-Bold", alignment=1)),
+        Paragraph("Rate", ParagraphStyle("th", parent=styles["Normal"], textColor=colors.white, fontSize=9, fontName="Helvetica-Bold", alignment=2)),
+        Paragraph("Amount", ParagraphStyle("th", parent=styles["Normal"], textColor=colors.white, fontSize=9, fontName="Helvetica-Bold", alignment=2)),
     ]
     rows = [header_row]
     for i, it in enumerate(items, 1):
-        rows.append([
-            Paragraph(str(i), normal),
-            Paragraph(str(it["description"]), normal),
-            Paragraph(str(it["qty"]), ParagraphStyle("center", parent=styles["Normal"],
-                                                      fontSize=10, alignment=1)),
-            Paragraph(f'{sym}{float(it["rate"]):,.2f}', ParagraphStyle("right", parent=styles["Normal"],
-                                                                         fontSize=10, alignment=2)),
-            Paragraph(f'{sym}{float(it["amount"]):,.2f}', ParagraphStyle("right", parent=styles["Normal"],
-                                                                           fontSize=10, alignment=2)),
-        ])
+        rows.append(
+            [
+                Paragraph(str(i), normal),
+                Paragraph(str(it["description"]), normal),
+                Paragraph(str(it["qty"]), ParagraphStyle("center", parent=styles["Normal"], fontSize=10, alignment=1)),
+                Paragraph(f'{sym}{float(it["rate"]):,.2f}', ParagraphStyle("right", parent=styles["Normal"], fontSize=10, alignment=2)),
+                Paragraph(f'{sym}{float(it["amount"]):,.2f}', ParagraphStyle("right", parent=styles["Normal"], fontSize=10, alignment=2)),
+            ]
+        )
 
     items_table = Table(rows, colWidths=col_w)
-    items_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), BRAND),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8f9fa")]),
-        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#e5e7eb")),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-    ]))
+    items_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), BRAND),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8f9fa")]),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#e5e7eb")),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
     story.append(items_table)
     story.append(Spacer(1, 6 * mm))
 
     # ── Totals ───────────────────────────────────────────────────────────────
     totals_data = [
-        [Paragraph("Subtotal", normal), Paragraph(f"{sym}{inv.subtotal:,.2f}",
-                                                    ParagraphStyle("r", parent=styles["Normal"],
-                                                                    fontSize=10, alignment=2))],
+        [Paragraph("Subtotal", normal), Paragraph(f"{sym}{inv.subtotal:,.2f}", ParagraphStyle("r", parent=styles["Normal"], fontSize=10, alignment=2))],
     ]
     if inv.tax_rate:
-        totals_data.append([
-            Paragraph(f"Tax ({inv.tax_rate}%)", normal),
-            Paragraph(f"{sym}{inv.tax_amount:,.2f}",
-                      ParagraphStyle("r", parent=styles["Normal"], fontSize=10, alignment=2)),
-        ])
-    totals_data.append([
-        Paragraph("<b>Total</b>", ParagraphStyle("tot_l", parent=styles["Normal"],
-                                                  fontSize=13, fontName="Helvetica-Bold")),
-        Paragraph(f"<b>{sym}{inv.total:,.2f}</b>",
-                  ParagraphStyle("tot_r", parent=styles["Normal"], fontSize=13,
-                                  fontName="Helvetica-Bold", alignment=2)),
-    ])
+        totals_data.append(
+            [
+                Paragraph(f"Tax ({inv.tax_rate}%)", normal),
+                Paragraph(f"{sym}{inv.tax_amount:,.2f}", ParagraphStyle("r", parent=styles["Normal"], fontSize=10, alignment=2)),
+            ]
+        )
+    totals_data.append(
+        [
+            Paragraph("<b>Total</b>", ParagraphStyle("tot_l", parent=styles["Normal"], fontSize=13, fontName="Helvetica-Bold")),
+            Paragraph(
+                f"<b>{sym}{inv.total:,.2f}</b>", ParagraphStyle("tot_r", parent=styles["Normal"], fontSize=13, fontName="Helvetica-Bold", alignment=2)
+            ),
+        ]
+    )
 
-    totals_table = Table(totals_data, colWidths=[130 * mm, 35 * mm],
-                         hAlign="RIGHT")
-    totals_table.setStyle(TableStyle([
-        ("LINEABOVE", (0, -1), (-1, -1), 1.5, INK),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-    ]))
+    totals_table = Table(totals_data, colWidths=[130 * mm, 35 * mm], hAlign="RIGHT")
+    totals_table.setStyle(
+        TableStyle(
+            [
+                ("LINEABOVE", (0, -1), (-1, -1), 1.5, INK),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
     story.append(totals_table)
 
     # ── Footer ───────────────────────────────────────────────────────────────

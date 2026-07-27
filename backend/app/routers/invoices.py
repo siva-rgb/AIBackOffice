@@ -36,11 +36,7 @@ async def list_invoices(user: User = Depends(get_current_user)):
 
 @router.post("", response_model=Invoice, status_code=201)
 async def create_invoice(body: CreateInvoiceRequest, user: User = Depends(get_current_user)):
-    items = [
-        LineItem(description=li.description, quantity=li.quantity, rate=li.rate,
-                 amount=round(li.quantity * li.rate, 2))
-        for li in body.line_items
-    ]
+    items = [LineItem(description=li.description, quantity=li.quantity, rate=li.rate, amount=round(li.quantity * li.rate, 2)) for li in body.line_items]
     subtotal, tax_amount, total = _totals(items, body.tax_rate)
 
     # Auto-fill client email/address/tax_id from the stored client record when
@@ -54,8 +50,7 @@ async def create_invoice(body: CreateInvoiceRequest, user: User = Depends(get_cu
         linked = store.get_client(user.id, body.client_id)
     if not linked and body.client_name:
         _name = body.client_name.strip().lower()
-        linked = next((c for c in store.list_clients(user.id)
-                       if (c.name or "").strip().lower() == _name), None)
+        linked = next((c for c in store.list_clients(user.id) if (c.name or "").strip().lower() == _name), None)
     if linked:
         client_email = client_email or getattr(linked, "email", None)
         client_address = client_address or getattr(linked, "billing_address", None)
@@ -91,6 +86,7 @@ async def create_invoice(body: CreateInvoiceRequest, user: User = Depends(get_cu
     # Generate PDF in the background — non-blocking
     try:
         from ..services.invoice_pdf import generate_invoice_pdf
+
         generate_invoice_pdf(user.id, saved.id)
     except Exception:
         pass
@@ -165,8 +161,7 @@ async def send_invoice(invoice_id: str, user: User = Depends(get_current_user)):
     pdf_url: str | None = None
     if inv and inv.pdf_path and is_configured():
         try:
-            pdf_url = get_signed_url(user.id, inv.pdf_path, expiry_minutes=72 * 60,
-                                     filename_override=f"invoice-{inv.invoice_number}.pdf")
+            pdf_url = get_signed_url(user.id, inv.pdf_path, expiry_minutes=72 * 60, filename_override=f"invoice-{inv.invoice_number}.pdf")
         except Exception:
             pass
 
@@ -176,11 +171,7 @@ async def send_invoice(invoice_id: str, user: User = Depends(get_current_user)):
     sender_name = ""
     if user_obj and user_obj.profile:
         p = user_obj.profile
-        sender_name = (
-            getattr(p, "business_name", None)
-            or getattr(p, "name", None)
-            or user_obj.email
-        )
+        sender_name = getattr(p, "business_name", None) or getattr(p, "name", None) or user_obj.email
 
     message_id = send_invoice_email(
         user_id=user.id,
@@ -197,18 +188,23 @@ async def send_invoice(invoice_id: str, user: User = Depends(get_current_user)):
         notes=inv.notes,
     )
 
-    return store.update_invoice(user.id, invoice_id, {
-        "status": "sent",
-        "sent_at": datetime.now(timezone.utc).isoformat(),
-        "payment_link": payment_link,
-        **({"email_message_id": message_id} if message_id else {}),
-    })
+    return store.update_invoice(
+        user.id,
+        invoice_id,
+        {
+            "status": "sent",
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+            "payment_link": payment_link,
+            **({"email_message_id": message_id} if message_id else {}),
+        },
+    )
 
 
 @router.post("/{invoice_id}/pdf")
 async def generate_pdf(invoice_id: str, user: User = Depends(get_current_user)):
     """Trigger PDF generation (or regeneration) and return the storage path."""
     from ..services.invoice_pdf import generate_invoice_pdf
+
     inv = store.get_invoice(user.id, invoice_id)
     if not inv:
         raise HTTPException(status_code=404, detail="Not found")
@@ -236,7 +232,9 @@ async def download_pdf(invoice_id: str, user: User = Depends(get_current_user)):
             inv = store.get_invoice(user.id, invoice_id)
         try:
             url = get_signed_url(
-                user.id, inv.pdf_path, expiry_minutes=15,
+                user.id,
+                inv.pdf_path,
+                expiry_minutes=15,
                 filename_override=f"invoice-{inv.invoice_number}.pdf",
             )
             return {"url": url, "expires_in_minutes": 15}
@@ -245,7 +243,9 @@ async def download_pdf(invoice_id: str, user: User = Depends(get_current_user)):
             generate_invoice_pdf(user.id, invoice_id)
             inv = store.get_invoice(user.id, invoice_id)
             url = get_signed_url(
-                user.id, inv.pdf_path, expiry_minutes=15,
+                user.id,
+                inv.pdf_path,
+                expiry_minutes=15,
                 filename_override=f"invoice-{inv.invoice_number}.pdf",
             )
             return {"url": url, "expires_in_minutes": 15}
@@ -260,9 +260,7 @@ async def download_pdf(invoice_id: str, user: User = Depends(get_current_user)):
 
 
 @router.patch("/{invoice_id}", response_model=Invoice)
-async def update_invoice_status(
-    invoice_id: str, body: UpdateInvoiceStatusRequest, user: User = Depends(get_current_user)
-):
+async def update_invoice_status(invoice_id: str, body: UpdateInvoiceStatusRequest, user: User = Depends(get_current_user)):
     inv = store.get_invoice(user.id, invoice_id)
     if not inv:
         raise HTTPException(status_code=404, detail="Not found")
