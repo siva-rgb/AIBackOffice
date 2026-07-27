@@ -1,4 +1,4 @@
-# KICKOFF-INTERVIEW — KORA
+﻿# KICKOFF-INTERVIEW — AIBackOffice
 
 > Run this BEFORE G0. The agent asks YOU questions until every assumption is explicit.
 > Output goes to `decisions/decisions-manifest.md`. That file is the input to G0.
@@ -70,8 +70,8 @@ now — your cognitive job is pre-filled in decisions-manifest.md."
 ## decisions-manifest.md template (write this when interview is done)
 
 ```markdown
-# decisions-manifest — KORA
-Generated: 2026-07-23 via KICKOFF-INTERVIEW.md
+# decisions-manifest — AIBackOffice
+Generated: 2026-07-27 via KICKOFF-INTERVIEW.md
 
 ## Trade-off ranking
 1. {{PRIORITY_1}}

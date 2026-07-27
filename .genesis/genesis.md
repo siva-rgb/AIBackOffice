@@ -1,4 +1,4 @@
-# genesis.md — the project genesis ritual
+﻿# genesis.md — the project genesis ritual
 
 Run this ONCE when starting (or adopting) any project. It produces the `.genesis/` spine, seeds it from
 the global agentic-swe-kit, and leaves you ready to run loops. Agent-agnostic — see `AGENT-ADAPTERS.md`
@@ -37,7 +37,7 @@ decisions/, checkpoints/CURRENT.md, wiki/}`. scaffold.sh will ask you for:
   - router skill name
   - token budget per milestone
   - max loop iterations per milestone
-Press Enter to accept defaults. These fill `claude-haiku-4-5`, `claude-opus-4-8`, etc. everywhere
+Press Enter to accept defaults. These fill `claude-sonnet-4-5`, `claude-opus-4-5`, etc. everywhere
 in the spine so no placeholder tokens survive into your working files.
 
 ## G2 — Build the context graph

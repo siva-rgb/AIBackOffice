@@ -73,4 +73,4 @@ desktop.ini
 *.swp
 
 # Local agent scaffolding / rolling state (genesis-kit)
-.genesis/checkpoints/
+

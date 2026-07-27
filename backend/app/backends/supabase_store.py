@@ -22,17 +22,21 @@ from ..models import (
     Transaction,
     User,
 )
+from .repository import TenantQuery
 
 # Supabase-backed data backend (KORA_DATA_BACKEND=supabase). Same function
 # surface as memory_store, so nothing else in the app changes.
 #
-# Mapping notes: models are camelCase-aliased Pydantic but dump to snake_case
-# (= DB columns). Two model fields have no column in the applied schema, so we
-# tuck them into adjacent JSONB to stay lossless without extra DDL:
-#   - AgentLog.cost_usd      -> output["_cost_usd"]
-#   - Contract.provider_name -> terms["_provider_name"]
+# All user-data queries MUST go through the `repo(user_id)` wrapper, which
+# automatically injects `eq("user_id", ...)` on every read/write and
+# validates that insert rows carry the caller's user_id. The raw `_sb` client
+# is only for truly tenant-agnostic operations (auth, admin, cross-tenant).
 
 _sb = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+
+
+def repo(user_id: str) -> TenantQuery:
+    return TenantQuery(_sb, user_id)
 
 
 def _dump(model) -> dict:
@@ -75,6 +79,10 @@ def _contract_from_row(row: dict) -> Contract:
 
 
 # ---- Users -----------------------------------------------------------------
+# User operations use `_sb` directly because user_id IS the tenant identity
+# and the users table is accessed by id/email (not a separate tenant column).
+
+
 def get_user(user_id: str) -> User | None:
     r = _sb.table("users").select("*").eq("id", user_id).limit(1).execute()
     return User(**r.data[0]) if r.data else None
@@ -109,7 +117,7 @@ def update_user(user_id: str, patch: dict) -> User | None:
 
 # ---- Transactions ----------------------------------------------------------
 def list_transactions(user_id: str) -> list[Transaction]:
-    r = _sb.table("transactions").select("*").eq("user_id", user_id).order("date", desc=True).execute()
+    r = repo(user_id).select("transactions").order("date", desc=True).execute()
     return [Transaction(**row) for row in r.data]
 
 
@@ -117,7 +125,7 @@ def insert_transactions(rows: list[Transaction]) -> list[Transaction]:
     if not rows:
         return []
     user_id = rows[0].user_id
-    existing = _sb.table("transactions").select("date,description,amount").eq("user_id", user_id).execute()
+    existing = repo(user_id).select("transactions").order("date", desc=True).execute()
     seen = {(e["date"], e["description"], round(float(e["amount"]), 2)) for e in existing.data}
     new: list[Transaction] = []
     for row in rows:
@@ -126,39 +134,40 @@ def insert_transactions(rows: list[Transaction]) -> list[Transaction]:
             seen.add(key)
             new.append(row)
     if new:
-        _sb.table("transactions").insert([_dump(t) for t in new]).execute()
+        repo(user_id).raw_table("transactions").insert([_dump(t) for t in new]).execute()
     return new
 
 
 def upsert_transactions(rows: list[Transaction]) -> list[Transaction]:
     if rows:
-        _sb.table("transactions").upsert([_dump(t) for t in rows]).execute()
+        user_id = rows[0].user_id
+        repo(user_id).raw_table("transactions").upsert([_dump(t) for t in rows]).execute()
     return rows
 
 
 def update_transaction(user_id: str, transaction_id: str, patch: dict) -> Transaction | None:
-    r = _sb.table("transactions").update(patch).eq("id", transaction_id).eq("user_id", user_id).execute()
+    r = repo(user_id).update("transactions", patch, transaction_id).execute()
     return Transaction(**r.data[0]) if r.data else None
 
 
 # ---- Invoices --------------------------------------------------------------
 def list_invoices(user_id: str) -> list[Invoice]:
-    r = _sb.table("invoices").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+    r = repo(user_id).select("invoices").order("created_at", desc=True).execute()
     return [Invoice(**row) for row in r.data]
 
 
 def get_invoice(user_id: str, invoice_id: str) -> Invoice | None:
-    r = _sb.table("invoices").select("*").eq("id", invoice_id).eq("user_id", user_id).limit(1).execute()
+    r = repo(user_id).select("invoices").eq("id", invoice_id).limit(1).execute()
     return Invoice(**r.data[0]) if r.data else None
 
 
 def insert_invoice(invoice: Invoice) -> Invoice:
-    _sb.table("invoices").insert(_dump(invoice)).execute()
+    repo(invoice.user_id).insert("invoices", _dump(invoice)).execute()
     return invoice
 
 
 def update_invoice(user_id: str, invoice_id: str, patch: dict) -> Invoice | None:
-    r = _sb.table("invoices").update(patch).eq("id", invoice_id).eq("user_id", user_id).execute()
+    r = repo(user_id).update("invoices", patch, invoice_id).execute()
     return Invoice(**r.data[0]) if r.data else None
 
 
@@ -178,9 +187,7 @@ def update_invoice_email(user_id: str, invoice_id: str, message_id: str) -> Invo
 def next_invoice_number(user_id: str) -> str:
     year = datetime.now(timezone.utc).year
     r = (
-        _sb.table("invoices")
-        .select("id", count="exact")
-        .eq("user_id", user_id)
+        repo(user_id).select("invoices")
         .gte("created_at", f"{year}-01-01")
         .execute()
     )
@@ -189,7 +196,7 @@ def next_invoice_number(user_id: str) -> str:
 
 # ---- Agent logs ------------------------------------------------------------
 def list_agent_logs(user_id: str) -> list[AgentLog]:
-    r = _sb.table("agent_logs").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+    r = repo(user_id).select("agent_logs").order("created_at", desc=True).execute()
     return [_agent_from_row(row) for row in r.data]
 
 
@@ -199,27 +206,25 @@ def list_all_agent_logs() -> list[AgentLog]:
 
 
 def insert_agent_log(log: AgentLog) -> AgentLog:
-    _sb.table("agent_logs").insert(_agent_to_row(log)).execute()
+    repo(log.user_id).insert("agent_logs", _agent_to_row(log)).execute()
     return log
 
 
 # ---- Alerts ----------------------------------------------------------------
 def list_alerts(user_id: str) -> list[Alert]:
-    r = _sb.table("alerts").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+    r = repo(user_id).select("alerts").order("created_at", desc=True).execute()
     return [Alert(**row) for row in r.data]
 
 
 def insert_alert(alert: Alert) -> Alert:
-    _sb.table("alerts").insert(_dump(alert)).execute()
+    repo(alert.user_id).insert("alerts", _dump(alert)).execute()
     return alert
 
 
 def alert_fired_recently(user_id: str, type_: str, within_days: int = 7) -> bool:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=within_days)).isoformat()
     r = (
-        _sb.table("alerts")
-        .select("id")
-        .eq("user_id", user_id)
+        repo(user_id).select("alerts")
         .eq("type", type_)
         .gte("created_at", cutoff)
         .limit(1)
@@ -229,36 +234,34 @@ def alert_fired_recently(user_id: str, type_: str, within_days: int = 7) -> bool
 
 
 def mark_alert_read(user_id: str, alert_id: str) -> Alert | None:
-    r = _sb.table("alerts").update({"read": True, "read_at": datetime.now(timezone.utc).isoformat()}).eq(
-        "id", alert_id
-    ).eq("user_id", user_id).execute()
+    r = repo(user_id).update("alerts", {"read": True, "read_at": datetime.now(timezone.utc).isoformat()}, alert_id).execute()
     return Alert(**r.data[0]) if r.data else None
 
 
 # ---- Contracts -------------------------------------------------------------
 def list_contracts(user_id: str) -> list[Contract]:
-    r = _sb.table("contracts").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+    r = repo(user_id).select("contracts").order("created_at", desc=True).execute()
     return [_contract_from_row(row) for row in r.data]
 
 
 def get_contract(user_id: str, contract_id: str) -> Contract | None:
-    r = _sb.table("contracts").select("*").eq("id", contract_id).eq("user_id", user_id).limit(1).execute()
+    r = repo(user_id).select("contracts").eq("id", contract_id).limit(1).execute()
     return _contract_from_row(r.data[0]) if r.data else None
 
 
 def insert_contract(contract: Contract) -> Contract:
-    _sb.table("contracts").insert(_contract_to_row(contract)).execute()
+    repo(contract.user_id).insert("contracts", _contract_to_row(contract)).execute()
     return contract
 
 
 def update_contract(user_id: str, contract_id: str, patch: dict) -> Contract | None:
-    r = _sb.table("contracts").update(patch).eq("id", contract_id).eq("user_id", user_id).execute()
+    r = repo(user_id).update("contracts", patch, contract_id).execute()
     return _contract_from_row(r.data[0]) if r.data else None
 
 
 # ---- Manager tasks (supervisor approval queue) -----------------------------
 def list_manager_tasks(user_id: str, status: str | None = None) -> list[ManagerTask]:
-    q = _sb.table("manager_tasks").select("*").eq("user_id", user_id)
+    q = repo(user_id).select("manager_tasks")
     if status:
         q = q.eq("status", status)
     r = q.order("created_at", desc=True).execute()
@@ -266,24 +269,24 @@ def list_manager_tasks(user_id: str, status: str | None = None) -> list[ManagerT
 
 
 def get_manager_task(user_id: str, task_id: str) -> ManagerTask | None:
-    r = _sb.table("manager_tasks").select("*").eq("id", task_id).eq("user_id", user_id).limit(1).execute()
+    r = repo(user_id).select("manager_tasks").eq("id", task_id).limit(1).execute()
     return ManagerTask(**r.data[0]) if r.data else None
 
 
 def find_open_manager_task(user_id: str, kind: str, source_record_id: str | None) -> ManagerTask | None:
-    q = _sb.table("manager_tasks").select("*").eq("user_id", user_id).eq("kind", kind).eq("status", "proposed")
+    q = repo(user_id).select("manager_tasks").eq("kind", kind).eq("status", "proposed")
     q = q.is_("source_record_id", "null") if source_record_id is None else q.eq("source_record_id", source_record_id)
     r = q.limit(1).execute()
     return ManagerTask(**r.data[0]) if r.data else None
 
 
 def insert_manager_task(task: ManagerTask) -> ManagerTask:
-    _sb.table("manager_tasks").insert(_dump(task)).execute()
+    repo(task.user_id).insert("manager_tasks", _dump(task)).execute()
     return task
 
 
 def update_manager_task(user_id: str, task_id: str, patch: dict) -> ManagerTask | None:
-    r = _sb.table("manager_tasks").update(patch).eq("id", task_id).eq("user_id", user_id).execute()
+    r = repo(user_id).update("manager_tasks", patch, task_id).execute()
     return ManagerTask(**r.data[0]) if r.data else None
 
 
@@ -300,7 +303,7 @@ def set_manager_memory(user_id: str, memory: dict) -> dict:
 
 # ---- Butler: clients -------------------------------------------------------
 def list_clients(user_id: str, status: str | None = None) -> list[Client]:
-    q = _sb.table("clients").select("*").eq("user_id", user_id)
+    q = repo(user_id).select("clients")
     if status:
         q = q.eq("status", status)
     r = q.order("last_activity_at", desc=True).execute()
@@ -308,28 +311,28 @@ def list_clients(user_id: str, status: str | None = None) -> list[Client]:
 
 
 def get_client(user_id: str, client_id: str) -> Client | None:
-    r = _sb.table("clients").select("*").eq("id", client_id).eq("user_id", user_id).limit(1).execute()
+    r = repo(user_id).select("clients").eq("id", client_id).limit(1).execute()
     return Client(**r.data[0]) if r.data else None
 
 
 def insert_client(client: Client) -> Client:
-    _sb.table("clients").insert(_dump(client)).execute()
+    repo(client.user_id).insert("clients", _dump(client)).execute()
     return client
 
 
 def update_client(user_id: str, client_id: str, patch: dict) -> Client | None:
-    r = _sb.table("clients").update(patch).eq("id", client_id).eq("user_id", user_id).execute()
+    r = repo(user_id).update("clients", patch, client_id).execute()
     return Client(**r.data[0]) if r.data else None
 
 
 def delete_client(user_id: str, client_id: str) -> bool:
-    r = _sb.table("clients").delete().eq("id", client_id).eq("user_id", user_id).execute()
+    r = repo(user_id).delete("clients", client_id).execute()
     return bool(r.data)
 
 
 # ---- Butler: engagements ---------------------------------------------------
 def list_engagements(user_id: str, client_id: str | None = None) -> list[Engagement]:
-    q = _sb.table("engagements").select("*").eq("user_id", user_id)
+    q = repo(user_id).select("engagements")
     if client_id:
         q = q.eq("client_id", client_id)
     r = q.order("created_at", desc=True).execute()
@@ -337,17 +340,17 @@ def list_engagements(user_id: str, client_id: str | None = None) -> list[Engagem
 
 
 def get_engagement(user_id: str, engagement_id: str) -> Engagement | None:
-    r = _sb.table("engagements").select("*").eq("id", engagement_id).eq("user_id", user_id).limit(1).execute()
+    r = repo(user_id).select("engagements").eq("id", engagement_id).limit(1).execute()
     return Engagement(**r.data[0]) if r.data else None
 
 
 def insert_engagement(engagement: Engagement) -> Engagement:
-    _sb.table("engagements").insert(_dump(engagement)).execute()
+    repo(engagement.user_id).insert("engagements", _dump(engagement)).execute()
     return engagement
 
 
 def update_engagement(user_id: str, engagement_id: str, patch: dict) -> Engagement | None:
-    r = _sb.table("engagements").update(patch).eq("id", engagement_id).eq("user_id", user_id).execute()
+    r = repo(user_id).update("engagements", patch, engagement_id).execute()
     return Engagement(**r.data[0]) if r.data else None
 
 
@@ -355,7 +358,7 @@ def update_engagement(user_id: str, engagement_id: str, patch: dict) -> Engageme
 def list_tasks(user_id: str, *, client_id: str | None = None,
                engagement_id: str | None = None, status: str | None = None,
                statuses: list[str] | None = None) -> list[Task]:
-    q = _sb.table("tasks").select("*").eq("user_id", user_id)
+    q = repo(user_id).select("tasks")
     if client_id is not None:
         q = q.eq("client_id", client_id)
     if engagement_id is not None:
@@ -369,42 +372,39 @@ def list_tasks(user_id: str, *, client_id: str | None = None,
 
 
 def get_task(user_id: str, task_id: str) -> Task | None:
-    r = _sb.table("tasks").select("*").eq("id", task_id).eq("user_id", user_id).limit(1).execute()
+    r = repo(user_id).select("tasks").eq("id", task_id).limit(1).execute()
     return Task(**r.data[0]) if r.data else None
 
 
 def find_task_by_source_ref(user_id: str, source_ref: str) -> Task | None:
-    r = (_sb.table("tasks").select("*").eq("user_id", user_id)
-         .eq("source_ref", source_ref).limit(1).execute())
+    r = repo(user_id).select("tasks").eq("source_ref", source_ref).limit(1).execute()
     return Task(**r.data[0]) if r.data else None
 
 
 def find_task_by_external_ref(user_id: str, external_ref: str) -> Task | None:
-    r = (_sb.table("tasks").select("*").eq("user_id", user_id)
-         .eq("external_ref", external_ref).limit(1).execute())
+    r = repo(user_id).select("tasks").eq("external_ref", external_ref).limit(1).execute()
     return Task(**r.data[0]) if r.data else None
 
 
 def insert_task(task: Task) -> Task:
-    _sb.table("tasks").insert(_dump(task)).execute()
+    repo(task.user_id).insert("tasks", _dump(task)).execute()
     return task
 
 
 def update_task(user_id: str, task_id: str, patch: dict) -> Task | None:
-    r = _sb.table("tasks").update(patch).eq("id", task_id).eq("user_id", user_id).execute()
+    r = repo(user_id).update("tasks", patch, task_id).execute()
     return Task(**r.data[0]) if r.data else None
 
 
 def delete_task(user_id: str, task_id: str) -> bool:
-    # stories.task_id is ON DELETE CASCADE, so child stories go with it.
-    r = _sb.table("tasks").delete().eq("id", task_id).eq("user_id", user_id).execute()
+    r = repo(user_id).delete("tasks", task_id).execute()
     return bool(r.data)
 
 
 # ---- Story layer (children of tasks) ---------------------------------------
 def list_stories(user_id: str, *, task_id: str | None = None,
                  client_id: str | None = None, statuses: list[str] | None = None) -> list[Story]:
-    q = _sb.table("stories").select("*").eq("user_id", user_id)
+    q = repo(user_id).select("stories")
     if task_id is not None:
         q = q.eq("task_id", task_id)
     if client_id is not None:
@@ -416,12 +416,12 @@ def list_stories(user_id: str, *, task_id: str | None = None,
 
 
 def get_story(user_id: str, story_id: str) -> Story | None:
-    r = _sb.table("stories").select("*").eq("id", story_id).eq("user_id", user_id).limit(1).execute()
+    r = repo(user_id).select("stories").eq("id", story_id).limit(1).execute()
     return Story(**r.data[0]) if r.data else None
 
 
 def insert_story(story: Story) -> Story:
-    _sb.table("stories").insert(_dump(story)).execute()
+    repo(story.user_id).insert("stories", _dump(story)).execute()
     return story
 
 
@@ -432,35 +432,35 @@ def update_story(user_id: str, story_id: str, patch: dict) -> Story | None:
             o.model_dump(by_alias=False, mode="json") if hasattr(o, "model_dump") else o
             for o in (patch["observations"] or [])
         ]}
-    r = _sb.table("stories").update(patch).eq("id", story_id).eq("user_id", user_id).execute()
+    r = repo(user_id).update("stories", patch, story_id).execute()
     return Story(**r.data[0]) if r.data else None
 
 
 def delete_story(user_id: str, story_id: str) -> bool:
-    r = _sb.table("stories").delete().eq("id", story_id).eq("user_id", user_id).execute()
+    r = repo(user_id).delete("stories", story_id).execute()
     return bool(r.data)
 
 
 def delete_stories_for_task(user_id: str, task_id: str) -> int:
-    r = _sb.table("stories").delete().eq("user_id", user_id).eq("task_id", task_id).execute()
+    r = repo(user_id).raw_table("stories").delete().eq("task_id", task_id).execute()
     return len(r.data or [])
 
 
 # ---- Butler: client notes --------------------------------------------------
 def list_client_notes(user_id: str, client_id: str) -> list[ClientNote]:
-    r = (_sb.table("client_notes").select("*").eq("user_id", user_id).eq("client_id", client_id)
+    r = (repo(user_id).select("client_notes").eq("client_id", client_id)
          .order("created_at", desc=True).limit(50).execute())
     return [ClientNote(**row) for row in r.data]
 
 
 def insert_client_note(note: ClientNote) -> ClientNote:
-    _sb.table("client_notes").insert(_dump(note)).execute()
+    repo(note.user_id).insert("client_notes", _dump(note)).execute()
     return note
 
 
 # ---- Butler: quick captures ------------------------------------------------
 def list_captures(user_id: str, requires_review: bool | None = None) -> list[QuickCapture]:
-    q = _sb.table("quick_captures").select("*").eq("user_id", user_id)
+    q = repo(user_id).select("quick_captures")
     if requires_review is not None:
         q = q.eq("requires_review", requires_review)
     r = q.order("created_at", desc=True).execute()
@@ -468,44 +468,44 @@ def list_captures(user_id: str, requires_review: bool | None = None) -> list[Qui
 
 
 def get_capture(user_id: str, capture_id: str) -> QuickCapture | None:
-    r = _sb.table("quick_captures").select("*").eq("id", capture_id).eq("user_id", user_id).limit(1).execute()
+    r = repo(user_id).select("quick_captures").eq("id", capture_id).limit(1).execute()
     return QuickCapture(**r.data[0]) if r.data else None
 
 
 def insert_capture(capture: QuickCapture) -> QuickCapture:
-    _sb.table("quick_captures").insert(_dump(capture)).execute()
+    repo(capture.user_id).insert("quick_captures", _dump(capture)).execute()
     return capture
 
 
 def update_capture(user_id: str, capture_id: str, patch: dict) -> QuickCapture | None:
-    r = _sb.table("quick_captures").update(patch).eq("id", capture_id).eq("user_id", user_id).execute()
+    r = repo(user_id).update("quick_captures", patch, capture_id).execute()
     return QuickCapture(**r.data[0]) if r.data else None
 
 
 # ---- Butler: proposals -----------------------------------------------------
 def list_proposals(user_id: str) -> list[Proposal]:
-    r = _sb.table("proposals").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+    r = repo(user_id).select("proposals").order("created_at", desc=True).execute()
     return [Proposal(**row) for row in r.data]
 
 
 def get_proposal(user_id: str, proposal_id: str) -> Proposal | None:
-    r = _sb.table("proposals").select("*").eq("id", proposal_id).eq("user_id", user_id).limit(1).execute()
+    r = repo(user_id).select("proposals").eq("id", proposal_id).limit(1).execute()
     return Proposal(**r.data[0]) if r.data else None
 
 
 def insert_proposal(proposal: Proposal) -> Proposal:
-    _sb.table("proposals").insert(_dump(proposal)).execute()
+    repo(proposal.user_id).insert("proposals", _dump(proposal)).execute()
     return proposal
 
 
 def update_proposal(user_id: str, proposal_id: str, patch: dict) -> Proposal | None:
-    r = _sb.table("proposals").update(patch).eq("id", proposal_id).eq("user_id", user_id).execute()
+    r = repo(user_id).update("proposals", patch, proposal_id).execute()
     return Proposal(**r.data[0]) if r.data else None
 
 
 # ---- Butler: retainers -----------------------------------------------------
 def list_retainers(user_id: str, status: str | None = None) -> list[Retainer]:
-    q = _sb.table("retainers").select("*").eq("user_id", user_id)
+    q = repo(user_id).select("retainers")
     if status:
         q = q.eq("status", status)
     r = q.order("created_at", desc=True).execute()
@@ -513,17 +513,17 @@ def list_retainers(user_id: str, status: str | None = None) -> list[Retainer]:
 
 
 def get_retainer(user_id: str, retainer_id: str) -> Retainer | None:
-    r = _sb.table("retainers").select("*").eq("id", retainer_id).eq("user_id", user_id).limit(1).execute()
+    r = repo(user_id).select("retainers").eq("id", retainer_id).limit(1).execute()
     return Retainer(**r.data[0]) if r.data else None
 
 
 def insert_retainer(retainer: Retainer) -> Retainer:
-    _sb.table("retainers").insert(_dump(retainer)).execute()
+    repo(retainer.user_id).insert("retainers", _dump(retainer)).execute()
     return retainer
 
 
 def update_retainer(user_id: str, retainer_id: str, patch: dict) -> Retainer | None:
-    r = _sb.table("retainers").update(patch).eq("id", retainer_id).eq("user_id", user_id).execute()
+    r = repo(user_id).update("retainers", patch, retainer_id).execute()
     return Retainer(**r.data[0]) if r.data else None
 
 
@@ -540,8 +540,8 @@ def set_butler_memory(user_id: str, memory: dict) -> dict:
 
 # ---- Client view cache (M3 PM agent fan-out) -------------------------------
 def get_client_view(user_id: str, client_id: str) -> dict | None:
-    r = (_sb.table("client_view_cache").select("*")
-         .eq("user_id", user_id).eq("client_id", client_id).limit(1).execute())
+    r = (repo(user_id).select("client_view_cache")
+         .eq("client_id", client_id).limit(1).execute())
     return r.data[0] if r.data else None
 
 
@@ -549,13 +549,13 @@ def upsert_client_view(user_id: str, client_id: str, view: dict,
                        token_cost: dict, refreshed_at: str) -> dict:
     row = {"user_id": user_id, "client_id": client_id, "view": view,
            "token_cost": token_cost, "refreshed_at": refreshed_at}
-    _sb.table("client_view_cache").upsert(row, on_conflict="user_id,client_id").execute()
+    repo(user_id).raw_table("client_view_cache").upsert(row, on_conflict="user_id,client_id").execute()
     return row
 
 
 def delete_client_view(user_id: str, client_id: str) -> bool:
-    r = (_sb.table("client_view_cache").delete()
-         .eq("user_id", user_id).eq("client_id", client_id).execute())
+    r = (repo(user_id).raw_table("client_view_cache").delete()
+         .eq("client_id", client_id).execute())
     return bool(r.data)
 
 
@@ -569,14 +569,7 @@ def upsert_playbook_entry(user_id: str, entry: dict) -> dict:
     key = entry.get("key", "")
     client_id = entry.get("client_id")
 
-    # Fetch existing to compute confidence growth in Python
-    q = (
-        _sb.table("business_playbook")
-        .select("*")
-        .eq("user_id", user_id)
-        .eq("category", category)
-        .eq("key", key)
-    )
+    q = repo(user_id).select("business_playbook").eq("category", category).eq("key", key)
     if client_id is None:
         q = q.is_("client_id", "null")
     else:
@@ -598,7 +591,7 @@ def upsert_playbook_entry(user_id: str, entry: dict) -> dict:
             patch["summary"] = entry["summary"]
         if entry.get("value"):
             patch["value"] = entry["value"]
-        r = _sb.table("business_playbook").update(patch).eq("id", existing["id"]).execute()
+        r = repo(user_id).raw_table("business_playbook").update(patch).eq("id", existing["id"]).execute()
         return r.data[0] if r.data else existing
     else:
         new_entry = {
@@ -617,8 +610,8 @@ def upsert_playbook_entry(user_id: str, entry: dict) -> dict:
             "expires_at": entry.get("expires_at"),
             "created_at": now,
         }
-        r = _sb.table("business_playbook").insert(new_entry).execute()
-        return r.data[0] if r.data else new_entry
+        insert_r = repo(user_id).insert("business_playbook", new_entry).execute()
+        return insert_r.data[0] if insert_r.data else new_entry
 
 
 def get_playbook_entries(
@@ -628,12 +621,7 @@ def get_playbook_entries(
     min_confidence: float = 0.0,
     limit: int = 100,
 ) -> list[dict]:
-    q = (
-        _sb.table("business_playbook")
-        .select("*")
-        .eq("user_id", user_id)
-        .gte("confidence", min_confidence)
-    )
+    q = repo(user_id).select("business_playbook").gte("confidence", min_confidence)
     if category:
         q = q.eq("category", category)
     if client_id is not None:
@@ -644,9 +632,7 @@ def get_playbook_entries(
 
 def get_playbook_corrections(user_id: str) -> list[dict]:
     r = (
-        _sb.table("business_playbook")
-        .select("*")
-        .eq("user_id", user_id)
+        repo(user_id).select("business_playbook")
         .gte("confidence", 1.0)
         .execute()
     )
@@ -655,9 +641,7 @@ def get_playbook_corrections(user_id: str) -> list[dict]:
 
 def get_playbook_for_client(user_id: str, client_id: str) -> list[dict]:
     r = (
-        _sb.table("business_playbook")
-        .select("*")
-        .eq("user_id", user_id)
+        repo(user_id).select("business_playbook")
         .eq("client_id", client_id)
         .order("confidence", desc=True)
         .execute()
@@ -667,23 +651,16 @@ def get_playbook_for_client(user_id: str, client_id: str) -> list[dict]:
 
 def update_playbook_entry(user_id: str, entry_id: str, patch: dict) -> dict | None:
     r = (
-        _sb.table("business_playbook")
+        repo(user_id).raw_table("business_playbook")
         .update(patch)
         .eq("id", entry_id)
-        .eq("user_id", user_id)
         .execute()
     )
     return r.data[0] if r.data else None
 
 
 def delete_playbook_entry(user_id: str, entry_id: str) -> bool:
-    r = (
-        _sb.table("business_playbook")
-        .delete()
-        .eq("id", entry_id)
-        .eq("user_id", user_id)
-        .execute()
-    )
+    r = repo(user_id).delete("business_playbook", entry_id).execute()
     return bool(r.data)
 
 
@@ -692,9 +669,7 @@ def decay_playbook_entries(user_id: str) -> int:
 
     cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
     r = (
-        _sb.table("business_playbook")
-        .select("id, confidence")
-        .eq("user_id", user_id)
+        repo(user_id).select("business_playbook")
         .lt("confidence", 1.0)
         .lt("last_observed_at", cutoff)
         .execute()
@@ -702,7 +677,7 @@ def decay_playbook_entries(user_id: str) -> int:
     rows = r.data or []
     for row in rows:
         new_conf = max(0.0, round(float(row["confidence"]) - 0.1, 4))
-        _sb.table("business_playbook").update({"confidence": new_conf}).eq("id", row["id"]).execute()
+        repo(user_id).raw_table("business_playbook").update({"confidence": new_conf}).eq("id", row["id"]).execute()
     return len(rows)
 
 
@@ -710,43 +685,43 @@ def decay_playbook_entries(user_id: str) -> int:
 
 def upsert_stripe_connection(user_id: str, data: dict) -> dict:
     data["user_id"] = user_id
-    r = _sb.table("stripe_connections").upsert(data, on_conflict="user_id").execute()
+    r = repo(user_id).raw_table("stripe_connections").upsert(data, on_conflict="user_id").execute()
     return r.data[0] if r.data else data
 
 
 def get_stripe_connection(user_id: str) -> dict | None:
-    r = _sb.table("stripe_connections").select("*").eq("user_id", user_id).eq("connected", True).execute()
+    r = repo(user_id).select("stripe_connections").eq("connected", True).execute()
     return r.data[0] if r.data else None
 
 
 def update_stripe_connection(user_id: str, updates: dict) -> dict:
-    r = _sb.table("stripe_connections").update(updates).eq("user_id", user_id).execute()
+    r = repo(user_id).raw_table("stripe_connections").update(updates).execute()
     return r.data[0] if r.data else updates
 
 
 def delete_stripe_connection(user_id: str) -> None:
-    _sb.table("stripe_connections").delete().eq("user_id", user_id).execute()
+    repo(user_id).raw_table("stripe_connections").delete().execute()
 
 
 # ---- Notion connection (task ledger mirror) --------------------------------
 def upsert_notion_connection(user_id: str, data: dict) -> dict:
     data["user_id"] = user_id
-    r = _sb.table("notion_connections").upsert(data, on_conflict="user_id").execute()
+    r = repo(user_id).raw_table("notion_connections").upsert(data, on_conflict="user_id").execute()
     return r.data[0] if r.data else data
 
 
 def get_notion_connection(user_id: str) -> dict | None:
-    r = _sb.table("notion_connections").select("*").eq("user_id", user_id).execute()
+    r = repo(user_id).select("notion_connections").execute()
     return r.data[0] if r.data else None
 
 
 def update_notion_connection(user_id: str, updates: dict) -> dict:
-    r = _sb.table("notion_connections").update(updates).eq("user_id", user_id).execute()
+    r = repo(user_id).raw_table("notion_connections").update(updates).execute()
     return r.data[0] if r.data else updates
 
 
 def delete_notion_connection(user_id: str) -> None:
-    _sb.table("notion_connections").delete().eq("user_id", user_id).execute()
+    repo(user_id).raw_table("notion_connections").delete().execute()
 
 
 # ---- Graph memory (kg_nodes / kg_edges) ------------------------------------
@@ -762,7 +737,7 @@ def upsert_kg_node(user_id: str, node: dict) -> dict:
     label = node.get("label", "")
     incoming_salience = float(node.get("salience", 0.5))
 
-    q = _sb.table("kg_nodes").select("*").eq("user_id", user_id).eq("node_type", node_type)
+    q = repo(user_id).select("kg_nodes").eq("node_type", node_type)
     if entity_id is not None:
         q = q.eq("entity_id", entity_id)
     else:
@@ -778,7 +753,7 @@ def upsert_kg_node(user_id: str, node: dict) -> dict:
             "salience": salience,
             "last_seen": now,
         }
-        r = _sb.table("kg_nodes").update(patch).eq("id", ex["id"]).execute()
+        r = repo(user_id).raw_table("kg_nodes").update(patch).eq("id", ex["id"]).execute()
         return r.data[0] if r.data else {**ex, **patch}
     new_node = {
         "id": node.get("id") or str(uuid.uuid4()),
@@ -792,8 +767,8 @@ def upsert_kg_node(user_id: str, node: dict) -> dict:
         "last_seen": now,
         "created_at": now,
     }
-    r = _sb.table("kg_nodes").insert(new_node).execute()
-    return r.data[0] if r.data else new_node
+    insert_r = repo(user_id).insert("kg_nodes", new_node).execute()
+    return insert_r.data[0] if insert_r.data else new_node
 
 
 def upsert_kg_edge(user_id: str, edge: dict) -> dict:
@@ -805,18 +780,18 @@ def upsert_kg_edge(user_id: str, edge: dict) -> dict:
     incoming_weight = float(edge.get("weight", 1))
 
     existing_rows = (
-        _sb.table("kg_edges").select("*")
-        .eq("user_id", user_id).eq("src_id", src_id).eq("dst_id", dst_id).eq("rel", rel)
+        repo(user_id).select("kg_edges")
+        .eq("src_id", src_id).eq("dst_id", dst_id).eq("rel", rel)
         .limit(1).execute().data
     )
     if existing_rows:
         ex = existing_rows[0]
         patch = {
-            "weight": max(float(ex.get("weight", 1)), incoming_weight),  # max → idempotent re-sync
+            "weight": max(float(ex.get("weight", 1)), incoming_weight),
             "props": {**(ex.get("props") or {}), **(edge.get("props") or {})},
             "last_seen": now,
         }
-        r = _sb.table("kg_edges").update(patch).eq("id", ex["id"]).execute()
+        r = repo(user_id).raw_table("kg_edges").update(patch).eq("id", ex["id"]).execute()
         return r.data[0] if r.data else {**ex, **patch}
     new_edge = {
         "id": edge.get("id") or str(uuid.uuid4()),
@@ -830,24 +805,23 @@ def upsert_kg_edge(user_id: str, edge: dict) -> dict:
         "last_seen": now,
         "created_at": now,
     }
-    r = _sb.table("kg_edges").insert(new_edge).execute()
-    return r.data[0] if r.data else new_edge
+    insert_r = repo(user_id).insert("kg_edges", new_edge).execute()
+    return insert_r.data[0] if insert_r.data else new_edge
 
 
 def get_kg_nodes(user_id: str) -> list[dict]:
-    r = _sb.table("kg_nodes").select("*").eq("user_id", user_id).execute()
+    r = repo(user_id).select("kg_nodes").execute()
     return r.data or []
 
 
 def get_kg_edges(user_id: str) -> list[dict]:
-    r = _sb.table("kg_edges").select("*").eq("user_id", user_id).execute()
+    r = repo(user_id).select("kg_edges").execute()
     return r.data or []
 
 
 def delete_kg_for_user(user_id: str) -> None:
-    # Edges first (FK to nodes), then nodes.
-    _sb.table("kg_edges").delete().eq("user_id", user_id).execute()
-    _sb.table("kg_nodes").delete().eq("user_id", user_id).execute()
+    repo(user_id).raw_table("kg_edges").delete().execute()
+    repo(user_id).raw_table("kg_nodes").delete().execute()
 
 
 # ---- Semantic memory (agent_memory) ----------------------------------------
@@ -862,8 +836,8 @@ def upsert_agent_memory(user_id: str, row: dict) -> dict:
 
     if ref_id is not None:
         existing_rows = (
-            _sb.table("agent_memory").select("*")
-            .eq("user_id", user_id).eq("kind", kind).eq("ref_id", ref_id)
+            repo(user_id).select("agent_memory")
+            .eq("kind", kind).eq("ref_id", ref_id)
             .limit(1).execute().data
         )
         if existing_rows:
@@ -882,7 +856,7 @@ def upsert_agent_memory(user_id: str, row: dict) -> dict:
                 patch["salience"] = float(row["salience"])
             if row.get("source") is not None:
                 patch["source"] = row["source"]
-            r = _sb.table("agent_memory").update(patch).eq("id", ex["id"]).execute()
+            r = repo(user_id).raw_table("agent_memory").update(patch).eq("id", ex["id"]).execute()
             return r.data[0] if r.data else {**ex, **patch}
 
     new_row = {
@@ -900,13 +874,13 @@ def upsert_agent_memory(user_id: str, row: dict) -> dict:
         "created_at": now,
         "updated_at": now,
     }
-    r = _sb.table("agent_memory").insert(new_row).execute()
-    return r.data[0] if r.data else new_row
+    insert_r = repo(user_id).insert("agent_memory", new_row).execute()
+    return insert_r.data[0] if insert_r.data else new_row
 
 
 def get_agent_memory(user_id: str, *, client_id: str | None = None,
                      kinds: list[str] | None = None, limit: int | None = None) -> list[dict]:
-    q = _sb.table("agent_memory").select("*").eq("user_id", user_id)
+    q = repo(user_id).select("agent_memory")
     if client_id is not None:
         q = q.eq("client_id", client_id)
     if kinds:
@@ -918,7 +892,7 @@ def get_agent_memory(user_id: str, *, client_id: str | None = None,
 
 
 def delete_agent_memory_for_user(user_id: str) -> None:
-    _sb.table("agent_memory").delete().eq("user_id", user_id).execute()
+    repo(user_id).raw_table("agent_memory").delete().execute()
 
 
 def delete_agent_memory(user_id: str, *, kind: str | None = None,
@@ -929,7 +903,7 @@ def delete_agent_memory(user_id: str, *, kind: str | None = None,
     trailing wildcard is the ONLY wildcard, keeping this equivalent to the mock
     backend's `str.startswith` for any prefix (Notion ids can't contain them, but
     the helper is generic)."""
-    q = _sb.table("agent_memory").delete().eq("user_id", user_id)
+    q = repo(user_id).raw_table("agent_memory").delete()
     if kind is not None:
         q = q.eq("kind", kind)
     if ref_id_prefix is not None:

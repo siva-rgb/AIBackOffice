@@ -1,0 +1,11 @@
+﻿# CURRENT
+- active_loop: BUILD (L1) → ready for L4 VERIFY
+- target: M1 (Tenant Isolation Enforcement + Token Encryption Hardening)
+- iteration: 1
+- last_gate: G4 (passed) — pytest tests/security/ 24 passed, existing tests 26 passed
+- last_action: M1.1→M1.4 complete. All supabase queries now go through `repo(user_id)` wrapper. token_encryption.py fails closed. RLS migration written. 24 regression tests pass.
+- next_action: Run L4 VERIFY (separate model, fresh context) against M1 gates; then mark M1 done in DONE.html/PLAN.md.
+- model: claude-sonnet-4-5
+- tokens_used: ~35000 (M1 build)
+- tokens_budget: 50000
+- skills_loaded: [agentic-swe-master, security-engineering]
