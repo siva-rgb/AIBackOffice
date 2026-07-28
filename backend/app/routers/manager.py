@@ -9,7 +9,7 @@ from ..config import settings
 from .. import store
 from ..services import supervisor
 from ..utils.rate_limit import check_rate_limit
-from ..utils.security import safe_sanitize
+from ..utils.security import PromptInjectionError, safe_sanitize, sanitize_prompt_input
 
 router = APIRouter(prefix="/api/manager", tags=["manager"])
 
@@ -71,8 +71,17 @@ async def chat(body: ChatRequest, user: User = Depends(get_current_user)):
     rl = check_rate_limit(f"ai:chat:{user.id}", max_requests=60, window_seconds=3600)
     if not rl.allowed:
         raise HTTPException(status_code=429, detail="Rate limit reached. Try again shortly.")
-    msg = safe_sanitize(body.message, max_len=2000)
-    history = [{"role": m.role, "content": m.content} for m in body.history][-8:]
+    # M4 (LLM Input Sanitization): `body.message` is direct user input — reject
+    # injection rather than redact. History is past messages — redact so a
+    # poisoned past message doesn't 500 the user out of their conversation.
+    try:
+        msg = sanitize_prompt_input(body.message, max_len=2000)
+    except PromptInjectionError:
+        raise HTTPException(
+            status_code=400,
+            detail="That message couldn't be accepted. Please rephrase without embedded instructions.",
+        )
+    history = [{"role": m.role, "content": safe_sanitize(m.content or "", max_len=2000)} for m in body.history][-8:]
     return supervisor.chat_agentic(user.id, msg, history)
 
 

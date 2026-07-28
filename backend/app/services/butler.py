@@ -223,7 +223,11 @@ def touch_client(user_id: str, client_id: str) -> None:
 def parse_capture(user_id: str, capture_id: str, raw_text: str) -> QuickCapture | None:
     """Parse a stored capture into structured state and apply safe actions.
     Inline (Kora has no worker runtime); best-effort — failures are recorded,
-    never lost. Returns the updated capture."""
+    never lost. Returns the updated capture.
+
+    m4-lint: no-sanitize — caller (`routers/butler.py`) already runs
+    sanitize_prompt_input on `body.text` before this function is invoked;
+    `raw_text` here is the sanitized value, never raw user input."""
     clients = store.list_clients(user_id)
     known = [c.name for c in clients]
     try:
@@ -439,6 +443,8 @@ def _refresh_health(user_id: str, clients) -> None:
 
 
 def generate_morning_briefing(user_id: str, triggered_by: str = "user") -> dict:
+    """m4-lint: store-only — payload to LLM is deterministic from store state;
+    no user text reaches the prompt."""
     state = _gather_state(user_id)
     _refresh_health(user_id, state["all_clients"])
     findings = _assess(state)

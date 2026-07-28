@@ -294,6 +294,8 @@ def _advisories(state: dict) -> list[dict]:
 
 # --- 3+4. Run: reconcile (safe) → queue proposals → brief -------------------
 def run_supervisor(user_id: str, triggered_by: str = "user") -> dict:
+    """m4-lint: store-only — supervisor state is from store; user_text reaches
+    this function only via manager /chat which sanitizes in routers/manager.py."""
     auto_actions: list[str] = []
     failed_steps: list[str] = []
 
@@ -739,7 +741,12 @@ def _compact_context(state: dict) -> dict:
 
 def chat(user_id: str, message: str, history: list[dict] | None = None) -> dict:
     """Conversational manager: answers grounded in the owner's live data and
-    suggests actions (which still flow through the safe approval/run paths)."""
+    suggests actions (which still flow through the safe approval/run paths).
+
+    m4-lint: no-sanitize — caller (`routers/manager.py`) already runs
+    sanitize_prompt_input on the user message and safe_sanitize on each
+    history entry before this function is invoked; both `message` and
+    `history[*].content` are sanitized at the router boundary."""
     state = gather_state(user_id)
     payload = {
         "message": message,

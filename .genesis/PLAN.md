@@ -76,16 +76,28 @@ improvement (stricter than the literal context-graph invariant; documented in
 ### M4 — LLM Input Sanitization  `HIGH` · Track: `llm-safety`
 Depends: none (can run parallel)
 
-- [ ] M4.1 Inventory every endpoint that interpolates user input into an LLM prompt
+- [x] M4.1 Inventory every endpoint that interpolates user input into an LLM prompt
       (`gmail_intel.py` confirmed vulnerable; re-check `clients.py`/`butler.py` for parity).
-- [ ] M4.2 Replace regex-based filtering with a structured sanitizer/library
+- [~] M4.2 Replace regex-based filtering with a structured sanitizer/library
       (e.g. Guardrails/LlamaGuard-style classifier) applied consistently across endpoints.
-- [ ] M4.3 Add strict input validation (length, allowed characters, schema) ahead of prompt
+      _(interpreted per user "(b)" answer: enforced consistent use of existing regex list;
+      library swap deferred to `structured-sanitizer-library` candidate milestone — see
+      M4.verify.md §Q3)_
+- [x] M4.3 Add strict input validation (length, allowed characters, schema) ahead of prompt
       construction for all LLM-facing parameters.
-- [ ] M4.4 Add adversarial test cases (prompt-injection payloads) to the CI suite from M2.
+- [x] M4.4 Add adversarial test cases (prompt-injection payloads) to the CI suite from M2.
 
 **Gate:** Injection test suite (`tests/security/test_prompt_injection.py`) passes against
 `gmail_intel.py` and all other LLM-facing endpoints.
+
+**Status (2026-07-28):** `[x]` — L4 APPROVE + quiz-me Q+A logged. Same-session L4 caveat
+documented (same as M3). 5 service files patched (butler_comms, contract_agent, invoice_agent,
+routers/manager, supervisor) + 2 new test files (`test_prompt_injection.py` 17 tests,
+`test_llm_input_lint.py` 2 AST-lint tests) + 2 context-graph invariants. Full suite 325
+passed, 1 skipped, coverage 42.38%; flake8/black clean. See `.genesis/checkpoints/M4.md`
+(iter 1 L1 BUILD) and `.genesis/checkpoints/M4.verify.md` (L4 verdict + Q+A).
+**M4.2 stays `[~]`** — literal-plan deviation; library swap recorded as candidate
+follow-up (`structured-sanitizer-library`), tracked under §Follow-ups below.
 
 ---
 

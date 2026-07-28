@@ -50,6 +50,8 @@ def _payment_probability(status: str, days_overdue: int) -> float:
 
 
 def compute_forecast(user_id: str, horizon_days: int = 90, with_insights: bool = True) -> dict:
+    """m4-lint: store-only — snapshot is deterministic from transactions/invoices;
+    no user text reaches the LLM prompt."""
     txns = store.list_transactions(user_id)
     invoices = store.list_invoices(user_id)
     today = date.today()

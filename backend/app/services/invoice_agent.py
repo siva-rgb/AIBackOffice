@@ -71,7 +71,12 @@ def find_payment_clause(content_md: str | None) -> str | None:
 
 def contract_context(user_id: str, contract_id: str | None) -> dict:
     """Build the contract fields the email/letter agents accept. Empty dict when
-    there's no linked contract or no extractable payment clause."""
+    there's no linked contract or no extractable payment clause.
+
+    M4: contract content may pre-date the sanitizer at write-time (uploaded
+    PDFs / DOCX). Belt-and-braces sanitize the extracted clause before it
+    crosses into the prompt.
+    """
     if not contract_id:
         return {}
     contract: Contract | None = store.get_contract(user_id, contract_id)
@@ -80,9 +85,10 @@ def contract_context(user_id: str, contract_id: str | None) -> dict:
     clause = find_payment_clause(contract.content_md)
     if not clause:
         return {}
-    label = (contract.title or (contract.type or "agreement").replace("_", " ")).strip()
+    label = safe_sanitize((contract.title or (contract.type or "agreement").replace("_", " ")).strip())
+    safe_clause = safe_sanitize(clause)
     ctx = {
-        "contract_payment_clause": clause,
+        "contract_payment_clause": safe_clause,
         "contract_reference": f"the {label}",
         "contract_type": (contract.type or "agreement").replace("_", " "),
     }

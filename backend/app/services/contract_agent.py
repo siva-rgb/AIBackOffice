@@ -167,7 +167,10 @@ def review_contract(
 ) -> ContractReview:
     """Run the AI risk review over contract text (a Kora contract or one the user
     received) and log it. Returns a normalized ContractReview."""
-    clean = (text or "").replace("\x00", "").strip()[:_MAX_REVIEW_CHARS]
+    # M4 (LLM Input Sanitization): contract text may legitimately contain
+    # phrases like "ignore previous clauses" as legal boilerplate — redact
+    # injection attempts rather than reject so a valid contract doesn't 500.
+    clean = safe_sanitize((text or "").replace("\x00", "").strip()[:_MAX_REVIEW_CHARS], max_len=_MAX_REVIEW_CHARS)
     ai = get_ai()
     call = generate_with_retry(
         lambda: ai.review_contract(

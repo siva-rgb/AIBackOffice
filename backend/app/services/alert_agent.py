@@ -15,6 +15,7 @@ _VALID_SEVERITY = {"info", "warning", "critical"}
 
 
 def run_digest(user_id: str, triggered_by: str = "user") -> dict:
+    """m4-lint: store-only — snapshot is deterministic from store state, no user text."""
     txns = store.list_transactions(user_id)
     invoices = store.list_invoices(user_id)
     today = date.today()
