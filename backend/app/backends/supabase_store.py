@@ -2,11 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from supabase import Client
-
 from ..clients.pool import get_supabase
 
-from ..config import settings
 from ..models import (
     AgentLog,
     Alert,

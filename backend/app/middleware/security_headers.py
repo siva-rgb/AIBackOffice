@@ -11,12 +11,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 _DOCS_PATHS = ("/docs", "/redoc")
 
 # API responses are JSON — strict deny-by-default CSP (no inline scripts).
-_APP_CSP = (
-    "default-src 'none'; "
-    "frame-ancestors 'none'; "
-    "base-uri 'none'; "
-    "form-action 'none'"
-)
+_APP_CSP = "default-src 'none'; " "frame-ancestors 'none'; " "base-uri 'none'; " "form-action 'none'"
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
