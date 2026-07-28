@@ -123,13 +123,13 @@ boots the app with placeholder values; billing insert no longer 500s.
 
 ## Phase 1 — SHORT-TERM (30–90 days)
 
-### M6 — Distributed Rate Limiting  `MEDIUM` · Track: `backend-infra`
+### M6 — Distributed Rate Limiting  `MEDIUM` · Track: `backend-infra` · `[x]` 2026-07-28 (close bypassed L4 quiz-me per owner request)
 Depends: M2 (needs CI to safely land infra changes)
 
-- [ ] M6.1 Introduce Redis (or existing managed cache) as shared state store.
-- [ ] M6.2 Replace in-process counters in `rate_limit.py` with Redis-backed sliding-window
+- [x] M6.1 Introduce Redis (or existing managed cache) as shared state store.
+- [x] M6.2 Replace in-process counters in `rate_limit.py` with Redis-backed sliding-window
       or token-bucket implementation.
-- [ ] M6.3 Load-test across multiple worker processes/containers to confirm consistency.
+- [x] M6.3 Load-test across multiple worker processes/containers to confirm consistency.
 
 **Gate:** Rate limit holds under a multi-worker load test (limit is enforced globally, not
 per-worker).

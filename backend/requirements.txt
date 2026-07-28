@@ -46,3 +46,4 @@ google-auth-httplib2>=0.2.0
 google-api-python-client>=2.118.0
 cryptography>=42.0.0
 pdfplumber
+redis>=5.0.0

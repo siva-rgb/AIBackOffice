@@ -105,5 +105,10 @@ class Settings(BaseSettings):
     SENTRY_DSN: str = ""
     ENVIRONMENT: str = "development"
 
+    # Shared rate-limit store (M6). Set in production so limits apply across
+    # all workers (e.g. redis://:password@host:6379/0 or Upstash URL).
+    # Empty = in-process limiter (single-instance dev only).
+    REDIS_URL: str = ""
+
 
 settings = Settings()

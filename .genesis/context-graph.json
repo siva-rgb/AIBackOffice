@@ -3156,7 +3156,8 @@
     "inv_audit_trail_coverage": "Every HTTP write request (POST/PUT/DELETE) MUST generate an audit log entry with actor, action, target, timestamp, and result. PII fields MUST be scrubbed before writing to audit store.",
     "inv_llm_input_sanitization": "Every string that crosses into an LLM prompt MUST pass through sanitize_prompt_input() (reject-on-flag) for direct user input, or safe_sanitize() (redact-on-flag) for stored fields. No raw user text may reach generate_with_retry() without one of these two functions adjacent. Enforced by tests/security/test_prompt_injection.py and tests/security/test_llm_input_lint.py.",
     "inv_llm_sanitizer_consistency": "safe_sanitize() delegates to sanitize_prompt_input() and inherits control-character stripping. Any future change to either function MUST keep the delegation so callers that use safe_sanitize() (batch paths) get the same defense as sanitize_prompt_input() (request boundaries).",
-    "inv_schema_env_billing": "docs/specs/schema.sql MUST reflect the full migration history (~20+ tables). backend/.env.example MUST exist with placeholder-only values (no secrets). agent_logs.agent_type CHECK MUST include 'billing' — stripe_billing.py/stripe_connect.py/stripe_sync.py log it."
+    "inv_schema_env_billing": "docs/specs/schema.sql MUST reflect the full migration history (~20+ tables). backend/.env.example MUST exist with placeholder-only values (no secrets). agent_logs.agent_type CHECK MUST include 'billing' — stripe_billing.py/stripe_connect.py/stripe_sync.py log it.",
+    "inv_rate_limit_distributed": "When REDIS_URL is set in a multi-instance deployment, check_rate_limit() MUST use shared Redis state (sorted-set sliding window), not per-process memory. Enforced by tests/test_rate_limit.py -k multi_worker and ADR 0001."
   },
   "freeze_boundary": [
     "src/**"
