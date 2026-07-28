@@ -157,13 +157,13 @@ test; M7 is "done" when all five sub-items are `[x]`.
 ### M8 — Performance: First Pass  `MEDIUM` · Track: `perf-backend`
 Depends: M1 (query wrapper should exist before adding indexes on top of it)
 
-- [ ] M8.1 Add database indexes for the query patterns actually hit by the dashboard/list
+- [x] M8.1 Add database indexes for the query patterns actually hit by the dashboard/list
       endpoints (identify via `EXPLAIN ANALYZE`).
-- [ ] M8.2 Add connection pooling for Supabase/HTTP clients.
-- [ ] M8.3 Move PDF generation (ReportLab) off the request path into a background job/queue.
-- [ ] M8.4 Convert blocking LLM calls to async clients; add request-level caching for
+- [x] M8.2 Add connection pooling for Supabase/HTTP clients.
+- [x] M8.3 Move PDF generation (ReportLab) off the request path into a background job/queue.
+- [x] M8.4 Convert blocking LLM calls to async clients; add request-level caching for
       repeated dashboard-triggered agent executions.
-- [ ] M8.5 Switch the 50-item batch transaction import to background processing instead of
+- [x] M8.5 Switch the 50-item batch transaction import to background processing instead of
       blocking the upload request.
 
 **Gate:** p95 latency for dashboard load and CSV/PDF upload drops measurably in a before/after

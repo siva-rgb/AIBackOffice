@@ -82,7 +82,7 @@ async def chat(body: ChatRequest, user: User = Depends(get_current_user)):
             detail="That message couldn't be accepted. Please rephrase without embedded instructions.",
         )
     history = [{"role": m.role, "content": safe_sanitize(m.content or "", max_len=2000)} for m in body.history][-8:]
-    return supervisor.chat_agentic(user.id, msg, history)
+    return await supervisor.chat_agentic_async(user.id, msg, history)
 
 
 @router.post("/tasks/{task_id}/approve")

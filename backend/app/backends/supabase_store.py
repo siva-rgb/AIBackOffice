@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from supabase import create_client
+from supabase import Client
+
+from ..clients.pool import get_supabase
 
 from ..config import settings
 from ..models import (
@@ -32,7 +34,7 @@ from .repository import TenantQuery
 # validates that insert rows carry the caller's user_id. The raw `_sb` client
 # is only for truly tenant-agnostic operations (auth, admin, cross-tenant).
 
-_sb = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+_sb = get_supabase()
 
 
 def repo(user_id: str) -> TenantQuery:

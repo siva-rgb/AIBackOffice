@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 
 from .. import store
@@ -23,6 +23,15 @@ from ..utils.rate_limit import check_rate_limit
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 
 
+def _queue_invoice_pdf(user_id: str, invoice_id: str) -> None:
+    try:
+        from ..services.invoice_pdf import generate_invoice_pdf
+
+        generate_invoice_pdf(user_id, invoice_id)
+    except Exception:
+        pass
+
+
 def _totals(items: list[LineItem], tax_rate: float):
     subtotal = round(sum(li.quantity * li.rate for li in items), 2)
     tax_amount = round(subtotal * tax_rate / 100, 2)
@@ -35,7 +44,11 @@ async def list_invoices(user: User = Depends(get_current_user)):
 
 
 @router.post("", response_model=Invoice, status_code=201)
-async def create_invoice(body: CreateInvoiceRequest, user: User = Depends(get_current_user)):
+async def create_invoice(
+    body: CreateInvoiceRequest,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+):
     items = [LineItem(description=li.description, quantity=li.quantity, rate=li.rate, amount=round(li.quantity * li.rate, 2)) for li in body.line_items]
     subtotal, tax_amount, total = _totals(items, body.tax_rate)
 
@@ -83,14 +96,7 @@ async def create_invoice(body: CreateInvoiceRequest, user: User = Depends(get_cu
     )
     saved = store.insert_invoice(invoice)
 
-    # Generate PDF in the background — non-blocking
-    try:
-        from ..services.invoice_pdf import generate_invoice_pdf
-
-        generate_invoice_pdf(user.id, saved.id)
-    except Exception:
-        pass
-
+    background_tasks.add_task(_queue_invoice_pdf, user.id, saved.id)
     return saved
 
 
@@ -201,18 +207,17 @@ async def send_invoice(invoice_id: str, user: User = Depends(get_current_user)):
 
 
 @router.post("/{invoice_id}/pdf")
-async def generate_pdf(invoice_id: str, user: User = Depends(get_current_user)):
-    """Trigger PDF generation (or regeneration) and return the storage path."""
-    from ..services.invoice_pdf import generate_invoice_pdf
-
+async def generate_pdf(
+    invoice_id: str,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+):
+    """Queue PDF generation (or regeneration) — non-blocking (M8.3)."""
     inv = store.get_invoice(user.id, invoice_id)
     if not inv:
         raise HTTPException(status_code=404, detail="Not found")
-    try:
-        gcs_path = generate_invoice_pdf(user.id, invoice_id)
-        return {"pdf_path": gcs_path}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    background_tasks.add_task(_queue_invoice_pdf, user.id, invoice_id)
+    return {"status": "queued", "invoiceId": invoice_id}
 
 
 @router.get("/{invoice_id}/pdf/download")

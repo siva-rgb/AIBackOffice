@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .middleware.security_headers import SecurityHeadersMiddleware
+from .utils.request_cache import begin_request_cache, end_request_cache
 from .routers import (
     account,
     agents,
@@ -107,6 +108,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_cache_middleware(request: Request, call_next):
+    begin_request_cache()
+    try:
+        return await call_next(request)
+    finally:
+        end_request_cache()
 
 
 @app.exception_handler(Exception)

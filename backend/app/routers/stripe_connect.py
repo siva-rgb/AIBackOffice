@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import stripe
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 
 from app.config import settings
 from app.dependencies import get_current_user
+from app.clients.pool import get_async_http
 from app.services.oauth_state import issue_oauth_state, verify_oauth_state
 from app.services.token_encryption import encrypt_token
 from app.services.agent_logger import log_action
@@ -57,17 +57,17 @@ async def stripe_connect_callback(
         return RedirectResponse(f"{frontend_url}/settings?stripe_connect_error=invalid_state")
 
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "https://connect.stripe.com/oauth/token",
-                data={
-                    "client_secret": settings.STRIPE_SECRET_KEY,
-                    "code": code,
-                    "grant_type": "authorization_code",
-                },
-                timeout=15.0,
-            )
-            data = resp.json()
+        client = get_async_http()
+        resp = await client.post(
+            "https://connect.stripe.com/oauth/token",
+            data={
+                "client_secret": settings.STRIPE_SECRET_KEY,
+                "code": code,
+                "grant_type": "authorization_code",
+            },
+            timeout=15.0,
+        )
+        data = resp.json()
 
         if "error" in data:
             return RedirectResponse(f"{frontend_url}/settings?stripe_connect_error={data['error']}")

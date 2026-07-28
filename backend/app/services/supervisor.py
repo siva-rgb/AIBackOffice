@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timezone
 
 from .. import store
 from ..config import settings
 from ..models import Alert, ManagerTask
+from ..utils.request_cache import request_cached
 from . import agent_logger, llm
 from .bookkeeper import recategorize_uncategorized
 from .cashflow_agent import compute_forecast
@@ -35,6 +37,7 @@ def _month_income(txns) -> float:
 
 
 # --- 1. Gather cross-module state -------------------------------------------
+@request_cached
 def gather_state(user_id: str) -> dict:
     user = store.get_user(user_id)
     profile = user.profile if user else None
@@ -1257,6 +1260,84 @@ def chat_agentic(user_id: str, message: str, history: list[dict] | None = None) 
     except Exception as exc:
         print(f"[supervisor] agentic chat failed, falling back: {exc}")
         return {**chat(user_id, message, history), "queued": 0}
+
+    if not reply:
+        reply = "Done."
+    agent_logger.log_action(
+        user_id=user_id,
+        agent_type="chat",
+        action=f"Manager chat (agentic): {message[:80]}",
+        input={"message": message[:500], "toolsUsed": tools_used},
+        output={"reply": reply[:500], "queued": queued},
+        model_used=model or settings.MODEL_NAME,
+        tokens_used=in_tok + out_tok,
+        cost_usd=estimate_cost_usd(in_tok, out_tok),
+        triggered_by="user",
+        source_record_type="supervisor",
+    )
+    return {"reply": reply, "suggestedActions": [], "queued": queued, "toolsUsed": tools_used}
+
+
+async def chat_agentic_async(user_id: str, message: str, history: list[dict] | None = None) -> dict:
+    """Async entry for manager chat — uses achat_messages on the request path (M8.4)."""
+    if not _agentic_available():
+        return {**(await asyncio.to_thread(chat, user_id, message, history)), "queued": 0}
+
+    user = store.get_user(user_id)
+    profile = user.profile if user else None
+    biz = (user.business_name if user else None) or "the owner"
+    btype = (profile.business_type if profile else None) or "small business"
+    system = (
+        f"You are Kora, the AI business manager for {biz} ({btype}). Use your tools to GROUND every "
+        "answer in the owner's real, live data — call read tools before stating numbers. "
+        "IMPORTANT SAFETY RULE: you may NEVER send a client email or move money directly."
+    )
+    messages: list[dict] = [{"role": "system", "content": system}]
+    for m in (history or [])[-8:]:
+        messages.append({"role": "user" if m.get("role") == "user" else "assistant", "content": m.get("content", "")})
+    messages.append({"role": "user", "content": message})
+
+    tools_used: list[str] = []
+    queued = 0
+    in_tok = out_tok = 0
+    model = None
+    reply = ""
+    try:
+        for _ in range(5):
+            turn = await llm.achat_messages(messages, tools=_TOOLS, temperature=0.3, max_tokens=800)
+            in_tok += turn.input_tokens
+            out_tok += turn.output_tokens
+            model = turn.model
+            if not turn.tool_calls:
+                reply = (turn.content or "").strip()
+                break
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": turn.content or "",
+                    "tool_calls": [
+                        {"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                        for tc in turn.tool_calls
+                    ],
+                }
+            )
+            for tc in turn.tool_calls:
+                name = tc.function.name
+                try:
+                    args = json.loads(tc.function.arguments or "{}")
+                except Exception:
+                    args = {}
+                handler = _HANDLERS.get(name)
+                result = handler(user_id, args) if handler else {"error": "unknown tool"}
+                if result.get("new"):
+                    queued += 1
+                tools_used.append(name)
+                messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(result, default=str)})
+        else:
+            reply = "I pulled the details together but ran out of steps — please ask once more."
+    except Exception as exc:
+        print(f"[supervisor] agentic chat failed, falling back: {exc}")
+        return {**(await asyncio.to_thread(chat, user_id, message, history)), "queued": 0}
 
     if not reply:
         reply = "Done."

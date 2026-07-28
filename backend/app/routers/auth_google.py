@@ -11,6 +11,7 @@ from ..dependencies import get_current_user
 from ..models import User
 from ..services.oauth_state import issue_oauth_state, verify_oauth_state
 from ..services.token_encryption import decrypt_token, encrypt_token
+from ..clients.pool import get_async_http
 
 # oauthlib (via google-auth-oauthlib) rejects non-HTTPS OAuth and raises on the
 # harmless scope reordering Google performs. Relax both for local dev — insecure
@@ -172,15 +173,13 @@ async def disconnect_google(user: User = Depends(get_current_user)):
 
     if rows and rows[0].get("access_token_enc"):
         try:
-            import httpx
-
             token = decrypt_token(rows[0]["access_token_enc"])
-            async with httpx.AsyncClient() as client:
-                await client.post(
-                    "https://oauth2.googleapis.com/revoke",
-                    params={"token": token},
-                    timeout=5.0,
-                )
+            client = get_async_http()
+            await client.post(
+                "https://oauth2.googleapis.com/revoke",
+                params={"token": token},
+                timeout=5.0,
+            )
         except Exception:
             pass
 
