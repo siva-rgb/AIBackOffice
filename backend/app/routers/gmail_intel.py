@@ -16,6 +16,7 @@ from ..services.gmail_intel import (
     renew_watch_if_configured,
     sync_client_email_intel,
 )
+from ..services.pubsub_auth import verify_pubsub_push_token
 
 router = APIRouter(prefix="/api/gmail", tags=["gmail"])
 
@@ -76,10 +77,17 @@ async def start_gmail_watch(user: User = Depends(get_current_user)):
 
 
 @router.post("/push")
-async def gmail_push(request: Request, background_tasks: BackgroundTasks):
-    """Pub/Sub push endpoint for Gmail watch notifications. No auth — Google calls
-    this directly. The message payload is `{emailAddress, historyId}` (base64).
-    We resolve the mailbox to a user and refresh their intel in the background."""
+async def gmail_push(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    authorization: str | None = Header(default=None),
+):
+    """Pub/Sub push endpoint for Gmail watch notifications. Google calls this
+    directly with an OIDC bearer token when push auth is configured. The message
+    payload is `{emailAddress, historyId}` (base64). We resolve the mailbox to a
+    user and refresh their intel in the background."""
+    if not verify_pubsub_push_token(authorization):
+        raise HTTPException(401, "Invalid Pub/Sub push token")
     try:
         envelope = await request.json()
     except Exception:

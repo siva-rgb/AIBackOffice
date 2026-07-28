@@ -139,14 +139,14 @@ per-worker).
 ### M7 — Remaining Security Controls  `MEDIUM` · Track: `security-hardening`
 Depends: M2. Sub-items are independently assignable.
 
-- [ ] M7a. Authorization: wire `require_plan` dependency into every feature-gated router;
+- [x] M7a. Authorization: wire `require_plan` dependency into every feature-gated router;
       add a test that a downgraded Stripe plan actually blocks the endpoint.
-- [ ] M7b. OAuth: replace `state=user_id` with a cryptographically random, session-bound
+- [x] M7b. OAuth: replace `state=user_id` with a cryptographically random, session-bound
       state token in the Google OAuth callback.
-- [ ] M7c. Gmail Pub/Sub: add signed JWT verification per Google's push-endpoint guidance.
-- [ ] M7d. Headers/CSP: remove `unsafe-eval`/`unsafe-inline`, move to nonce/hash-based CSP,
+- [x] M7c. Gmail Pub/Sub: add signed JWT verification per Google's push-endpoint guidance.
+- [x] M7d. Headers/CSP: remove `unsafe-eval`/`unsafe-inline`, move to nonce/hash-based CSP,
       add `Expect-CT`, COOP, COEP.
-- [ ] M7e. PII: add application-level field encryption for tax IDs/bank details (defense in
+- [x] M7e. PII: add application-level field encryption for tax IDs/bank details (defense in
       depth beyond DB-level encryption).
 
 **Gate:** Each sub-item ships as its own PR with a passing CI run (from M2) and a targeted

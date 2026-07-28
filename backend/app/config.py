@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     # Gmail real-time push (watch → Pub/Sub). e.g. projects/<proj>/topics/gmail-intel.
     # Empty = push disabled (sync stays scheduled/manual).
     GMAIL_PUBSUB_TOPIC: str = ""
+    # OIDC audience for Pub/Sub push auth — set to your public push URL in prod.
+    # Empty = skip JWT verification (local dev).
+    GMAIL_PUBSUB_AUDIENCE: str = ""
 
     # Notion connector — mirrors the canonical KORA task ledger into Notion.
     # Two auth modes:

@@ -9,6 +9,7 @@ from fastapi.responses import RedirectResponse
 from ..config import settings
 from ..dependencies import get_current_user
 from ..models import User
+from ..services.oauth_state import issue_oauth_state, verify_oauth_state
 from ..services.token_encryption import decrypt_token, encrypt_token
 
 # oauthlib (via google-auth-oauthlib) rejects non-HTTPS OAuth and raises on the
@@ -68,7 +69,7 @@ async def connect_google(user: User = Depends(get_current_user)):
     """Return a Google OAuth URL for the user to authorize Kora."""
     if not settings.GOOGLE_OAUTH_CLIENT_ID:
         return {"error": "Google OAuth not configured (GOOGLE_OAUTH_CLIENT_ID missing)"}
-    flow = _build_flow(state=user.id)
+    flow = _build_flow(state=issue_oauth_state(user.id))
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         prompt="consent",
@@ -92,7 +93,9 @@ async def google_callback(
     if not code or not state:
         return RedirectResponse(f"{frontend_url}/settings?google_error=missing_params")
 
-    user_id = state
+    user_id = verify_oauth_state(state)
+    if not user_id:
+        return RedirectResponse(f"{frontend_url}/settings?google_error=invalid_state")
     try:
         flow = _build_flow(state=state)
         flow.fetch_token(code=code)

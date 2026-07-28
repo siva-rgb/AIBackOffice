@@ -9,6 +9,7 @@ from ..dependencies import get_current_user, verify_cron_secret
 from ..models import CamelModel, User
 from ..seed import DEMO_USER_ID
 from ..services import notion_connector, notion_ingest
+from ..services.oauth_state import issue_oauth_state, verify_oauth_state
 
 router = APIRouter(prefix="/api/notion", tags=["notion"])
 
@@ -34,8 +35,8 @@ async def notion_status(user: User = Depends(get_current_user)):
 @router.get("/connect")
 async def notion_connect(user: User = Depends(get_current_user)):
     """Start the Notion OAuth flow (public integration). Returns the URL for the
-    browser to visit; `state` carries the user id so the callback can attribute it."""
-    url = notion_connector.oauth_authorize_url(state=user.id)
+    browser to visit; `state` is a signed token bound to this user."""
+    url = notion_connector.oauth_authorize_url(state=issue_oauth_state(user.id))
     if not url:
         raise HTTPException(
             status_code=400,
@@ -50,7 +51,10 @@ async def notion_callback(code: str | None = None, state: str | None = None, err
     app_url = settings.NEXT_PUBLIC_APP_URL.rstrip("/")
     if error or not code or not state:
         return RedirectResponse(f"{app_url}/settings?notion=error")
-    result = notion_connector.exchange_code(state, code)
+    user_id = verify_oauth_state(state)
+    if not user_id:
+        return RedirectResponse(f"{app_url}/settings?notion=error")
+    result = notion_connector.exchange_code(user_id, code)
     ok = "connected" if result.get("ok") else "error"
     return RedirectResponse(f"{app_url}/settings?notion={ok}")
 

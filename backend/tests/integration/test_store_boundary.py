@@ -172,5 +172,6 @@ def test_insert_agent_log_preserves_fields(user_id):
 def test_store_is_in_mock_mode():
     """conftest forces KORA_DATA_BACKEND=mock — verify the dispatch landed there."""
     from app.backends import memory_store
-    # store.get_user must be the memory_store function (not supabase_store)
-    assert store.get_user.__module__ == memory_store.__name__
+
+    # Wrapped functions live in app.store; the backend module is the source of truth.
+    assert store._b is memory_store

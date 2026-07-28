@@ -14,27 +14,56 @@ if settings.KORA_DATA_BACKEND == "supabase":
 else:
     from .backends import memory_store as _b
 
+from .services import pii_fields as _pii
+
 
 def uid(prefix: str = "") -> str:
     return str(uuid.uuid4())
 
 
-# Re-export the backend surface.
-get_user = _b.get_user
-get_user_by_email = _b.get_user_by_email
-get_user_by_stripe_customer = _b.get_user_by_stripe_customer
-update_user = _b.update_user
-verify_token = _b.verify_token
+# Re-export the backend surface (PII fields encrypted at this boundary).
+def get_user(user_id: str):
+    return _pii.decrypt_user(_b.get_user(user_id))
+
+
+def get_user_by_email(email: str):
+    return _pii.decrypt_user(_b.get_user_by_email(email))
+
+
+def get_user_by_stripe_customer(customer_id: str):
+    return _pii.decrypt_user(_b.get_user_by_stripe_customer(customer_id))
+
+
+def update_user(user_id: str, patch: dict):
+    return _pii.decrypt_user(_b.update_user(user_id, _pii.encrypt_user_patch(patch)))
+
+
+def verify_token(token: str):
+    return _pii.decrypt_user(_b.verify_token(token))
+
 
 list_transactions = _b.list_transactions
 insert_transactions = _b.insert_transactions
 upsert_transactions = _b.upsert_transactions
 update_transaction = _b.update_transaction
 
-list_invoices = _b.list_invoices
-get_invoice = _b.get_invoice
-insert_invoice = _b.insert_invoice
-update_invoice = _b.update_invoice
+
+def list_invoices(user_id: str):
+    return [_pii.decrypt_invoice(i) for i in _b.list_invoices(user_id)]
+
+
+def get_invoice(user_id: str, invoice_id: str):
+    return _pii.decrypt_invoice(_b.get_invoice(user_id, invoice_id))
+
+
+def insert_invoice(invoice):
+    return _pii.decrypt_invoice(_b.insert_invoice(_pii.encrypt_invoice(invoice)))
+
+
+def update_invoice(user_id: str, invoice_id: str, patch: dict):
+    return _pii.decrypt_invoice(_b.update_invoice(user_id, invoice_id, _pii.encrypt_invoice_patch(patch)))
+
+
 update_invoice_pdf = _b.update_invoice_pdf
 update_invoice_email = _b.update_invoice_email
 next_invoice_number = _b.next_invoice_number
@@ -62,11 +91,26 @@ update_manager_task = _b.update_manager_task
 get_manager_memory = _b.get_manager_memory
 set_manager_memory = _b.set_manager_memory
 
+
 # Butler: clients / engagements / notes
-list_clients = _b.list_clients
-get_client = _b.get_client
-insert_client = _b.insert_client
-update_client = _b.update_client
+
+
+def list_clients(user_id: str, status: str | None = None):
+    return [_pii.decrypt_client(c) for c in _b.list_clients(user_id, status)]
+
+
+def get_client(user_id: str, client_id: str):
+    return _pii.decrypt_client(_b.get_client(user_id, client_id))
+
+
+def insert_client(client):
+    return _pii.decrypt_client(_b.insert_client(_pii.encrypt_client(client)))
+
+
+def update_client(user_id: str, client_id: str, patch: dict):
+    return _pii.decrypt_client(_b.update_client(user_id, client_id, _pii.encrypt_client_patch(patch)))
+
+
 delete_client = _b.delete_client
 
 list_engagements = _b.list_engagements

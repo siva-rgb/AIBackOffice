@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 
 from app.config import settings
 from app.dependencies import get_current_user
+from app.services.oauth_state import issue_oauth_state, verify_oauth_state
 from app.services.token_encryption import encrypt_token
 from app.services.agent_logger import log_action
 from app import store
@@ -25,7 +26,7 @@ async def connect_stripe(user=Depends(get_current_user)):
         "?response_type=code"
         f"&client_id={settings.STRIPE_CONNECT_CLIENT_ID}"
         "&scope=read_write"
-        f"&state={user.id}"
+        f"&state={issue_oauth_state(user.id)}"
         f"&redirect_uri={settings.STRIPE_CONNECT_REDIRECT_URI}"
     )
     return {"auth_url": auth_url}
@@ -40,7 +41,7 @@ async def stripe_connect_callback(
 ):
     """
     Stripe redirects here after the user grants / denies permission.
-    state = user_id (set in /connect).
+    state = signed OAuth token (set in /connect).
     This endpoint is called by the Next.js proxy at /api/auth/stripe/callback.
     """
     frontend_url = settings.NEXT_PUBLIC_APP_URL
@@ -51,7 +52,9 @@ async def stripe_connect_callback(
     if not code or not state:
         return RedirectResponse(f"{frontend_url}/settings?stripe_connect_error=missing_params")
 
-    user_id = state
+    user_id = verify_oauth_state(state)
+    if not user_id:
+        return RedirectResponse(f"{frontend_url}/settings?stripe_connect_error=invalid_state")
 
     try:
         async with httpx.AsyncClient() as client:
