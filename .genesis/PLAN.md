@@ -104,16 +104,20 @@ follow-up (`structured-sanitizer-library`), tracked under §Follow-ups below.
 ### M5 — Docs & Schema Accuracy  `MEDIUM` · Track: `docs-infra`
 Depends: none (fully parallel — good first task for a second contributor/agent)
 
-- [ ] M5.1 Regenerate `docs/specs/schema.sql` from the actual ~20-table migration history
+- [x] M5.1 Regenerate `docs/specs/schema.sql` from the actual ~20-table migration history
       (supersede the stale v1 snapshot).
-- [ ] M5.2 Add the missing `.env.example` referenced by 4 existing docs.
-- [ ] M5.3 Fix the `agent_logs.agent_type` CHECK constraint to include `'billing'` via a new
+- [x] M5.2 Add the missing `.env.example` referenced by 4 existing docs.
+- [x] M5.3 Fix the `agent_logs.agent_type` CHECK constraint to include `'billing'` via a new
       migration.
-- [ ] M5.4 Reconcile conflicting GCS bucket names (`gcp_setup.md` vs `gcp-cloud.md`);
+- [x] M5.4 Reconcile conflicting GCS bucket names (`gcp_setup.md` vs `gcp-cloud.md`);
       de-duplicate `stripes_integration/setup.md`; fix stale `tracker.md` header date.
 
 **Gate:** `schema.sql` diff matches `\d` output from a freshly-migrated DB; `.env.example`
 boots the app with placeholder values; billing insert no longer 500s.
+
+**Status (2026-07-28):** `[x]` — L4 APPROVE + quiz-me Q+A logged. schema.sql has 28 tables;
+`.env.example` 57 placeholder lines; billing CHECK migration added. See
+`.genesis/checkpoints/M5.md` and `.genesis/checkpoints/M5.verify.md`.
 
 ---
 

@@ -3155,7 +3155,8 @@
     "inv_token_encryption_startup": "token_encryption.load_key() MUST raise StartupError (not fall back to random key) if TOKEN_ENCRYPTION_KEY is unset in production mode. No silent data loss.",
     "inv_audit_trail_coverage": "Every HTTP write request (POST/PUT/DELETE) MUST generate an audit log entry with actor, action, target, timestamp, and result. PII fields MUST be scrubbed before writing to audit store.",
     "inv_llm_input_sanitization": "Every string that crosses into an LLM prompt MUST pass through sanitize_prompt_input() (reject-on-flag) for direct user input, or safe_sanitize() (redact-on-flag) for stored fields. No raw user text may reach generate_with_retry() without one of these two functions adjacent. Enforced by tests/security/test_prompt_injection.py and tests/security/test_llm_input_lint.py.",
-    "inv_llm_sanitizer_consistency": "safe_sanitize() delegates to sanitize_prompt_input() and inherits control-character stripping. Any future change to either function MUST keep the delegation so callers that use safe_sanitize() (batch paths) get the same defense as sanitize_prompt_input() (request boundaries)."
+    "inv_llm_sanitizer_consistency": "safe_sanitize() delegates to sanitize_prompt_input() and inherits control-character stripping. Any future change to either function MUST keep the delegation so callers that use safe_sanitize() (batch paths) get the same defense as sanitize_prompt_input() (request boundaries).",
+    "inv_schema_env_billing": "docs/specs/schema.sql MUST reflect the full migration history (~20+ tables). backend/.env.example MUST exist with placeholder-only values (no secrets). agent_logs.agent_type CHECK MUST include 'billing' — stripe_billing.py/stripe_connect.py/stripe_sync.py log it."
   },
   "freeze_boundary": [
     "src/**"

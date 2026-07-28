@@ -1,5 +1,8 @@
 # Kora — GCP Cloud Storage Setup & Implementation
 
+> **Canonical spec for bucket naming and folder layout.** `docs/gcp_setup.md` is a
+> getting-started cheatsheet that defers here for bucket names and IAM scoping.
+
 > One private bucket. Folders per user. All access through the backend.
 > No user ever touches GCP directly.
 
