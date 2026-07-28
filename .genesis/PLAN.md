@@ -55,14 +55,21 @@ See `.genesis/checkpoints/M2.md` for the L1 → L4 audit trail and quiz-me Q+A.
 ### M3 — Token Encryption Fail-Closed  `HIGH` · Track: `backend-core`
 Depends: none (can run parallel with M1/M2)
 
-- [ ] M3.1 Remove the fallback random Fernet key generation in `token_encryption.py`.
-- [ ] M3.2 Add startup validation: process exits with a clear error if
+- [x] M3.1 Remove the fallback random Fernet key generation in `token_encryption.py`.
+- [x] M3.2 Add startup validation: process exits with a clear error if
       `TOKEN_ENCRYPTION_KEY` is unset or malformed.
-- [ ] M3.3 Add a startup smoke test (in CI, from M2) that verifies this failure path.
-- [ ] M3.4 Document key rotation/recovery procedure.
+- [x] M3.3 Add a startup smoke test (in CI, from M2) that verifies this failure path.
+- [x] M3.4 Document key rotation/recovery procedure.
 
 **Gate:** Starting the app without `TOKEN_ENCRYPTION_KEY` exits non-zero with a descriptive
 error instead of booting.
+
+**Status (2026-07-28):** `[x]` — L4 APPROVE. Mock-mode escape hatch removed as a safety
+improvement (stricter than the literal context-graph invariant; documented in
+`M3.verify.md` §5). 10/10 token_encryption tests pass; full suite 306 passed,
+1 skipped, coverage 39.57%; flake8/black clean. See `.genesis/checkpoints/M3.md`
+(iter 1 + iter 2 self-verify) and `.genesis/checkpoints/M3.verify.md`
+(iter 2 L4 verdict, same-session caveat logged per LOOPS.md).
 
 ---
 

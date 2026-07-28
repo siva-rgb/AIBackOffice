@@ -35,7 +35,7 @@
   <h1>DONE � AIBackOffice</h1>
   <p class="sub">The single source of truth for <b>what "done" means</b> and <b>the implementation plan</b>.
      This file is LOCKED � the driver model may not edit it without explicit user request.
-      Updated: 2026-07-28</p>
+      Updated: 2026-07-28 (M3 closed)</p>
 
   <!-- ------------- THE LOCKED SPEC ------------- -->
   <h2>1 � The Locked Spec (what we are building)</h2>
@@ -70,7 +70,7 @@
       <tbody>
 <tr><td>M1</td><td>Tenant Isolation Enforcement</td><td>Phase 11 (Security)</td><td><code>pytest tests/security/test_tenant_isolation.py -v</code></td><td>L1, L4</td><td><span class="pill">todo</span></td></tr>
         <tr><td>M2</td><td>Test Harness + CI Pipeline</td><td>Phase 18 (CI/CD)</td><td><code>pytest tests/ --cov=src --cov-report=term --cov-fail-under=40 && mypy src/</code></td><td>L1, L3, L4</td><td><span class="pill ok">done</span></td></tr>
-        <tr><td>M3</td><td>Token Encryption Fail-Closed</td><td>Phase 11 (Security)</td><td><code>STARTUP w/o TOKEN_ENCRYPTION_KEY exits non-zero; pytest -k token_encryption</code></td><td>L1, L4</td><td><span class="pill">todo</span></td></tr>
+        <tr><td>M3</td><td>Token Encryption Fail-Closed</td><td>Phase 11 (Security)</td><td><code>STARTUP w/o TOKEN_ENCRYPTION_KEY exits non-zero; pytest -k token_encryption</code></td><td>L1, L4</td><td><span class="pill ok">done</span></td></tr>
         <tr><td>M4</td><td>LLM Input Sanitization</td><td>Phase 5 (LLM)</td><td><code>pytest tests/security/test_prompt_injection.py -v</code></td><td>L1, L2, L4</td><td><span class="pill">todo</span></td></tr>
         <tr><td>M5</td><td>Docs &amp; Schema Accuracy</td><td>Phase 14 (Data)</td><td><code>diff schema.sql &lt;(pg_dump --schema-only); grep -c '.' .env.example</code></td><td>L1, L4</td><td><span class="pill">todo</span></td></tr>
         <tr><td>M6</td><td>Distributed Rate Limiting (Redis)</td><td>Phase 12 (Reliability)</td><td><code>pytest tests/test_rate_limit.py -v -k multi_worker</code></td><td>L1, L4</td><td><span class="pill">todo</span></td></tr>

@@ -1,23 +1,30 @@
 # CURRENT
-- active_loop: M3 → L4 VERIFY → DONE
-- target: M3 (Token Encryption Fail-Closed)
-- iteration: iter 2 (L4 self-verify)
-- last_gate: G4 (passed) — token_encryption fail-closed implemented; 10/10 security tests pass; 306 total tests pass, 1 skipped, coverage 39.57%
-- last_action: M3 L1 BUILD iter 1 + L4 self-verify iter 2. Implementation complete; same-session self-audit APPROVE with caveats (LOOPS.md requires separate-model L4 — flagged for human-driven follow-up). Quiz-me Q+A written to checkpoint.
-- next_action: **Awaiting human quiz-me Q&A answers** OR **spawn separate-model L4 session** OR **mark M3 done** (human judgment). Recommend: spawn one separate-model L4 pass before flipping PLAN.md / DONE.html to `[x]`.
+- active_loop: M4 → G0 → L1 BUILD
+- target: M4 (LLM Input Sanitization)
+- iteration: iter 1 (starting fresh)
+- last_gate: G4 (passed) — M3 L4 APPROVE on 2026-07-28; M3 closed per human authorization
+- last_action: M3 closed. PLAN.md M3 → [x]; DONE.html §3 M3 row → done; M3.verify.md APPROVE (same-session caveat logged). Active loop flipped to M4.
+- next_action: G0 existence pre-flight for M4 (per LOOPS.md). Read context-graph + implementation-notes for prior prompt-injection analysis; load llmops-ai-agents skill.
 - model: nvidia/minimax-m3 (driver)
-- tokens_used: ~8200 (M3 iter 1 + L4 self-verify)
-- tokens_budget: 50000
-- skills_loaded: [agentic-swe-master, coding-orchestrator, security-engineering]
+- tokens_used: ~8200 (M3 cumulative, rolled over as M3 budget reference)
+- tokens_budget: 50000 (reset per milestone per LOOPS.md)
+- skills_loaded: [agentic-swe-master, coding-orchestrator, security-engineering] — pending M4-specific load (llmops-ai-agents + security-engineering confirmed needed by DONE.html §4)
 
-## M3 files touched (iter 1)
-- `backend/app/services/token_encryption.py` — rewritten: `StartupError`, `load_key()`, removed `_fernet = None` mock escape
-- `backend/conftest.py` — sets `TOKEN_ENCRYPTION_KEY` to a fixed test Fernet key (hermetic)
-- `backend/tests/security/test_token_encryption.py` — NEW (10 tests: missing key, malformed key, valid key, encrypt/decrypt round-trip, empty string, distinct-IVs, startup smoke test parametrized)
-- `docs/sops/token-key-rotation.md` — NEW (rotation + recovery procedure)
-- `.genesis/checkpoints/M3.md` — NEW (G0 pre-flight + L1 iter 1 audit + L4 self-verify iter 2 audit)
+## M4 scope preview (from PLAN.md)
+- [ ] M4.1 Inventory every endpoint that interpolates user input into an LLM prompt (gmail_intel.py confirmed vulnerable; re-check clients.py/butler.py for parity).
+- [ ] M4.2 Replace regex-based filtering with a structured sanitizer/library (e.g. Guardrails/LlamaGuard-style classifier) applied consistently across endpoints.
+- [ ] M4.3 Add strict input validation (length, allowed characters, schema) ahead of prompt construction for all LLM-facing parameters.
+- [ ] M4.4 Add adversarial test cases (prompt-injection payloads) to the CI suite from M2.
 
-## Pending (human decision)
-- Spawn separate-model L4 pass to upgrade self-verify → strict-protocol APPROVE
-- OR mark M3 done now (PLAN.md M3 → `[x]`, DONE.html row M3 → `<span class="pill ok">done</span>`)
-- Then move to M4 (LLM Input Sanitization) per PLAN.md parallelization table
+**Gate (from PLAN.md):** Injection test suite (tests/security/test_prompt_injection.py) passes against gmail_intel.py and all other LLM-facing endpoints.
+
+## M3 close-out summary
+- File: .genesis/checkpoints/M3.md iter 3
+- Verdict: APPROVE (same-session caveat per LOOPS.md §244; independent-command evidence mitigates)
+- Artifact: token_encryption fail-closed (StartupError + load_key + mock-mode escape removed); 10/10 token_encryption tests; 306 passed / 1 skipped / coverage 39.57%; SOP at docs/sops/token-key-rotation.md
+- Optional stricter L4: re-run M3.verify-brief.md in a fresh separate-model session
+
+## Open follow-ups (parked across milestones)
+- type-cleanup (218 mypy errors) — candidate milestone (M2 post-L4 hotfix)
+- key-rotation-zero-downtime — candidate (multi-key rotation out-of-scope for M3)
+- context-graph.json: tighten inv_token_encryption_startup wording to match stricter impl (housekeeping)
