@@ -56,13 +56,16 @@ def test_pattern_catalog_has_minimum_coverage():
 
 
 # --- corpus: simple string values --------------------------------------------
+# NOTE: These test cases intentionally include fake secret-shaped strings to verify
+# the scrubber correctly redacts them. They are NOT real credentials.
 @pytest.mark.parametrize(
     "raw,marker",
     [
         ("Authorization: Bearer eyJabc.def.ghi", "Bearer"),
         ("header: Basic dXNlcjpwYXNz", "Basic"),
         ("token=eyJabc12345.payload.signature", "eyJ"),
-        ("sk_live_4eC39HqLyjWDarjtT1zdp7dc", "sk_live_"),
+        # Test Stripe key pattern (obviously fake, M11.4 gate verification)
+        ("sk_live_TESTKEY0000000000000", "sk_live_"),
         ("rk_test_abcdefghij1234567890", "rk_test_"),
         ("api_key=abcd1234EFGH5678ijkl", "api_key="),
         ("secret: aBcDeFgHiJkLmNoPqRsT1234", "secret:"),
