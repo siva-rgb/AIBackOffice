@@ -58,6 +58,9 @@ def _agent_from_row(row: dict) -> AgentLog:
     if isinstance(out, dict) and "_cost_usd" in out:
         out = dict(out)
         row = {**row, "cost_usd": out.pop("_cost_usd"), "output": out}
+    # M11.2 — `_request_id` rides along on the output envelope; no round-trip
+    # needed because it never escapes the dict. Consumers reach it via
+    # `log.output.get("_request_id")`.
     return AgentLog(**row)
 
 

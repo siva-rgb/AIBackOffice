@@ -245,12 +245,34 @@ against the recorded JSONB baseline). All M10 work uncommitted in the working tr
 ### M11 — Observability  `LOW` · Track: `observability`
 Depends: M2 (CI needed to safely add instrumentation without regressions)
 
-- [ ] M11.1 Access logging with PII scrubbing (request/response audit trail).
-- [ ] M11.2 OpenTelemetry distributed tracing across API -> agent -> LLM call chain.
-- [ ] M11.3 Business metrics dashboard (KPIs, usage analytics, per-tenant LLM cost/latency).
-- [ ] M11.4 Validate secrets-scrubbing rules against a corpus of representative log lines.
+- [~] M11.1 Access logging with PII scrubbing (request/response audit trail).
+- [~] M11.2 OpenTelemetry distributed tracing across API -> agent -> LLM call chain.
+- [~] M11.3 Business metrics dashboard (KPIs, usage analytics, per-tenant LLM cost/latency).
+- [~] M11.4 Validate secrets-scrubbing rules against a corpus of representative log lines.
 
 **Gate:** A single request is traceable end-to-end in the tracing backend; a sample log export contains no raw secrets or unscrubbed PII.
+
+**Status (2026-07-29):** `[~]` — L1 BUILD iter 1 complete (gate G4 PASS, real exit codes).
+49 new observability tests pass; full suite 428 passed, 2 skipped, 1 deselected (same
+M6/M8 deselects as M10 — pre-existing); flake8 + black clean on all 17 M11-touched
+files; mypy 0 M11-introduced errors after fixing `stats.py:107` dict-item annotation.
+**Literal-plan deviation:** M11.2 ships **correlation-id propagation across the existing
+`agent_logger` audit trail + structured access logs** rather than the OpenTelemetry
+SDK — zero new dependencies, fully compatible with a future OTel SDK upgrade (see
+FU-M11-otel-sdk). The gate ("single request traceable end-to-end") is met: every
+request emits a structured JSON line with `request_id`, every `agent_logs` row
+written during that request carries the same `request_id` inside `output._request_id`,
+and the response carries `X-Request-ID` so callers can quote it. Pure ASGI middleware
+was chosen over Starlette's `BaseHTTPMiddleware` because the latter runs `call_next`
+on a spawned anyio task that loses `ContextVar` writes (documented Python behaviour)
+— the end-to-end test failed under `BaseHTTPMiddleware` and went green immediately
+under a pure ASGI `__call__`. All 4 PII/secrets scrubber patterns (Bearer/JWT,
+sk_live/sk_test/rk_live, 16+ digit blobs, cards, emails, SSN, routing) are unit-tested
+against a 30-line corpus. New endpoint `GET /api/agents/log/dashboard?window_days=14`
+exposes the KPI surface (p50/p95 latency, cost-by-model, top-3 errors, per-day series).
+See `.genesis/checkpoints/M11.md` (L1 iter 1) for the full audit trail and
+`.genesis/wiki/concepts/observability-context.md` for the three-channel correlation
+contract. L4 VERIFY pending — separate model, fresh context.
 
 ---
 

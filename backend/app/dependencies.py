@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 
 from .config import settings
 from .models import User
 from .seed import DEMO_USER_ID
 from . import store
+from .utils.request_context import set_user_id
 
 # Auth + plan-gate dependencies (SKILL.md §16 Rules 2 & 7).
 #
@@ -23,13 +24,17 @@ def _bearer(authorization: str | None) -> str | None:
     return None
 
 
-async def get_current_user(authorization: str | None = Header(default=None)) -> User:
+async def get_current_user(
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> User:
     if settings.KORA_DATA_BACKEND == "supabase":
         token = _bearer(authorization)
         # Real auth: verify the Supabase access token and load the profile.
         if token and token != "demo":
             user = store.verify_token(token)
             if user:
+                _stamp(request, user)
                 return user
             raise HTTPException(status_code=401, detail="Invalid or expired session")
         # Demo bridge (until the frontend login is wired) — resolves the seeded
@@ -37,6 +42,7 @@ async def get_current_user(authorization: str | None = Header(default=None)) -> 
         if settings.ALLOW_DEMO_USER:
             user = store.get_user_by_email(settings.DEMO_EMAIL)
             if user:
+                _stamp(request, user)
                 return user
         raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -44,7 +50,19 @@ async def get_current_user(authorization: str | None = Header(default=None)) -> 
     user = store.get_user(DEMO_USER_ID)
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    _stamp(request, user)
     return user
+
+
+def _stamp(request: Request, user: User) -> None:
+    """M11.2 — mirror user_id onto both the ContextVar and `request.state`.
+
+    The contextvar is the fast-path used by services in the same task; the
+    `request.state` mirror survives Starlette's BaseHTTPMiddleware context
+    boundary (the well-known ContextVar-not-propagated-across-tasks quirk).
+    """
+    set_user_id(user.id)
+    request.state.user_id = user.id
 
 
 def require_plan(min_plan: str):
@@ -52,7 +70,9 @@ def require_plan(min_plan: str):
 
     async def _dep(user: User = Depends(get_current_user)) -> User:
         if _PLAN_RANK.get(user.plan, 0) < _PLAN_RANK.get(min_plan, 0):
-            raise HTTPException(status_code=403, detail=f"Upgrade to {min_plan} required")
+            raise HTTPException(
+                status_code=403, detail=f"Upgrade to {min_plan} required"
+            )
         return user
 
     return _dep
