@@ -176,11 +176,27 @@ benchmark; no request-path code still calls the sync LLM client directly.
 ### M9 — GDPR/CCPA Compliance  `MEDIUM` · Track: `compliance`
 Depends: M1 (deletion/export must respect tenant boundaries)
 
-- [ ] M9.1 Data export endpoint (JSON/CSV) covering all tables holding user data.
-- [ ] M9.2 Full data deletion endpoint (hard delete or anonymization, per data class).
-- [ ] M9.3 Verify/enhance consent capture in onboarding; log consent version + timestamp.
+- [x] M9.1 Data export endpoint (JSON/CSV) covering all tables holding user data.
+- [x] M9.2 Full data deletion endpoint (hard delete or anonymization, per data class).
+- [x] M9.3 Verify/enhance consent capture in onboarding; log consent version + timestamp.
 
 **Gate:** A test tenant can request export and deletion via API; post-deletion queries return no residual PII for that tenant.
+
+**Status (2026-07-29):** `[x]` — L4 APPROVE (separate model: z-ai/glm-5.2, fresh-context
+pass; maker was composer). Quiz-me gate returned `skip ×3`; verdict would-strict-downgrade to
+UNCERTAIN, but owner direction `Accept verifier answers, finalise APPROVE` accepted the
+verifier's Q1/Q2/Q3 answers as the Q+A block — override logged openly in
+`.genesis/checkpoints/M9.verify.md` §5. Gates re-computed independently: 12/12 M9 tests pass
+(EXITCODE=0); full suite green with 2 pre-M9-unrelated failures deselected (`test_rate_limit`
+redis-missing M6, `test_perf_m8 supabase_singleton` creds-missing M8); flake8 + black clean
+on all 5 M9-touched files (EXITCODE=0 both); mypy scope = 4 M9-introduced inference errors in
+`memory_store.py` heterogeneous-dict lookup (`_USER_DATA_DICTS[table]` typed `object`) —
+runtime-fine, precedent-aligned with M3/M4 lenient baseline; recorded as follow-up FU-M9-mypy.
+Context-graph invariants: M1 wrapper respected (only documented service-role exceptions:
+`deletion_log` no-tenant, `auth.admin.delete_user`), M3 untouched, D5 no-PII audit row
+verified, zero new cycles. See `.genesis/checkpoints/M9.md` (L1 iter 1) and
+`.genesis/checkpoints/M9.verify.md` (L4 verdict + Q+A + 5 non-blocking follow-ups incl.
+FU-M9-reconsent-UX, FU-DONE-demo-cmd, FU-M9-commit, FU-M1-followup).
 
 ---
 

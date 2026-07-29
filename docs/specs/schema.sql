@@ -25,6 +25,9 @@ CREATE TABLE public.users (
   plan_expires_at TIMESTAMPTZ,
   onboarding_completed BOOLEAN DEFAULT FALSE,
   profile JSONB NOT NULL DEFAULT '{}'::jsonb,  -- business profile (owner + business info, goals, prefs)
+  -- M9.3 — GDPR/CCPA consent capture (Art. 7 / §1798.100).
+  consent_version   TEXT,
+  consent_given_at  TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -908,3 +911,17 @@ ALTER TABLE public.agent_logs ADD CONSTRAINT agent_logs_agent_type_check
     'butler_drive','butler_calendar','meeting_agent','gmail_agent','calendar_agent',
     'playbook','email_delivery','morning_digest','billing'
   ));
+
+-- =============================================
+-- DELETION LOG (M9 — GDPR/CCPA audit)
+-- Append-only audit table. NO PII. NO user_id FK.
+-- Inserted by routers/account.py::delete_account() via the service-role key.
+-- =============================================
+CREATE TABLE IF NOT EXISTS public.deletion_log (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  deleted_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reason       TEXT NOT NULL DEFAULT 'user_request',
+  tables_cleared      JSONB NOT NULL DEFAULT '{}'::jsonb,
+  files_deleted_count INTEGER NOT NULL DEFAULT 0,
+  user_request_id     UUID NOT NULL DEFAULT uuid_generate_v4()
+);

@@ -61,7 +61,9 @@ def insert_invoice(invoice):
 
 
 def update_invoice(user_id: str, invoice_id: str, patch: dict):
-    return _pii.decrypt_invoice(_b.update_invoice(user_id, invoice_id, _pii.encrypt_invoice_patch(patch)))
+    return _pii.decrypt_invoice(
+        _b.update_invoice(user_id, invoice_id, _pii.encrypt_invoice_patch(patch))
+    )
 
 
 update_invoice_pdf = _b.update_invoice_pdf
@@ -108,7 +110,9 @@ def insert_client(client):
 
 
 def update_client(user_id: str, client_id: str, patch: dict):
-    return _pii.decrypt_client(_b.update_client(user_id, client_id, _pii.encrypt_client_patch(patch)))
+    return _pii.decrypt_client(
+        _b.update_client(user_id, client_id, _pii.encrypt_client_patch(patch))
+    )
 
 
 delete_client = _b.delete_client
@@ -198,3 +202,9 @@ upsert_stripe_connection = _b.upsert_stripe_connection
 get_stripe_connection = _b.get_stripe_connection
 update_stripe_connection = _b.update_stripe_connection
 delete_stripe_connection = _b.delete_stripe_connection
+
+# M9 — GDPR/CCPA
+list_user_data = _b.list_user_data
+delete_user_data = _b.delete_user_data
+record_deletion = _b.record_deletion
+list_deletion_log = _b.list_deletion_log
