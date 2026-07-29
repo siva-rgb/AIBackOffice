@@ -771,6 +771,78 @@ CREATE POLICY "Users access own agent memory" ON public.agent_memory
     FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- =============================================
+-- PGVECTOR ANN FOR AGENT MEMORY (M10)
+-- (added 2026-07-29 by backend/migrations/2026-07-29_pgvector_agent_memory.sql)
+-- ANN-indexed vector column alongside the JSONB embedding. The RPC is the
+-- authoritative tenant boundary (SECURITY DEFINER + explicit auth.uid() check).
+-- Default recall backend stays "jsonb" until an operator has run the migration
+-- + python -m scripts.backfill_agent_memory_vectors + flipped
+-- AGENT_MEMORY_VECTOR_BACKEND=pgvector.
+-- =============================================
+CREATE EXTENSION IF NOT EXISTS vector;
+ALTER TABLE agent_memory ADD COLUMN IF NOT EXISTS embedding_vec vector(1536);
+CREATE INDEX IF NOT EXISTS idx_agent_memory_embedding_vec_hnsw
+    ON agent_memory USING hnsw (embedding_vec vector_cosine_ops);
+
+CREATE OR REPLACE FUNCTION public.match_agent_memory(
+    p_user_id       UUID,
+    p_query_embedding vector(1536),
+    p_match_threshold float DEFAULT 0.0,
+    p_match_count     int   DEFAULT 20,
+    p_filter_client   UUID  DEFAULT NULL,
+    p_filter_kinds    TEXT[] DEFAULT NULL
+)
+RETURNS TABLE (
+    id           UUID,
+    kind         TEXT,
+    client_id    UUID,
+    ref_type     TEXT,
+    ref_id       TEXT,
+    content      TEXT,
+    salience     NUMERIC,
+    source       TEXT,
+    metadata     JSONB,
+    created_at   TIMESTAMPTZ,
+    updated_at   TIMESTAMPTZ,
+    similarity   float
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_auth uuid := auth.uid();
+BEGIN
+    IF v_auth IS NULL OR v_auth <> p_user_id THEN
+        RETURN;
+    END IF;
+
+    RETURN QUERY
+    SELECT
+        am.id,
+        am.kind,
+        am.client_id,
+        am.ref_type,
+        am.ref_id,
+        am.content,
+        am.salience,
+        am.source,
+        am.metadata,
+        am.created_at,
+        am.updated_at,
+        (1.0 - (am.embedding_vec <=> p_query_embedding))::float AS similarity
+    FROM agent_memory am
+    WHERE am.user_id = p_user_id
+      AND am.embedding_vec IS NOT NULL
+      AND (p_filter_client IS NULL OR am.client_id = p_filter_client)
+      AND (p_filter_kinds  IS NULL OR am.kind = ANY(p_filter_kinds))
+      AND (1.0 - (am.embedding_vec <=> p_query_embedding)) >= p_match_threshold
+    ORDER BY am.embedding_vec <=> p_query_embedding
+    LIMIT GREATEST(p_match_count, 1);
+END;
+$$;
+
+-- =============================================
 -- NOTION CONNECTION
 -- (added 2026-07-17 by backend/migrations/2026-07-17_add_notion_connection.sql)
 -- =============================================

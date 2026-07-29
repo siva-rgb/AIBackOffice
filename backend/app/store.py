@@ -190,6 +190,8 @@ upsert_agent_memory = _b.upsert_agent_memory
 get_agent_memory = _b.get_agent_memory
 delete_agent_memory_for_user = _b.delete_agent_memory_for_user
 delete_agent_memory = _b.delete_agent_memory
+# M10 — pgvector ANN search (Supabase-only; mock backend returns [])
+vector_search_agent_memory = _b.vector_search_agent_memory
 
 # Notion connection (task ledger mirror)
 upsert_notion_connection = _b.upsert_notion_connection

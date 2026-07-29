@@ -16,8 +16,14 @@ When embeddings aren't configured the semantic term drops out and recall falls
 back to lexical-only — so it always returns something useful and never hard-fails.
 
 Per-user memory is small (100s–1000s of rows), so we load the candidate rows and
-score in Python — the same design as `graph_memory`. A pgvector ANN index is a
-drop-in optimization later without changing this interface.
+score in Python — the same design as `graph_memory`.
+
+M10 (pgvector ANN): When `AGENT_MEMORY_VECTOR_BACKEND=pgvector` AND embeddings
+are configured, candidate selection delegates to the `match_agent_memory` RPC
+(2026-07-29_pgvector_agent_memory.sql) and the hybrid score is computed over the
+returned candidates. The public API surface (`remember` / `recall` /
+`build_recall_brief` / `reindex` / `stats`) is unchanged; the toggle is
+operational. Default backend is `jsonb` — the proven pre-M10 path.
 """
 
 from __future__ import annotations
@@ -27,6 +33,7 @@ import re
 from datetime import datetime, timezone
 
 from .. import store
+from ..config import settings
 from . import embeddings
 
 _TOKEN = re.compile(r"[a-z0-9]+")
@@ -64,11 +71,21 @@ _STOP = {
 }
 
 # Kinds recalled by default (all). Callers can narrow with `kinds=`.
-KINDS = ("playbook", "graph_fact", "email_intel", "meeting", "note", "decision", "action")
+KINDS = (
+    "playbook",
+    "graph_fact",
+    "email_intel",
+    "meeting",
+    "note",
+    "decision",
+    "action",
+)
 
 
 def _tokens(text: str) -> set[str]:
-    return {w for w in _TOKEN.findall((text or "").lower()) if len(w) > 2 and w not in _STOP}
+    return {
+        w for w in _TOKEN.findall((text or "").lower()) if len(w) > 2 and w not in _STOP
+    }
 
 
 def _cosine(a, b) -> float:
@@ -150,23 +167,74 @@ def remember(
 
 
 # ── Read ────────────────────────────────────────────────────────────────────
-def recall(user_id: str, query: str, *, k: int = 6, client_id: str | None = None, kinds: list[str] | None = None, min_score: float = 0.05) -> list[dict]:
+def recall(
+    user_id: str,
+    query: str,
+    *,
+    k: int = 6,
+    client_id: str | None = None,
+    kinds: list[str] | None = None,
+    min_score: float = 0.05,
+) -> list[dict]:
     """Top-k memories most relevant to `query`, hybrid-ranked. Each result carries
-    the original row plus `_score`, `_sim` (None if lexical-only) and `_lex`."""
+    the original row plus `_score`, `_sim` (None if lexical-only) and `_lex`.
+
+    Backend dispatch (M10):
+      - When settings.AGENT_MEMORY_VECTOR_BACKEND == "pgvector" AND embeddings
+        are enabled AND we got a query vector, we delegate the candidate
+        selection to `store.vector_search_agent_memory` (HNSW ANN over the
+        embedding_vec column) and re-score the returned candidates with the
+        same hybrid formula below. This is an O(log N) candidate selection
+        instead of O(N) Python cosine.
+      - Otherwise we load all rows for the tenant and score in Python —
+        identical to the pre-M10 path.
+
+    The public contract is unchanged: same return shape, same scoring
+    semantics. The flag is operational, not a code change for callers.
+    """
     query = (query or "").strip()
     if not query:
         return []
-    rows = store.get_agent_memory(user_id, client_id=client_id, kinds=kinds)
-    if not rows:
-        return []
-
     q_tokens = _tokens(query)
     q_vec = embeddings.embed(query)  # None → lexical-only ranking
 
+    use_pgvector = (
+        settings.AGENT_MEMORY_VECTOR_BACKEND == "pgvector" and q_vec is not None
+    )
+
+    if use_pgvector:
+        # Pull a wider candidate window than k — the index ranks by ANN
+        # similarity alone, but the final score mixes lexical + salience +
+        # recency too, so some lower-similarity candidates can outrank a
+        # higher-similarity one. 3x k is a safe over-fetch at the per-user
+        # scale (hundreds–thousands of rows).
+        assert q_vec is not None  # use_pgvector already narrows on q_vec is not None
+        candidates = store.vector_search_agent_memory(
+            user_id,
+            q_vec,
+            max(1, k * 3),
+            client_id=client_id,
+            kinds=kinds,
+            min_similarity=0.0,
+        )
+        if not candidates:
+            return []
+    else:
+        candidates = store.get_agent_memory(user_id, client_id=client_id, kinds=kinds)
+        if not candidates:
+            return []
+
     scored: list[dict] = []
-    for r in rows:
-        emb = r.get("embedding")
-        sim = _cosine(q_vec, emb) if (q_vec and emb) else None
+    for r in candidates:
+        # When the candidate came from the RPC, the row already carries
+        # `_similarity` (cosine in [0,1]). Otherwise fall back to in-Python
+        # cosine against the JSONB embedding for parity with the pre-M10 path.
+        sim_val = r.pop("_similarity", None)
+        if sim_val is not None:
+            sim: float | None = float(sim_val)
+        else:
+            emb = r.get("embedding")
+            sim = _cosine(q_vec, emb) if (q_vec and emb) else None
         lex = _lexical(q_tokens, r.get("content", ""))
         sal = float(r.get("salience", 0.5) or 0.5)
         rec = _recency(r.get("updated_at") or r.get("created_at"))
@@ -187,7 +255,15 @@ def recall(user_id: str, query: str, *, k: int = 6, client_id: str | None = None
     return scored[:k]
 
 
-def build_recall_brief(user_id: str, query: str, *, k: int = 5, client_id: str | None = None, kinds: list[str] | None = None, max_chars: int = 500) -> str:
+def build_recall_brief(
+    user_id: str,
+    query: str,
+    *,
+    k: int = 5,
+    client_id: str | None = None,
+    kinds: list[str] | None = None,
+    max_chars: int = 500,
+) -> str:
     """Serialize the top recalled memories into a prompt-injection block, or ""."""
     hits = recall(user_id, query, k=k, client_id=client_id, kinds=kinds)
     if not hits:
@@ -256,8 +332,17 @@ def reindex(user_id: str, *, embed_missing: bool = True) -> dict:
         if settings.SUPABASE_URL:
             from supabase import create_client
 
-            db = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
-            rows = db.table("email_intel_cache").select("client_id, client_name, summary").eq("user_id", user_id).execute().data or []
+            db = create_client(
+                settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY
+            )
+            rows = (
+                db.table("email_intel_cache")
+                .select("client_id, client_name, summary")
+                .eq("user_id", user_id)
+                .execute()
+                .data
+                or []
+            )
             for row in rows:
                 summ = (row.get("summary") or "").strip()
                 if summ:

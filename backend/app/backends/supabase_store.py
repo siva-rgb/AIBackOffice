@@ -969,6 +969,7 @@ def upsert_agent_memory(user_id: str, row: dict) -> dict:
     now = datetime.now(timezone.utc).isoformat()
     kind = row.get("kind", "")
     ref_id = row.get("ref_id")
+    emb = row.get("embedding")
 
     if ref_id is not None:
         existing_rows = (
@@ -991,8 +992,12 @@ def upsert_agent_memory(user_id: str, row: dict) -> dict:
             }
             if row.get("content"):
                 patch["content"] = row["content"]
-            if row.get("embedding") is not None:
-                patch["embedding"] = row["embedding"]
+            if emb is not None:
+                patch["embedding"] = emb
+                # M10 — mirror into the ANN-indexed vector column so new /
+                # updated rows are immediately searchable by the pgvector
+                # branch without waiting for a re-backfill.
+                patch["embedding_vec"] = _vector_literal(emb)
             if row.get("client_id") is not None:
                 patch["client_id"] = row["client_id"]
             if row.get("salience") is not None:
@@ -1016,7 +1021,11 @@ def upsert_agent_memory(user_id: str, row: dict) -> dict:
         "ref_type": row.get("ref_type"),
         "ref_id": ref_id,
         "content": row.get("content", ""),
-        "embedding": row.get("embedding"),
+        "embedding": emb,
+        # M10 — populate the ANN-indexed column alongside JSONB. NULL when
+        # `defer_embed=True` (bulk paths) — the backfill script will fill
+        # these in later.
+        "embedding_vec": _vector_literal(emb) if emb else None,
         "salience": float(row.get("salience", 0.5)),
         "source": row.get("source"),
         "metadata": row.get("metadata") or {},
@@ -1025,6 +1034,16 @@ def upsert_agent_memory(user_id: str, row: dict) -> dict:
     }
     insert_r = repo(user_id).insert("agent_memory", new_row).execute()
     return insert_r.data[0] if insert_r.data else new_row
+
+
+def _vector_literal(vec) -> str:
+    """Format a list of floats as a pgvector literal: '[v1,v2,...]'.
+
+    Mirrors the same helper in scripts/backfill_agent_memory_vectors.py; kept
+    local so upsert_agent_memory doesn't depend on a scripts/ import (which
+    is one-way and not part of the runtime app surface).
+    """
+    return "[" + ",".join(repr(float(x)) for x in vec) + "]"
 
 
 def get_agent_memory(
@@ -1067,6 +1086,55 @@ def delete_agent_memory(
         )
         q = q.like("ref_id", f"{literal}%")
     return len(q.execute().data or [])
+
+
+def vector_search_agent_memory(
+    user_id: str,
+    query_embedding: list[float],
+    k: int,
+    *,
+    client_id: str | None = None,
+    kinds: list[str] | None = None,
+    min_similarity: float = 0.0,
+) -> list[dict]:
+    """ANN search over a tenant's agent_memory rows via the pgvector RPC.
+
+    Returns the top-`k` rows by cosine similarity to `query_embedding`. Each row
+    carries the same fields as `get_agent_memory` plus a `_similarity` float
+    in [0, 1].
+
+    M1 invariant: tenant scoping happens INSIDE the RPC via an explicit
+    `auth.uid() = p_user_id` check (the RPC is SECURITY DEFINER; RLS alone is
+    not enough because SECURITY DEFINER bypasses the table's RLS for the
+    function's own reads). The Python-side `user_id` argument is forwarded
+    without filtering — the DB is the authoritative tenant boundary.
+
+    Empty `query_embedding` or wrong-dim `query_embedding` returns [] without
+    raising — matches the best-effort semantics of `embeddings.embed()`.
+    """
+    if not query_embedding:
+        return []
+    try:
+        # Supabase Python client: _sb.rpc("name", {"p": v}).execute()
+        # The RPC is tenant-scoped server-side; no .eq("user_id", ...) needed here.
+        resp = _sb.rpc(
+            "match_agent_memory",
+            {
+                "p_user_id": user_id,
+                "p_query_embedding": query_embedding,
+                "p_match_threshold": float(min_similarity),
+                "p_match_count": int(max(1, k)),
+                "p_filter_client": client_id,
+                "p_filter_kinds": list(kinds) if kinds else None,
+            },
+        ).execute()
+    except Exception as exc:
+        print(f"[memory] vector_search_agent_memory failed: {exc}")
+        return []
+    rows = resp.data or []
+    for r in rows:
+        r["_similarity"] = r.pop("similarity", None)
+    return rows
 
 
 # ── M9 GDPR/CCPA ─────────────────────────────────────────────────────────────

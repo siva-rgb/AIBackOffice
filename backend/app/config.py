@@ -37,6 +37,22 @@ class Settings(BaseSettings):
     # back to lexical-only, so the feature never hard-breaks.
     EMBEDDING_MODEL: str = "azure.text-embedding-3-small"
 
+    # Dimensionality of the embedding model above. Must match the `vector(N)`
+    # column on agent_memory.embedding_vec (M10 migration). Defaults to 1536
+    # (text-embedding-3-small / ada-002). Operators swapping to text-embedding-
+    # 3-large should set 3072 AND re-issue the column type — recorded as
+    # FU-M10-dim-change-migration.
+    EMBEDDING_DIM: int = 1536
+
+    # M10 — which recall backend the service layer uses.
+    #   "jsonb"   — load all rows for the tenant, cosine in Python (legacy,
+    #               works in mock mode, O(N) per query)
+    #   "pgvector" — call match_agent_memory RPC, O(log N) per query; requires
+    #               the 2026-07-29_pgvector_agent_memory.sql migration AND a
+    #               backfill (python -m scripts.backfill_agent_memory_vectors).
+    # Default stays on "jsonb" until an operator has run the migration + backfill.
+    AGENT_MEMORY_VECTOR_BACKEND: str = "jsonb"
+
     FRONTEND_ORIGIN: str = "http://localhost:3000"
 
     # Supabase (service role — backend only)
@@ -71,7 +87,9 @@ class Settings(BaseSettings):
     GOOGLE_OAUTH_CLIENT_SECRET: str = ""
     GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:8000/api/auth/google/callback"
     NEXT_PUBLIC_APP_URL: str = "http://localhost:3000"
-    TOKEN_ENCRYPTION_KEY: str = ""  # Fernet key — run: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    TOKEN_ENCRYPTION_KEY: str = (
+        ""  # Fernet key — run: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    )
     # Gmail real-time push (watch → Pub/Sub). e.g. projects/<proj>/topics/gmail-intel.
     # Empty = push disabled (sync stays scheduled/manual).
     GMAIL_PUBSUB_TOPIC: str = ""

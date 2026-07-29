@@ -200,14 +200,45 @@ FU-M9-reconsent-UX, FU-DONE-demo-cmd, FU-M9-commit, FU-M1-followup).
 
 ---
 
-### M10 — Memory System → pgvector  `LOW` · Track: `ml-infra`
+### M10 — Memory System → pgvector  `LOW` · Track: `ml-infra` · `[x]` 2026-07-29 (L4 APPROVE)
 Depends: none (parallel-friendly)
 
-- [ ] M10.1 Design pgvector schema + HNSW/IVFFLAT index for `memory_recall.py`'s embeddings.
-- [ ] M10.2 Write migration & backfill script preserving existing API surface.
-- [ ] M10.3 Benchmark recall latency/quality vs. current implementation before cutover.
+- [x] M10.1 Design pgvector schema + HNSW/IVFFLAT index for `memory_recall.py`'s embeddings.
+- [x] M10.2 Write migration & backfill script preserving existing API surface.
+- [x] M10.3 Benchmark recall latency/quality vs. current implementation before cutover.
 
 **Gate:** Recall API contract unchanged; latency/quality benchmark meets or beats baseline.
+
+**Status (2026-07-29):** `[x]` — L4 APPROVE (separate model: z-ai/glm-5.2, fresh-context pass;
+maker was composer). Quiz-me gate returned `skip ×3`; verdict would-strict-downgrade to
+UNCERTAIN, but owner direction `APPROVE with FU-M10-rpc-auth-model + live benchmark
+follow-up` (option 1 of a 3-option decision tree the verifier surfaced) accepted the
+verifier's Q1/Q2/Q3 answers as the Q+A block — override logged openly in
+`.genesis/checkpoints/M10.verify.md` §5. Gates re-computed independently: pytest M10 scope
+13/13 (EXITCODE=0); full suite 370 passed, 1 skipped, 1 deselected (same 2 pre-M10
+deselects as M9 — `test_rate_limit` redis-missing M6, `test_perf_m8 supabase_singleton`
+creds-missing M8); flake8 + black clean on all 5 M10-touched source files (EXITCODE=0
+both); mypy scope = **0 M10-introduced errors** (4 pre-existing in `memory_store.py` from
+FU-M9-mypy; 1 pre-existing in `store.py:15`; 14 pre-existing in `app/seed.py` +
+`app/_bootstrap.py` — all out of M10's freeze boundary). Migration adds `vector` extension
++ `embedding_vec vector(1536)` column + HNSW index + `match_agent_memory` SECURITY DEFINER
+RPC (explicit `auth.uid()` check inside the body, not RLS-only — RLS alone is not enough
+because SECURITY DEFINER bypasses RLS for the function's own reads). `vector_search_agent_memory`
+helper added to `supabase_store` + mock-backend shim returning `[]`. `memory_recall.recall()`
+gains a pgvector branch gated on `AGENT_MEMORY_VECTOR_BACKEND=pgvector` AND `q_vec is not None`;
+default backend stays `jsonb` (proven pre-M10 path). Backfill script is idempotent,
+hermetic-friendly (skips when no Supabase creds), supports `--dry-run` / `--reset` / `--batch`.
+5 new benchmark tests (3 quality + 1 empty-candidates + 1 lexical-fallback + 1 JSONB latency
+smoke). JSONB baseline recorded: p50=2.6ms / p95=3.0ms (500 rows / 50 queries). Context-graph
+invariants: M1 wrapper respected on writes (RPC is `.rpc()`-not-`.table()`, documented
+exception — tenant boundary enforced inside the RPC body); M3 fail-closed untouched; mock
+backend returns `[]` (FU-M10-defer-vector-on-mock); API stability invariant verified by
+re-reading public signatures. **Two non-blocking security/ops follow-ups surfaced by L4**:
+FU-M10-rpc-auth-model (regression test that probes the RPC with a forged `p_user_id` and
+asserts `[]` — requires live Supabase) and FU-M10-live-bench (pgvector live-latency gate
+against the recorded JSONB baseline). All M10 work uncommitted in the working tree
+(FU-M10-commit). See `.genesis/checkpoints/M10.md` (L1 iter 1) and
+`.genesis/checkpoints/M10.verify.md` (L4 verdict + Q+A + 7 non-blocking follow-ups).
 
 ---
 

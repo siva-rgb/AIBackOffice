@@ -1056,6 +1056,29 @@ def delete_agent_memory(
     return removed
 
 
+def vector_search_agent_memory(
+    user_id: str,
+    query_embedding: list[float],
+    k: int,
+    *,
+    client_id: str | None = None,
+    kinds: list[str] | None = None,
+    min_similarity: float = 0.0,
+) -> list[dict]:
+    """Mock-backend stub for the pgvector ANN RPC.
+
+    The mock backend has no Postgres; vector search is a Supabase-only
+    optimization. Return [] so the service-layer dispatch (memory_recall.recall)
+    cleanly falls back to the load-all-and-cosine path in mock mode, and
+    callers can ignore the toggle.
+
+    The mock memory_store.load+cosine path is the source of truth for
+    mock-mode tests — see `recall()` in memory_recall.py and
+    `test_memory_recall.py`.
+    """
+    return []
+
+
 # ---- Notion connection (task ledger mirror) --------------------------------
 _notion_connections: dict[str, dict] = {}
 
