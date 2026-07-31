@@ -1283,7 +1283,9 @@ async def chat_agentic_async(user_id: str, message: str, history: list[dict] | N
     if not _agentic_available():
         return {**(await asyncio.to_thread(chat, user_id, message, history)), "queued": 0}
 
-    user = store.get_user(user_id)
+    # Offload blocking store I/O so the event loop stays free during the DB
+    # round-trip (M8 R2 — the async path must not block on sync calls).
+    user = await asyncio.to_thread(store.get_user, user_id)
     profile = user.profile if user else None
     biz = (user.business_name if user else None) or "the owner"
     btype = (profile.business_type if profile else None) or "small business"
@@ -1328,7 +1330,11 @@ async def chat_agentic_async(user_id: str, message: str, history: list[dict] | N
                 except Exception:
                     args = {}
                 handler = _HANDLERS.get(name)
-                result = handler(user_id, args) if handler else {"error": "unknown tool"}
+                result = (
+                    await asyncio.to_thread(handler, user_id, args)
+                    if handler
+                    else {"error": "unknown tool"}
+                )
                 if result.get("new"):
                     queued += 1
                 tools_used.append(name)
@@ -1341,7 +1347,8 @@ async def chat_agentic_async(user_id: str, message: str, history: list[dict] | N
 
     if not reply:
         reply = "Done."
-    agent_logger.log_action(
+    await asyncio.to_thread(
+        agent_logger.log_action,
         user_id=user_id,
         agent_type="chat",
         action=f"Manager chat (agentic): {message[:80]}",

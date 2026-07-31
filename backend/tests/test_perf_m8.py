@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import inspect
 import pathlib
+import uuid
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
@@ -79,6 +80,32 @@ def test_import_job_completes(user_id):
     assert job["inserted"] >= 1
 
 
+def test_import_job_state_is_store_backed(user_id):
+    """R1 durability fix: job state lives in the store (shared/durable in prod),
+    not a per-process module dict — so it survives across workers/restarts."""
+    from app.services import import_jobs
+    from app import store
+
+    # The old in-process job dict must be gone (anti-regression).
+    assert not hasattr(import_jobs, "_jobs")
+
+    job_id = create_job(user_id)
+    # Retrievable straight from the store layer, keyed by (user, job).
+    row = store.get_import_job(user_id, job_id)
+    assert row is not None
+    assert row["status"] == "pending"
+
+
+def test_import_job_is_tenant_scoped(user_id):
+    other = str(uuid.uuid4())
+    job_id = create_job(user_id)
+    # Another tenant cannot read this job.
+    assert get_job(job_id, other) is None
+    from app import store
+
+    assert store.get_import_job(other, job_id) is None
+
+
 def test_invoice_pdf_endpoint_queues_background(user_id, monkeypatch):
     user = User(id=user_id, email="u@example.com", plan="free", created_at=datetime.now(timezone.utc).isoformat())
     app.dependency_overrides[get_current_user] = lambda: user
@@ -135,6 +162,42 @@ def test_manager_chat_uses_async_agentic(monkeypatch):
     app.dependency_overrides.pop(get_current_user, None)
     assert r.status_code == 200
     assert called["async"] is True
+
+
+def test_async_chat_offloads_blocking_store_io(user_id, monkeypatch):
+    """R2: the async chat path must run blocking store I/O off the event-loop
+    thread (via asyncio.to_thread), not inline on the loop."""
+    import asyncio
+    import threading
+    import types
+
+    main_thread = threading.current_thread()
+    seen: dict = {}
+    real_get_user = store.get_user
+
+    def spy_get_user(uid):
+        seen["get_user_thread"] = threading.current_thread()
+        return real_get_user(uid)
+
+    monkeypatch.setattr(supervisor.store, "get_user", spy_get_user)
+    monkeypatch.setattr(supervisor, "_agentic_available", lambda: True)
+
+    async def fake_achat_messages(messages, **kwargs):
+        return types.SimpleNamespace(
+            tool_calls=None,
+            content="hi there",
+            input_tokens=1,
+            output_tokens=1,
+            model="mock",
+        )
+
+    monkeypatch.setattr(supervisor.llm, "achat_messages", fake_achat_messages)
+
+    out = asyncio.run(supervisor.chat_agentic_async(user_id, "hello", []))
+
+    assert out["reply"] == "hi there"
+    assert seen.get("get_user_thread") is not None
+    assert seen["get_user_thread"] is not main_thread  # offloaded, not on the loop
 
 
 def test_overview_latency_smoke():

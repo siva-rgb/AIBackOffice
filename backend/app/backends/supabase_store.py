@@ -508,7 +508,14 @@ def delete_story(user_id: str, story_id: str) -> bool:
 
 
 def delete_stories_for_task(user_id: str, task_id: str) -> int:
-    r = repo(user_id).raw_table("stories").delete().eq("task_id", task_id).execute()
+    r = (
+        repo(user_id)
+        .raw_table("stories")
+        .delete()
+        .eq("user_id", user_id)
+        .eq("task_id", task_id)
+        .execute()
+    )
     return len(r.data or [])
 
 
@@ -646,6 +653,7 @@ def delete_client_view(user_id: str, client_id: str) -> bool:
         .raw_table("client_view_cache")
         .delete()
         .eq("client_id", client_id)
+        .eq("user_id", user_id)
         .execute()
     )
     return bool(r.data)
@@ -693,6 +701,7 @@ def upsert_playbook_entry(user_id: str, entry: dict) -> dict:
             .raw_table("business_playbook")
             .update(patch)
             .eq("id", existing["id"])
+            .eq("user_id", user_id)
             .execute()
         )
         return r.data[0] if r.data else existing
@@ -755,6 +764,7 @@ def update_playbook_entry(user_id: str, entry_id: str, patch: dict) -> dict | No
         .raw_table("business_playbook")
         .update(patch)
         .eq("id", entry_id)
+        .eq("user_id", user_id)
         .execute()
     )
     return r.data[0] if r.data else None
@@ -781,7 +791,7 @@ def decay_playbook_entries(user_id: str) -> int:
         new_conf = max(0.0, round(float(row["confidence"]) - 0.1, 4))
         repo(user_id).raw_table("business_playbook").update(
             {"confidence": new_conf}
-        ).eq("id", row["id"]).execute()
+        ).eq("id", row["id"]).eq("user_id", user_id).execute()
     return len(rows)
 
 
@@ -805,12 +815,20 @@ def get_stripe_connection(user_id: str) -> dict | None:
 
 
 def update_stripe_connection(user_id: str, updates: dict) -> dict:
-    r = repo(user_id).raw_table("stripe_connections").update(updates).execute()
+    r = (
+        repo(user_id)
+        .raw_table("stripe_connections")
+        .update(updates)
+        .eq("user_id", user_id)
+        .execute()
+    )
     return r.data[0] if r.data else updates
 
 
 def delete_stripe_connection(user_id: str) -> None:
-    repo(user_id).raw_table("stripe_connections").delete().execute()
+    repo(user_id).raw_table("stripe_connections").delete().eq(
+        "user_id", user_id
+    ).execute()
 
 
 # ---- Notion connection (task ledger mirror) --------------------------------
@@ -831,12 +849,20 @@ def get_notion_connection(user_id: str) -> dict | None:
 
 
 def update_notion_connection(user_id: str, updates: dict) -> dict:
-    r = repo(user_id).raw_table("notion_connections").update(updates).execute()
+    r = (
+        repo(user_id)
+        .raw_table("notion_connections")
+        .update(updates)
+        .eq("user_id", user_id)
+        .execute()
+    )
     return r.data[0] if r.data else updates
 
 
 def delete_notion_connection(user_id: str) -> None:
-    repo(user_id).raw_table("notion_connections").delete().execute()
+    repo(user_id).raw_table("notion_connections").delete().eq(
+        "user_id", user_id
+    ).execute()
 
 
 # ---- Graph memory (kg_nodes / kg_edges) ------------------------------------
@@ -877,6 +903,7 @@ def upsert_kg_node(user_id: str, node: dict) -> dict:
             .raw_table("kg_nodes")
             .update(patch)
             .eq("id", ex["id"])
+            .eq("user_id", user_id)
             .execute()
         )
         return r.data[0] if r.data else {**ex, **patch}
@@ -927,6 +954,7 @@ def upsert_kg_edge(user_id: str, edge: dict) -> dict:
             .raw_table("kg_edges")
             .update(patch)
             .eq("id", ex["id"])
+            .eq("user_id", user_id)
             .execute()
         )
         return r.data[0] if r.data else {**ex, **patch}
@@ -957,8 +985,8 @@ def get_kg_edges(user_id: str) -> list[dict]:
 
 
 def delete_kg_for_user(user_id: str) -> None:
-    repo(user_id).raw_table("kg_edges").delete().execute()
-    repo(user_id).raw_table("kg_nodes").delete().execute()
+    repo(user_id).raw_table("kg_edges").delete().eq("user_id", user_id).execute()
+    repo(user_id).raw_table("kg_nodes").delete().eq("user_id", user_id).execute()
 
 
 # ---- Semantic memory (agent_memory) ----------------------------------------
@@ -1012,6 +1040,7 @@ def upsert_agent_memory(user_id: str, row: dict) -> dict:
                 .raw_table("agent_memory")
                 .update(patch)
                 .eq("id", ex["id"])
+                .eq("user_id", user_id)
                 .execute()
             )
             return r.data[0] if r.data else {**ex, **patch}
@@ -1068,7 +1097,7 @@ def get_agent_memory(
 
 
 def delete_agent_memory_for_user(user_id: str) -> None:
-    repo(user_id).raw_table("agent_memory").delete().execute()
+    repo(user_id).raw_table("agent_memory").delete().eq("user_id", user_id).execute()
 
 
 def delete_agent_memory(
@@ -1080,7 +1109,7 @@ def delete_agent_memory(
     trailing wildcard is the ONLY wildcard, keeping this equivalent to the mock
     backend's `str.startswith` for any prefix (Notion ids can't contain them, but
     the helper is generic)."""
-    q = repo(user_id).raw_table("agent_memory").delete()
+    q = repo(user_id).raw_table("agent_memory").delete().eq("user_id", user_id)
     if kind is not None:
         q = q.eq("kind", kind)
     if ref_id_prefix is not None:
@@ -1193,27 +1222,81 @@ def delete_user_data(user_id: str) -> dict[str, int]:
     return counts
 
 
+def create_import_job(user_id: str, job_id: str) -> None:
+    """Persist a new background import job (durable + shared across workers)."""
+    repo(user_id).insert(
+        "import_jobs",
+        {"id": job_id, "user_id": user_id, "status": "pending", "result": {}},
+    ).execute()
+
+
+def get_import_job(user_id: str, job_id: str) -> dict | None:
+    r = repo(user_id).select("import_jobs").eq("id", job_id).execute()
+    return r.data[0] if r.data else None
+
+
+def update_import_job(user_id: str, job_id: str, patch: dict) -> None:
+    patch = {**patch, "updated_at": datetime.now(timezone.utc).isoformat()}
+    repo(user_id).update("import_jobs", patch, job_id).execute()
+
+
+def get_google_token(user_id: str) -> str | None:
+    """Return the user's decrypted Google access token, or None.
+
+    Used by GDPR deletion to actually revoke the OAuth grant at Google *before*
+    the `google_connections` row is wiped. Keyed by user_id (single-row table);
+    reads a raw handle because there is no user-scoped select needed beyond the
+    filter already applied here.
+    """
+    try:
+        r = (
+            _sb.table("google_connections")
+            .select("access_token_enc")
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception:
+        return None
+    if r.data and r.data[0].get("access_token_enc"):
+        from ..services.token_encryption import decrypt_token
+
+        try:
+            return decrypt_token(r.data[0]["access_token_enc"])
+        except Exception:
+            return None
+    return None
+
+
 def record_deletion(
     *,
     reason: str,
     tables_cleared: dict[str, int],
     files_deleted: int,
     user_request_id: str,
+    side_effects: dict[str, str] | None = None,
 ) -> None:
     """Append a no-PII audit row to `public.deletion_log`.
 
-    The row carries: a random UUID id, timestamp, reason, per-table counts,
-    a random user_request_id. NO `user_id` FK — see migration comment.
+    The row carries: a random UUID id, timestamp, reason, per-table counts, a
+    random user_request_id, and the per-side-effect outcome map (status strings
+    only — revoke/cancel/gcs/auth-delete results, never PII). NO `user_id` FK —
+    see migration comment.
     """
-    _sb.table("deletion_log").insert(
-        {
-            "id": user_request_id,
-            "reason": reason,
-            "tables_cleared": tables_cleared,
-            "files_deleted_count": files_deleted,
-            "user_request_id": user_request_id,
-        }
-    ).execute()
+    base = {
+        "id": user_request_id,
+        "reason": reason,
+        "tables_cleared": tables_cleared,
+        "files_deleted_count": files_deleted,
+        "user_request_id": user_request_id,
+    }
+    try:
+        _sb.table("deletion_log").insert(
+            {**base, "side_effects": side_effects or {}}
+        ).execute()
+    except Exception:
+        # The `side_effects` column may not exist yet (migration not applied).
+        # Still write the audit row without it rather than lose the record.
+        _sb.table("deletion_log").insert(base).execute()
 
 
 def list_deletion_log() -> list[dict]:

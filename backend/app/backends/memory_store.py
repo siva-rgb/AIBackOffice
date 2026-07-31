@@ -1299,12 +1299,44 @@ def _notion_connection_row(user_id: str) -> dict:
     return {"user_id": user_id, **_notion_connections[user_id]}
 
 
+_import_jobs: dict[str, dict] = {}
+
+
+def create_import_job(user_id: str, job_id: str) -> None:
+    _import_jobs[job_id] = {
+        "id": job_id,
+        "user_id": user_id,
+        "status": "pending",
+        "result": {},
+        "error": None,
+    }
+
+
+def get_import_job(user_id: str, job_id: str) -> dict | None:
+    job = _import_jobs.get(job_id)
+    if not job or job.get("user_id") != user_id:
+        return None
+    return dict(job)
+
+
+def update_import_job(user_id: str, job_id: str, patch: dict) -> None:
+    job = _import_jobs.get(job_id)
+    if job and job.get("user_id") == user_id:
+        job.update(patch)
+
+
+def get_google_token(user_id: str) -> str | None:
+    """Mock backend holds no real OAuth tokens — nothing to revoke."""
+    return None
+
+
 def record_deletion(
     *,
     reason: str,
     tables_cleared: dict[str, int],
     files_deleted: int,
     user_request_id: str,
+    side_effects: dict[str, str] | None = None,
 ) -> None:
     """Append a no-PII audit row. Mock backend: in-memory list, no real DB."""
     _deletion_log.append(
@@ -1315,6 +1347,7 @@ def record_deletion(
             "tables_cleared": dict(tables_cleared),
             "files_deleted_count": files_deleted,
             "user_request_id": user_request_id,
+            "side_effects": dict(side_effects or {}),
         }
     )
 

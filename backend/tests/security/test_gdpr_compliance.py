@@ -19,6 +19,7 @@ tenants without needing real JWTs.
 
 from __future__ import annotations
 
+import json
 import uuid
 
 import pytest
@@ -119,9 +120,12 @@ def test_export_returns_format_version_and_timestamp():
     r = client.get("/api/account/export")
     assert r.status_code == 200
     payload = r.json()
-    assert payload["format_version"] == "1.0"
+    assert payload["format_version"] == "1.1"
     assert "exported_at" in payload
-    assert payload["profile"]["email"] == f"{uid}@example.com"
+    # `account` is the full user record (not just a few flat fields).
+    assert payload["account"]["email"] == f"{uid}@example.com"
+    assert "profile" in payload["account"], "full profile JSONB must be exported"
+    assert "agent_memory" in payload
 
 
 def test_export_covers_every_table_in_registry():
@@ -212,6 +216,59 @@ def test_delete_writes_audit_row_with_no_pii():
     assert matching["reason"] == "user_request"
     assert isinstance(matching["tables_cleared"], dict)
     assert matching["files_deleted_count"] == 0
+    # side_effects are now persisted on the audit row — and stay PII-free
+    # (status strings only, no user_id/email/name anywhere in them).
+    assert "side_effects" in matching
+    se = matching["side_effects"]
+    assert isinstance(se, dict)
+    blob = json.dumps(se).lower()
+    assert uid.lower() not in blob
+    assert "@example.com" not in blob
+
+
+def test_delete_reports_honest_side_effects_and_no_false_errors():
+    """The response tells the truth: mock env has no auth backend / no Google
+    token / no subscription, so those are 'not_applicable' (not a silent
+    'skipped'), there are no errors, and `deleted` is True."""
+    uid = str(uuid.uuid4())
+    _seed_demo_user_with_data(uid)
+    _as(uid)
+    body = client.delete("/api/account/delete").json()
+
+    assert body["deleted"] is True
+    assert body["errors"] == []
+    assert "warnings" in body
+    se = body["side_effects"]
+    assert se["auth_delete"].startswith("not_applicable")
+    assert se["google_revoke"].startswith("not_applicable")
+    assert se["stripe_cancel"].startswith("not_applicable")
+    assert se["deletion_log"] == "recorded"
+
+
+def test_delete_is_deleted_false_when_auth_identity_delete_fails(monkeypatch):
+    """The honesty fix: if Supabase IS configured but the auth-identity delete
+    throws (the login email would survive), `deleted` is False with an error —
+    not a false 'deleted: true'."""
+    from app.config import settings as _settings
+
+    monkeypatch.setattr(_settings, "SUPABASE_URL", "http://localhost")
+    monkeypatch.setattr(_settings, "SUPABASE_SERVICE_ROLE_KEY", "svc")
+
+    import supabase
+
+    def _boom(*a, **k):
+        raise RuntimeError("auth backend down")
+
+    monkeypatch.setattr(supabase, "create_client", _boom)
+
+    uid = str(uuid.uuid4())
+    _seed_demo_user_with_data(uid)
+    _as(uid)
+    body = client.delete("/api/account/delete").json()
+
+    assert body["deleted"] is False
+    assert "auth_identity_not_deleted" in body["errors"]
+    assert body["side_effects"]["auth_delete"].startswith("failed")
 
 
 def test_post_delete_export_returns_no_residual_pii():
