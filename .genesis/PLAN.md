@@ -322,15 +322,29 @@ Depends: none
 
 ---
 
-### M16 — Full CI/CD Pipeline  `MEDIUM` · Track: `ci-infra`
-Depends: M2, M12
+### M16 — Full CI/CD Pipeline  `MEDIUM` · Track: `ci-infra` · `[x]` 2026-08-01 (L1 BUILD; live-GCP verify pending)
+Depends: M2 (done). M12 not done — Dependabot/pip-audit are M12's, not gating the pipeline.
 
-- [ ] M16.1 Add official backend Dockerfile.
-- [ ] M16.2 Add official frontend Dockerfile (currently missing — only inferred in docs).
-- [ ] M16.3 Build → test → deploy workflow to staging, then production.
-- [ ] M16.4 Blue/green or canary deployment strategy.
+- [x] M16.1 Add official backend Dockerfile. _(pre-existing from M7 — `backend/Dockerfile`, verified real.)_
+- [x] M16.2 Add official frontend Dockerfile. _(pre-existing from M7 — `frontend/Dockerfile`, standalone; the PLAN's "missing" note was stale.)_
+- [x] M16.3 Build → test → deploy workflow to staging, then production.
+      `.github/workflows/deploy.yml`: `verify` (hermetic tests) → `staging` (auto, 100%) →
+      `production-canary` (held behind the `production` Environment's required reviewers).
+- [x] M16.4 Blue/green / canary strategy. Cloud Run revision tags: deploy `--no-traffic --tag=canary`
+      → shift `CANARY_PERCENT` (10%) → `promote` to 100% (cutover) / `rollback` drains canary to 0%.
 
-**Gate:** A merge to `main` deploys to staging automatically; promotion to production is dimple reviewed action.
+**Gate:** A merge to `main` deploys to staging automatically; promotion to production is a simple reviewed action.
+
+**Status (2026-08-01):** `[x]` L1 BUILD. All deploy logic in `ops/deploy.sh` (4 modes:
+staging / prod-canary / prod-promote / prod-rollback); orchestrated by `.github/workflows/deploy.yml`
+(4 jobs, dependency graph verified: verify→staging→production-canary on push; production-traffic on
+dispatch). Verified by every means short of a live GCP account: `bash -n` clean; all 3 workflows
+parse; **stubbed dry-run** (fake gcloud/docker/jq on PATH) exercised all 4 modes end-to-end + the
+bad-mode guard (exit 2) — backend-first URL bake and canary tag-URL resolution both fire correctly.
+Docs in `DEPLOY.md` (required secrets/vars, WIF, environment reviewer gate). **NOT computed:** a real
+`gcloud run deploy` — needs a GCP project + Artifact Registry + WIF binding + the `production`
+Environment reviewer configured (same daemon/creds-blocked pattern as M7). See
+`.genesis/checkpoints/M16.md`. L4 VERIFY pending — separate model, fresh context.
 
 ---
 

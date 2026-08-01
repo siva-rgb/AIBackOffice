@@ -1,0 +1,162 @@
+name: Deploy
+
+# Full CI/CD pipeline (M16.3 + M16.4).
+#
+#   merge to main ──▶ verify (hermetic tests) ──▶ deploy STAGING (100%, auto)
+#                                                        │
+#                                                        ▼
+#                                             deploy PRODUCTION CANARY
+#                                             (new revision, CANARY_PERCENT%)
+#                                             ⏸ gated by the `production`
+#                                               GitHub Environment reviewers
+#
+#   workflow_dispatch (action = promote | rollback | canary) ──▶ production
+#   traffic move (blue/green cutover or instant rollback).
+#
+# Staging deploys automatically on every merge to main. Production only ever
+# moves behind the `production` environment's required-reviewer gate — configure
+# reviewers in repo Settings ▸ Environments ▸ production. See DEPLOY.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Production traffic action"
+        type: choice
+        options: [promote, rollback, canary]
+        default: promote
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGION: us-central1
+  CANARY_PERCENT: "10"
+
+jobs:
+  # ── Gate: never deploy a red main. Mirrors the hermetic backend suite. ──────
+  verify:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 3s --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Hermetic tests (deploy gate)
+        env:
+          KORA_DATA_BACKEND: mock
+          REDIS_TEST_URL: redis://127.0.0.1:6379/15
+        run: pytest -q --cov=app --cov-fail-under=39
+
+  # ── Staging: automatic on merge to main, full traffic. ─────────────────────
+  staging:
+    needs: verify
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: ${{ vars.FRONTEND_ORIGIN }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+      - name: Deploy to staging
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          REGION: ${{ env.REGION }}
+          SHA: ${{ github.sha }}
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID: ${{ secrets.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID }}
+          NEXT_PUBLIC_STRIPE_PRO_PRICE_ID: ${{ secrets.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID }}
+        run: bash ops/deploy.sh staging
+
+  # ── Production canary: auto-queued after staging, HELD for review. ─────────
+  production-canary:
+    needs: staging
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.FRONTEND_ORIGIN }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+      - name: Deploy production canary
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          REGION: ${{ env.REGION }}
+          SHA: ${{ github.sha }}
+          CANARY_PERCENT: ${{ env.CANARY_PERCENT }}
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID: ${{ secrets.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID }}
+          NEXT_PUBLIC_STRIPE_PRO_PRICE_ID: ${{ secrets.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID }}
+        run: bash ops/deploy.sh prod-canary
+
+  # ── Manual production traffic: promote (100%) / rollback / re-canary. ──────
+  production-traffic:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.FRONTEND_ORIGIN }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+      - name: Production traffic — ${{ github.event.inputs.action }}
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          REGION: ${{ env.REGION }}
+          SHA: ${{ github.sha }}
+          CANARY_PERCENT: ${{ env.CANARY_PERCENT }}
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID: ${{ secrets.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID }}
+          NEXT_PUBLIC_STRIPE_PRO_PRICE_ID: ${{ secrets.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID }}
+        run: bash ops/deploy.sh prod-${{ github.event.inputs.action }}
