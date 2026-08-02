@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M8: Performance — First Pass — Kora AI Back Office</title>
+<style>
+  :root {
+    --bg: #0d1117; --fg: #c9d1d9; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --yellow: #d2991d; --purple: #a371f7;
+    --border: #30363d; --surface: #161b22; --surface2: #21262d;
+    --code-bg: #0d1117; --radius: 8px;
+    --font-mono: 'Cascadia Code','Fira Code','JetBrains Mono','Consolas',monospace;
+    --font-sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font-sans); line-height: 1.6; max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem 6rem; }
+  h1 { font-size: 2rem; color: #fff; margin-bottom: .25rem; }
+  h2 { font-size: 1.4rem; color: #f0f6fc; margin: 2.5rem 0 .75rem; border-bottom: 1px solid var(--border); padding-bottom: .3rem; }
+  h3 { font-size: 1.1rem; color: #e6edf3; margin: 1.5rem 0 .5rem; }
+  h4 { color: #fff; margin-bottom: .5rem; }
+  p, li { margin-bottom: .6rem; }
+  a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+  code { font-family: var(--font-mono); font-size: .9em; background: var(--surface2); padding: .15em .4em; border-radius: 4px; }
+  pre { font-family: var(--font-mono); font-size: .85rem; background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.2rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.2rem 1.5rem; margin: 1.5rem 0 2rem; }
+  .toc h3 { margin-top: 0; margin-bottom: .5rem; }
+  .toc ol { padding-left: 1.3rem; }
+  .toc li { margin-bottom: .25rem; font-size: .95rem; }
+  .badges { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 1.5rem; }
+  .badge { font-size: .8rem; font-weight: 600; padding: .25em .75em; border-radius: 99px; border: 1px solid; }
+  .badge-green { color: var(--green); border-color: var(--green); }
+  .badge-red { color: var(--red); border-color: var(--red); }
+  .badge-yellow { color: var(--yellow); border-color: var(--yellow); }
+  .badge-purple { color: var(--purple); border-color: var(--purple); }
+  .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0 1.5rem; align-items: start; }
+  .cmp-pane { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .cmp-head { padding: .4rem 1rem; font-weight: 700; font-size: .85rem; letter-spacing: .02em; }
+  .cmp-head.before { background: #3d1e1e; color: var(--red); }
+  .cmp-head.after { background: #1e3d24; color: var(--green); }
+  .cmp-body pre { border: none; border-radius: 0; margin: 0; font-size: .78rem; }
+  .flow { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .6rem; margin: 1.2rem 0 1.5rem; font-family: var(--font-mono); font-size: .85rem; }
+  .flow-box { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: .5rem 1rem; text-align: center; }
+  .flow-box.highlight { border-color: var(--accent); background: #0a1a2e; }
+  .flow-arrow { color: var(--muted); font-size: 1.2rem; }
+  .quiz { margin: 1.5rem 0; }
+  .quiz-q { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.2rem 1.3rem; margin-bottom: 1rem; }
+  .quiz-q ul { list-style: none; padding-left: 0; }
+  .quiz-q li { margin-bottom: .3rem; padding: .4rem .6rem; border-radius: 4px; cursor: pointer; transition: background .15s; }
+  .quiz-q li:hover { background: var(--surface2); }
+  .quiz-q li.correct { background: #1e3d24; color: var(--green); font-weight: 600; pointer-events: none; }
+  .quiz-q li.wrong { background: #3d1e1e; color: var(--red); font-weight: 600; pointer-events: none; }
+  .feedback { margin-top: .6rem; padding: .5rem .8rem; border-radius: 4px; font-size: .85rem; display: none; }
+  .feedback.show { display: block; }
+  .feedback.correct { background: #1e3d24; border: 1px solid var(--green); color: var(--green); }
+  .feedback.wrong { background: #3d1e1e; border: 1px solid var(--red); color: var(--red); }
+  .gate { background: linear-gradient(135deg,#2e3d84,#2428b1e); border: 1px solid var(--green); border-radius: var(--radius); padding: 1rem 1.3rem; margin: 1.5rem 0; display: flex; align-items: center; gap: .8rem; }
+  .gate-icon { font-size: 1.8rem; }
+  .gate-body { font-size: .9rem; }
+  .gate-body strong { color: var(--green); }
+  .decisions { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0 1.5rem; }
+  .decision { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.2rem; }
+  .decision h4 { color: var(--accent); margin-bottom: .3rem; font-size: .95rem; }
+  .decision p { font-size: .9rem; margin: 0; }
+  .checklist { list-style: none; padding: 0; margin: 1rem 0; }
+  .checklist li { padding: .3rem 0; }
+  .checklist li::before { content: " V "; color: var(--green); font-weight: 700; }
+  .perf { display: flex; align-items: baseline; gap: .5rem; margin: .3rem 0; font-family: var(--font-mono); font-size: .85rem; }
+  .perf-label { color: var(--muted); min-width: 70px; }
+  .perf-val { color: var(--accent); font-weight: 600; }
+  @media (max-width:700px) { .cmp, .decisions, .sub-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<h1>M8: Performance — First Pass</h1>
+
+<div class="badges">
+  <span class="badge badge-purple">Performance</span>
+  <span class="badge badge-green">Backend</span>
+  <span class="badge badge-yellow">Async + Indexes</span>
+  <span class="badge badge-red">Phase 1</span>
+</div>
+
+<p>
+<strong>Five performance bottlenecks fixed in one milestone.</strong> M8 targeted the most impactful wins: database indexes for dashboard queries, connection pooling, offloading PDF generation from route path, converting LLM calls to async, and background CSV import.
+</p>
+
+<div class="toc">
+<h3>Table of Contents</h3>
+<ol>
+  <li><a href="#background">Background</a></li>
+  <li><a href="#intuition">Intuition — The Five Bottlenecks</a></li>
+  <li><a href="#walkthrough">Code Walkthrough</a></li>
+  <li><a href="#decisions">Key Design Decisions</a></li>
+  <li><a href="#gate">Gate &amp; Verification</a></li>
+  <li><a href="#quiz">Quiz — 5 Questions</a></li>
+</ol>
+</div>
+
+<h2 id="background">1. Background</h2>
+<p>Kora as MVP was functional but slow in core paths: dashboard loads did full table scans, every request created a new Supabase client, invoice PDF generation blocked the HTTP response, CSV uploads blocked for 50-row AI batches, LLM calls were synchronous, and the <code>gather_state()</code> helper was called 6 times per supervisor run without caching. M8 addresses each with minimal, targeted changes.</p>
+
+<h2 id="intuition">2. Intuition — The Five Bottlenecks</h2>
+
+<h3>M8.1: Database Indexes — dashboard full scans become index scans</h3>
+<div class=cmp>
+<div class="cmp-pane"><div class="cmp-head before">BEFORE (no Index)</div><div class="cmp-body"><pre>SELECT * FROM invoices WHERE user_id = ?
+ORDER BY created_at DESC LIMIT 50;
+-- full table scan, ~500ms for 10K rows</pre></div></div>
+<div class="cmp-pane"><div class="cmp-head after">AFTER (indexed)</div><div class="cmp-body"><pre>CREATE INDEX idx_invoices_user_created
+ON invoices(user_id, created_at DESC);
+-- Index scan, ~5ms for any row count</pre></div></div>
+</div>
+
+<h3>M8.2: Connection Pooling — Per-request client creation to shared singleton</h3>
+<div class="cmp">
+<div class="cmp-pane"><div class="cmp-head before">BEFORE</div><div class="cmp-body"><pre># Every request: create new client
+_sb = create_client(url=..., key=...).
+# 100 req/s = 100 client init, Handshakes,
+# HTTPS handshakes per second</pre></div></div>
+<div class="cmp-pane"><div class="cmp-head after">AFTER (pooled)</div><div class="cmp-body"><pre># app/clients/pool.py — singleton
+_sb = get_supabase()  # once per process
+# 100 req/s = 1 reused connection pool</pre></div></div>
+</div>
+
+<h3>M8.3: PDF Generation — Sync inline to BackgroundTasks</h3>
+<div class="cmp">
+<div class="cmp-pane"><div class="cmp-head before">BEFORE</div><div class="cmp-body"><pre># routers/invoices.py (old)
+def create_invoice(body):
+    invoice = store.insert_invoice(...)
+    pdf_path = generate_invoice_pdf(invoice)  # blocks
+    store.update_invoice_pdf(...)
+    return invoice  # 5-10s response</pre></div></div>
+<div class="cmp-pane"><div class="cmp-head after">AFTER (BackgroundTasks)</div><div class="cmp-body"><pre>def create_invoice(body, background_tasks):
+    invoice = store.insert_invoice(...)
+    background_tasks.add_task(generate_and_upload_pdf, invoice)
+    return invoice  # ~50ms response</pre></div></div>
+</div>
+
+<h3>M8.4: Async LLM — Sync chat to achat/achat_messages</h3>
+<div class="cmp">
+<div class="cmp-pane"><div class="cmp-head before">BEFORE (sync)</div><div class="cmp-body"><pre>response = llm.chat(messages)
+# blocks for 2-10s, blocks the FastAPI event loop</pre></div></div>
+<div class="cmp-pane"><div class="cmp-head after">AFTER (async)</div><div class="cmp-body"><pre>response = await llm.chat(messages)
+# 2-10s call, FastAPI event loop continues
+# processing other requests in parallel</pre></div></div>
+</div>
+
+<h3>M8.5: CSV Upload — foreground to background</h3>
+<div class="cmp">
+<div class="cmp-pane"><div class="cmp-head before">BEFORE</div><div class="cmp-body"><pre>POST /api/bookkeeping/ingest (CSV)
+-> sync process CSV -> loop
+   over 50 transactions with AI batches
+-> block for 20-45s
+-> return full parsed list</pre></div></div>
+<div class="cmp-pane"><div class="cmp-head after">AFTER (job polling)</div><div class="cmp-body"><pre>POST /api/bookkeeping/ingest
+-> return {job_id, status:"processing"} (200ms)
+GET /api/bookkeeping/import/{job_id}
+-> {status:"done", count: 42, error: null}</pre></div></div>
+</div>
+
+<h2 id="walkthrough">3. Code Walkthrough</h2>
+<h3>Connection pool — clients/pool.py</h3>
+<pre>
+import httpx
+from supabase import create_client
+
+_sb = None
+_http = Non
+
+def get_supabase():
+    global _sb
+    if _sb is None:
+        _sb = create_client(url, key)
+    return _sb
+
+def get_http():
+    global _http
+    if _http is None:
+        _http = httpx.AsyncClient(timeout=30)
+    return _http
+</pre>
+<p>Two singletons: Supabase for DB queries, httpx for HTTP outbound (Stripe API, Google API). Created once at import, reused for all requests.</p>
+
+<h3>Per-request cache — request_cache.py</h3>
+<pre>
+from contextvars import ContextVar
+
+request_cache: ContextVar[dict] = ContextVar("request_cache", default={})
+
+def cached_gather_state(user_id: str):
+    cache = request_cache.get()
+    if "gather_state" in cache:
+        return cache["gather_state"]
+    result = compute_gather_state(user_id)  # expensive
+    cache["gather_state"] = result
+    return result</pre>
+<p>ContextVar (not process-global) ensures no cross-tenant leakage. Within one request, the first <code>gather_state</code> call computes, subsequent calls return the cached value.</p>
+
+<h3>3. Background CSV import — import_jobs.py</h3>
+<pre>
+import asyncio_versionimport threading
+
+def start_csv_import(user_id, cause) -> str:
+    job_id = uuid4().Hex
+    jobs[job_id] = { "status": "processing", "progress": 0, "total": causes_rows }
+    asyncio.create_task(_ingest(user_id, chunks, job_id))
+    return job_id
+
+async def _ingest(job_id, user_id, chunks):
+    for chunk in chunks:
+        store.insert_transactions(chunk)
+        jobs[job_id]["progress"] += 1
+    jobs[job_id]["status"] = "done" if not errors else "error"</pre>
+
+<h3>4. PDF off-path: Invoice generate</h3>
+<pre>
+from fastapi import BackgroundTasks
+
+@router.post("/invoices/{invoice_id}/pdf")
+async def generate_pdf(invoice_id: str, background_tasks: BackgroundTasks, user: User):
+    invoice = store.get_invoice(user.id, invoice_id)
+    background_tasks.add_task(generate_and_upload_pdf, invoice)
+    return {"status": "queued"}
+# "PDF generating; use GET /invoice/{id} later to check"</pre>
+
+<h2 id="decisions">4. Key Design Decisions</h2>
+
+<div class="decisions">
+<div class="decision"><h4>ContextVar over process-global cache</h4><p>The module-level dict would mix snapshots between users and requests. ContextVar scopes each request independently. Cost: 2 extra lines. Result: no cross-user leakage.</p></div>
+<div class="decision"><h4>BackgroundTasks over Redis queue</h4><p>FastAPI's BackgroundTask runs in the same process after the response. No Redis dependency, no broker monitoring, zero new infra. For a single-worker stage, this is enough. For multi-worker, migrate to Redis/Celery.</p></div>
+<div class="decision"><h4>Module-level singleton client over dynamic creation</h4><p>A singleton prevents TLS re-handshake overhead per request. The <code>socket.get_supabase()</code> guard ensures thread/process-safe singleton without actual formal locking.</p></div>
+<div class="decision"><h4>Indexes driven by EXPLAIN ANALYZE</h4><p>Only add indexes that actual query patterns benefit from. Don't pre-index on speculation. Every index slows down inserts, increases DB size.</p></div>
+</div>
+
+<h2 id="gate">5. Gate &amp; Verification</h2>
+
+<div class="gate"><div class="gate-icon">&#10003;</div><div class="gate-body"><strong>Passed.</strong> 9/9 M8 tests pass. Full suite 358 passed, 3 skipped, coverage 44.04%. No sync LLM calls from routers. PNL on asyncio.to_thread, Invoice PDF via BackgroundTasks. L4 APPROVED.</div></div>
+
+<div class="checklist">
+  <li>M8.1: Indexes added for invoice / transactions / agent_logs</li>
+  <li>M8.2: Connection pool singleton active</li>
+  <li>M8.3: PDF generation non-blocking</li>
+  <li>M8.4: Async LLM path active; sync calls gone from routers</li>
+  <li>M8.5: CSV import returns job id immediately, bk polls</li>
+</div>
+
+<h2 id="quiz">6. Quiz — 5 Questions</h2>
+
+<div class="quiz">
+  <div class="quiz-q" id="q1">
+    <h4>What distinguishes the Connection pool singleton from a per-request client?</h4>
+    <ul>
+      <li data-correct="false">It caches database credentials in-memory for faster lookup</li>
+      <li data-correct="false"Anti-each pool instance holds one TCP connection</li>
+      <li data-correct="true">It eliminates per-request TCP/SSL&A handshake overhead by reusing a warm pool</li>
+      <li data-correct="false">It is the only way to support concurrent Supabase queries</li>
+    </ul>
+    <div class="feedback wrong">Credentials are not cached — they're just passed to the create_client call</div>
+    <div class="feedback wrong">The pool typically holds multiple connections to handle concurrent queries.</div>
+    <div class="feedback correct">C is correct. The singleton eliminates per-request TCP + SSL handshake (a cold 3-way TCP open + 2-trip SSL for each request). A warm pool reuses existing connection.</div>
+    <div class="feedback wrong">Supabase client already supports concurrent queries — pool is about reuse, not concurrency.</div>
+  </div>
+
+  <div class="quiz-q" id="q2">
+    <h4>Q2. Why is ContextVar chosen for per-request cache over a global dict?</h4>
+    <ul>
+      <li data-correct="false">It's faster than a dict lookup</li>
+      <li data-correct="false">'s required by FastAPI's base middleware</li>
+      <li data-correct="true">A global dict would mix data between different users and requests</li>
+      <li data-correct="false">The project uses Django internally</li>
+    </ul>
+    <div class="feedback wrong">Dict isn't faster than ContextVar for this use case.</div>
+    <div class="feedback wrong">It's not a FastAPI requirement — it's chosen for correctness.</div>
+    <div class="feedback correct">C is correct. A module-level dict maintains state from ALL requests globally across the process. ContextVar scopes each request independently. No cross-user leaks.</div>
+    <div class="feedback wrong">Kora uses FastAPI, not Django.</div>
+  </div>
+
+  <div class="quiz-q" id="q3">
+    <h4>Q3. What happens if you call "send" immediately after a "create invoice" (before PDF generation finishes)?</h4>
+    <ul>
+      <li data-correct="false">The email sent will be missing the PDF attachment</li>
+      <li data-correct="false">The PDF will be corrupted because it was only partly generated</li>
+      <li data-correct="true">Backend ensures the PDF exists before emailing — generates it on demand if not ready</li>
+      <li data-correct="false">The endpoint returns HTTP 409 Conflict</li>
+    </ul>
+    <div class="feedback wrong">Backend won't email before PDF exists — it regenerates if needed.</div>
+    <div class="feedback wrong">PDF generation is atomic — either the file exists or doesn't.</div>
+    <div class="feedback correct">C is correct. The backend's "send" method checks if the PDF exists; if it hasn't been generated yet by the background task, it regenerates synchronously before emailing.</div>
+    <div class="feedback wrong">It doesn't fail — it regenerates the PDF on demand.</div>
+  </div>
+
+  <div class="quiz-q" id="q4">
+    <h4>Q4. Why are database indexes added only for ACTUAL query patterns (not guessed)?</h4>
+    <ul>
+      <li data-correct="false">All indexes are automatically created by Supabase</li>
+      <li data-correct="false">Adding an index has no performance cost</li>
+      <li data-correct="true">Every index costs INSERT/ (  pre slowdown) and extra disk space — must be cost-justified</li>
+      <li data-correct="false">Index management requires manual migration</li>
+    </ul>
+    <div class="feedback wrong">No. Indexes are explicitly created in migration files.</div>
+    <div class="feedback wrong">Every index has write cost and disk cost.</div>
+    <div class="feedback correct">C is correct. An index is not free: every INSERT/UPDATE/DELETE on an indexed column triggers index-maintenance I/O. At Kora-scale, every wasted index compounds.</div>
+    <div class="feedback wrong">Manual migration is unrelated to the decision not to create unnecessary indexes.</div>
+  </div>
+
+  <div class="quiz-q" id="q5">
+    <h4>Q5. After M8, what would you find by grepping for <code>llm.chat</code> in <code>backend/app/routers/</code>?</h4>
+    <ul>
+      <li data-correct="false">Every call that uses the async path</li>
+      <li data-correct="false">Only the backups for older sync compat</li>
+      <li data-correct="true">Zero hits — no sync LLM calls in router level</li>
+      <li data-correct="false">2 hits of legacy CVR code</li>
+    </ul>
+    <div class="feedback wrong">It would show sync calls that M8 is designed to eliminate.</div>
+    <div class="feedback wrong">There are no old compat sync-calls — they were all converted.</div>
+    <div class="feedback correct">C is correct. M8's gate: no request-path router code calls the sync LLM client. <code>grep llm\\.chat app/routers/</code> returns 0 results.</div>
+    <div class="feedback wrong">There is no legacy code in routers/ that retains sync calls.</div>
+  </div>
+</div>
+
+<p style="text-align:center;margin-top:3rem;color:var(--muted);font-size:.85rem;">Kora AI Back Office · M8: Performance First Pass · 2026-07-31</p>
+
+<script>
+(function() {
+  var answered = {};
+  document.querySelectorAll('.quiz-q').forEach(function(q) {
+    var lis = q.querySelectorAll('li');
+    var fbs = q.querySelectorAll('.feedback');
+    lis.forEach(function(li) {
+      li.addEventListener('click', function() {
+        if (answered[q.id]) return;
+        answered[q.id] = true;
+        var correct = li.dataset.correct === 'true';
+        li.classList.add(correct ? 'correct' : 'wrong');
+        lis.forEach(function(o) { if (o !== li) { o.style.pointerEvents = 'none'; o.style.opacity = '0.5'; } });
+        if (correct) fbs.forEach(function(f) { if (f.classList.contains('correct')) f.classList.add('show'); });
+        else { var idx = Array.from(lis).indexOf(li); var wf = q.querySelectorAll('.feedback.wrong'); if (wf[idx]) wf[idx].classList.add('show'); }
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

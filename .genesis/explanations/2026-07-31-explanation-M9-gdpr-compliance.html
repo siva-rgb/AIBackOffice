@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M9: GDPR/CCPA Compliance — Kora AI Back Office</title>
+<style>:root{--bg:#0d1117;--fg:#c9d1d9;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--yellow:#d2991d;--purple:#a371f7;--border:#30363d;--surface:#161b22;--surface2:#21262d;--code-bg:#0d1117;--radius:8px;--font-mono:'Cascadia Code','Fira Code','JetBrains Mono','Consolas',monospace;--font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif}*{box-sizing:border-box;margin:0;padding:0}body{background:var(--bg);color:var(--fg);font-family:var(--font-sans);line-height:1.6;max-width:960px;margin:0 auto;padding:2rem 1.5rem 6rem}h1{font-size:2rem;color:#fff;margin-bottom:.25rem}h2{font-size:1.4rem;color:#f0f6fc;margin:2.5rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}h3{font-size:1.1rem;color:#e6edf3;margin:1.5rem 0 .5rem}h4{color:#fff;margin-bottom:.5rem}p,li{margin-bottom:.6rem}a{color:var(--accent)}code{font-family:var(--font-mono);font-size:.9em;background:var(--surface2);padding:.15em .4em;border-radius:4px}pre{font-family:var(--font-mono);font-size:.85rem;background:var(--code-bg);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.2rem;overflow-x:auto;white-space:pre-wrap;word-break:break-word}.toc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem 1.5rem;margin:1.5rem 0 2rem}.toc h3{margin-top:0;margin-bottom:.5rem}.toc ol{padding-left:1.3rem}.toc li{margin-bottom:.25rem;font-size:.95rem}.badges{display:flex;flex-wrap:wrap;gap:.5rem;margin:1rem 0 1.5rem}.badge{font-size:.8rem;font-weight:600;padding:.25em .75em;border-radius:99px;border:1px solid}.badge-green{color:var(--green);border-color:var(--green)}.badge-red{color:var(--red);border-color:var(--red)}.badge-yellow{color:var(--yellow);border-color:var(--yellow)}.badge-purple{color:var(--purple);border-color:var(--purple)}.cmp{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0 1.5rem;align-items:start}.cmp-pane{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}.cmp-head{padding:.4rem 1rem;font-weight:700;font-size:.85rem}.cmp-head.before{background:#3d1e1e;color:var(--red)}.cmp-head.after{background:#1e3d24;color:var(--green)}.cmp-body pre{border:none;border-radius:0;margin:0;font-size:.78rem}.flow{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:.6rem;margin:1.2rem 0 1.5rem;font-family:var(--font-mono);font-size:.85rem}.flow-box{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:.5rem 1rem;text-align:center}.flow-box.highlight{border-color:var(--accent);background:#0a1a2e}.flow-arrow{color:var(--muted);font-size:1.2rem}.quiz{margin:1.5rem 0}.quiz-q{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem 1.3rem;margin-bottom:1rem}.quiz-q ul{list-style:none;padding-left:0}.quiz-q li{margin-bottom:.3rem;padding:.4rem .6rem;border-radius:4px;cursor:pointer;transition:background .15s}.quiz-q li:hover{background:var(--surface2)}.quiz-q li.correct{background:#1e3d24;color:var(--green);font-weight:600;pointer-events:none}.quiz-q li.wrong{background:#3d1e1e;color:var(--red);font-weight:600;pointer-events:none}.feedback{margin-top:.6rem;padding:.5rem .8rem;border-radius:4px;font-size:.85rem;display:none}.feedback.show{display:block}.feedback.correct{background:#1e3d24;border:1px solid var(--green);color:var(--green)}.feedback.wrong{background:#3d1e1e;border:1px solid var(--red);color:var(--red)}.gate{background:linear-gradient(135deg,#1e3d1b,#0d1b10);border:1px solid var(--green);border-radius:var(--radius);padding:1rem 1.3rem;margin:1.5rem 0;display:flex;align-items:center;gap:.8rem}.gate-icon{font-size:1.8rem}.gate-body{font-size:.9rem}.gate-body strong{color:var(--green)}.decisions{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0 1.5rem}.decision{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.2rem}.decision h4{color:var(--accent);margin-bottom:.3rem;font-size:.95rem}.decision p{font-size:.9rem;margin:0}.checklist{list-style:none;padding:0;margin:1rem 0}.checklist li{padding:.3rem 0}.checklist li::before{content:" V ";color:var(--green);font-weight:700}@media(max-width:700px){.cmp,.decisions{grid-template-columns:1fr}}</style></head>
+<body>
+
+<h1>M9: GDPR/CCPA Compliance</h1>
+<div class="badges"><span class="badge badge-green">Compliance</span><span class="badge badge-purple">Privacy</span><span class="badge badge-yellow">Backend</span><span class="badge badge-red">Phase 2</span></div>
+<p><strong>Data export, deletion, and consent capture — all driven from a single source-of-truth table registry.</strong> Before M9, the endpoints existed but were fragile: hard-coded table lists (8 tables missing), silent failures, and no consent tracking.</p>
+<div class="toc"><h3>Table of Contents</h3><ol>
+<li><a href="#background">Background</a></li><li><a href="#intuition">Intuition — The Fragile Before</a></li>
+<li><a href="#walkthrough">Code Walkthrough — The 3 Endpoints</a></li>
+<li><a href="#decisions">Key Design Decisions</a></li><li><a href="#gate">Gate &amp; Verification</a></li><li><a href="#quiz">Quiz — 5 Questions</a></li></ol></div>
+
+<h2 id="background">1. Background</h2>
+<p>Kora stores personal data across 28 tables for each user. GDPR Articles 15 (right of access), 17 (right to erasure), and 7 (consent) require three things: <strong>export all data</strong>, <strong>delete all data</strong>, and <strong>prove consent was given</strong>.</p>
+<p>Before M9, <code>routers/account.py</code> had endpoints but they were dangerous: skipping 8 of 28 tables in the hard-coded list, silent try/except everywhere hiding failures, and an audit table referenced that didn't even exist in the migration history.</p>
+
+<h2 id="intuition">2. Intuition — The Fragile Before</h2>
+<div class="cmp"><div class="cmp-pane"><div class="cmp-head before">BEFORE (hard-coded, 8 tables missed)</div><div class="cmp-body"><pre>DELETE_TABLES = [
+  "transactions", "invoices", "contracts",
+  "clients", "engagements", ...
+]  # only 20 of 28 tables
+for table in DELETE_TABLES:
+    try:
+        db.table(table).delete().eq("user_id", uid).execute()
+    except: pass  # silent failure!</pre></div></div>
+<div class="cmp-pane"><div class="cmp-head after">AFTER (registry-based, structured reporting)</div><div class="cmp-body"><pre># user_data.py — single source of truth
+USER_DATA_TABLES = ("transactions", "invoices",
+    "contracts", "clients", "engagements",
+    "tasks", "stories", "captures", "proposals",
+    "retainers", "client_notes", "agent_logs",
+    "alerts", "kg_nodes", "kg_edges",
+    "agent_memory", "business_playbook",
+    "client_view_cache", "manager_tasks",
+    "google_connections", "stripe_connections"d
+    "notion_connections", "agent_memory", ...)
+# 28 tables, registry-based, M1 repo() exposed</pre></div></div></div>
+
+<h2 id="walkthrough">3. Code Walkthrough</h2>
+
+<h3>M9.1: Export endpoint — GET /api/account/export</h3>
+<p>The export endpoint iterates every table in USER_DATA_TABLES, queries via <code>repo(user_id)</code> (M1 wrapper auto-scopes), and returns a structured JSON payload:</p>
+<pre>{
+  "format_version": 1,
+  "exported_at": "2026-07-29T...",
+  "profile": { "email": "...", "full_name": "...", "business_name": "...",
+                "country": "DE", "currency": "EUR",
+                "consent_version": "2026-06-01", "consent_given_at": "..." },
+  "tables": {
+    "transactions": [{ "date": "...", "description": "...", ... }],
+    "invoices": [{ ... }],
+    ...all 28 tables...
+  }
+}
+```
+
+<h3>M9.2: Delete endpoint — DELETE /api/account/delete</h3>
+<p>The 7-step pipeline:</p>
+<pre>Step 1: Google OAuth revoke (best-effort)
+Step 2: Stripe subscription cancel
+Step 3: GCS file deletion (storage.delete_user_data)
+Step 4: DB wipe: all 28 USER_DATA_TABLES + users row
+    → per-table row counts via repo() + raw_table()
+Step 5: auth.admin.delete_user(user_id)  (best-effort)
+Step 6: record_deletion() — audit log, no PII
+     "id: random UUID, reason, tables_cleared, files_deleted"
+Step 7: Return structured side-effect report
+
+Response:
+{ "deleted": true, "user_request_id": "<uuid>",
+  "files_removed": 5,
+  "tables_cleared": { "transactions": 142, "invoices": 3, ... },
+  "side_effects": { "auth_delete": "done", ... } }
+</pre>
+
+<h3>M9.3: Consent — POST /api/account/consent</h3>
+<p>Two consent capture paths:</p>
+<pre># Path 1: explicit POST /api/account/consent
+# body: { "version": "2026-06-01" }  (defaults to CURRENT_CONSENT_VERSION)
+store.update_user(user.id, {
+  consent_version: body.version,
+  consent_given_at: now,
+})
+
+# Path 2: autoconf-reported onboarding (idempotent)
+# routers/users.py::update_me
+if patch.onboarding_completed and not user.onboarding_completed \
+   and not existing.consent_version:
+    store.update_user(user.id, {
+        consent_version: "2026-06-01",
+        consent_given_at: now,
+    })
+# Never overwrites existing consent — idempotent guard</pre>
+
+<h2 id="decisions">4. Key Design Decisions</h2>
+<div class="decisions">
+<div class="decision"><h4>Table registry over schema derivation</h4><p>A hand-maintained Python tuple in <code>user_data.py</code> instead of <code>information_schema</code> querying. Why: mock backend has no information_schema; manual allow-list excludes non-PII tables (deletion_log, config); FK child-before-parent ordering needs manual curation.</p></div>
+<div class="decision"><h4>Structured side-effect reporting</h4><p>Export returns per-table record count alongside full rows. Delete returns "{table: <count>}" per table. No silent failures — the audit row records what was cleared.</p></div>
+<div class="decision"><h4>No-PII audit trail</h4><p>deletion_log has no user_id column, random UUID. Even a GDPR audit row cannot re-identify a user from the admin log itself. GDPR Art. 5(1)(c).</p></div>
+<div class="decision"><h4>No consent overwrite</h4><p>Onboarding completion captures consent exactly once. A second toggle never overwrites existing consent_version. Pre-M9 users need re-consent UX (out of M9 scope).</p></div>
+</div>
+
+<h2 id="gate">5. Gate &amp; Verification</h2>
+<div class="gate"><div class="gate-icon">&#10003;</div><div class="gate-body"><strong>Passed.</strong> 12/12 GDPR tests pass. Full suite 367 passed, 3 skipped (same M6/M8), coverage 46% vs 44.44% pre-M9. M1 wrapper respected. L4 APPROVE (separate model GLM-5.2). Gate: "post-deletion queries return no residual PII."</div></div>
+<div class="checklist">
+<li>Post-deletion export returns "{}" rows — zero PII residual for deleted tenant</li>
+<li>Delete of tenant A does not touch tenant B (cross-tenant test pass)</li>
+<li>Deletion_log row has no user_id, no email, no personal name</li>
+<li>Consent data recorded at first onboarding transition; idempotent</li>
+<li>CSP CSV export well-formed and covers all 28 tables</li>
+</div>
+
+<h2 id="quiz">6. Quiz — 5 Questions</h2>
+<div class="quiz">
+<div class="quiz-q" id="q1"><h4>Q1. Why is a hand-maintained Python tuple preferable over information_schema for the table list?</h4><ul>
+<li data-correct="false">It has better runtime performance than information_schema queries</li>
+<li data-correct="true">The mock backend has no information_schema to query — a Python constant is the lowest common denominator for both backends</li>
+<li data-correct="false">information_schema is deprecated in PostgreSQL 15+</li>
+<li data-correct="false">White Python can be more expressive than SQL introspection</li>
+</ul>
+<div class="feedback wrong">Performance is not the driving factor — correctness parity is.</div><div class="feedback correct">B is correct. The mock backend has no database at all — information_schema would fail. The Python tuple works identically in both backends.</div><div class="feedback wrong">information_schema is not deprecated — it's fine in PostgreSQL 15+. The issue is mock mode.</div><div class="feedback wrong">The tuple doesn't need to be more expressive — it just needs to be shared across mock and supabase backends.</div></div>
+
+<div class="quiz-q" id="q2"><h4>Q2. What if the Supabase admin.delete_user call fails (network error / admin API down)?</h4>
+<ul>
+<li data-correct="false">The entire deletion is rolled back</li>
+<li data-correct="true">The business PII is still deleted; the auth identity lingers — the endpoint returns "side_effects.auth_delete": "skipped: <error>" so the operator sees the failure</li>
+<li data-correct="false">The user's auth identity is retained but the row is marked as "pending-delete"</li>
+<li data-correct="false">The deletion halts with a 500 error</li>
+</ul>
+<div class="feedback wrong">The user's data is already wiped. rollback doesn't make sense here.</div><div class="feedback correct">B is correct. If step 4 DB wipe succeeds but step 5 admin delete fails, the business PII is gone, the (non-Supabase) auth identity is gone, and the return carries a structured notice. The operator can re-issue admin delete later.</div><div class="feedback wrong">No pending-delete state — the admin delete simply fails separately.</div><div class="feedback wrong">It doesn't 500 — the DB wipe happened successfully. The admin delete failing is a separate, logged side effect.</div></div>
+
+<div class="quiz-q" id="q3"><h4>Q3. After M9: post-delete, what does a GET /api/account/export return for the deleted user ID?</h4>
+<ul>
+<li data-correct="false">A 404 NOT FOUND — the profile is gone</li>
+<li data-correct="true">A 401 or 403 — because the auth identity is removed, the request has no valid token</li>
+<li data-correct="false">An empty wrapper {format_version: 1, profile: null, tables: {}}</li>
+<li data-correct="false">A 200 with some residual metadata about the deletion</li>
+</ul>
+<div class="feedback wrong">By post-deletion, if the caller's token works, new queries return 0 rows. But the auth was deleted — so authentication should fail first.</div><div class="feedback correct">B is correct. The deletion process removes the auth identity in step 5. A post-deletion request with the same token should fail auth — the auth identity no longer exists. Even if auth were bypassed, the export returns zero for all tables ("test_post_delete_export_returns_no_residual_pii").</div><div class="feedback wrong">The JSON shape is real but the auth was deleted first.</div><div class="feedback wrong">No metadata about the deletion remains in any data-table read.</div></div>
+
+<div class="quiz-q" id="q4"><h4>Q4. For a user already onboarded before M9, how do they obtain a consent_version?</h4>
+<ul>
+<li data-correct="false">It is auto-captured at first login after M9 deploys</li>
+<li data-correct="false">The backend explicitly records it during any POST to any endpoint</li>
+<li data-correct="true">Only POST /api/account/accept explicitly — pre-migration users are a special re-consent UX path</li>
+<li data-correct="false">Their consent_version defaults to current during any API call</li>
+</ul>
+<div class="feedback wrong">Auto-captures have potential GDPR violation — consent is explicit not automatic.</div><div class="feedback wrong">No automatic capture on random endpoints.</div><div class="feedback correct">C is correct. The onboarding-completion hook fires only when onboarding_completed flips false \rightarrow true — already-onboarded users never see this code. The only path is POST /api/account/consent (which Kora can prompt on-screen as a "terms update" re-consent UX).</div><div class="feedback wrong">Not auto-recorded — it must be user-called explicitly.</div></div>
+
+<div class="quiz-q" id="q5"><h4>Q5. Why does deletion_log have no user_id FK despite many tables having it?</h4>
+<ul>
+<li data-correct="false">For maximum query performance on log listings</li>
+<li data-correct="false">BELD_Model SQL constraint rules require it</li>
+<li data-correct="true">GDPR Art. 5(1)(c) — the audit trail itself must not become a re-identification vector</li>
+<li data-correct="false">Supabase RLS doesn't support logging</li>
+</ul>
+<div class="feedback wrong">Not about query performance.</div><div class="feedback wrong">No SQL constraint rule forbids FKs.</div><div class="feedback correct">C is correct. The audit rows carry per-table counts and a random user_request_id but NOT a database-level user_id. This prevents the audit log from being a correlation vector that re-identifies users. Support can correlate via the request_id only.
+</div><div class="feedback wrong">Supabase SQL interface supports FK constraints fine — it's a design choice.</div></div>
+</div>
+
+<p style="text-align:center;margin-top:3rem;color:var(--muted);font-size:.85rem;">Kora · M9: GDPR/CCPA · 2026-07-31</p>
+<script>(function(){var a={};document.querySelectorAll('.quiz-q').forEach(function(q){var l=q.querySelectorAll('li');var f=q.querySelectorAll('.feedback');l.forEach(function(li){li.addEventListener('click',function(){if(a[q.id])return;a[q.id]=true;var c=li.dataset.correct==='true';li.classList.add(c?'correct':'wrong');l.forEach(function(o){if(o!==li){o.style.pointerEvents='none';o.style.opacity='0.5'}});if(c)f.forEach(function(fb){if(fb.classList.contains('correct'))fb.classList.add('show')});else{var i=Array.from(l).indexOf(li);var wf=q.querySelectorAll('.feedback.wrong');if(wf[i])wf[i].classList.add('show')}})})})})();</script>
+</body></html>

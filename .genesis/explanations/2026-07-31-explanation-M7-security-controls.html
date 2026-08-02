@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M7: Remaining Security Controls — Kora AI Back Office</title>
+<style>
+  :root {
+    --bg: #0d1117; --fg: #c9d1d9; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --yellow: #d2991d; --purple: #a371f7;
+    --border: #30363d; --surface: #161b22; --surface2: #21262d;
+    --code-bg: #0d1117; --radius: 8px;
+    --font-mono: 'Cascadia Code','Fira Code','JetBrains Mono','Consolas',monospace;
+    --font-sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font-sans); line-height: 1.6; max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem 6rem; }
+  h1 { font-size: 2rem; color: #fff; margin-bottom: .25rem; }
+  h2 { font-size: 1.4rem; color: #f0f6fc; margin: 2.5rem 0 .75rem; border-bottom: 1px solid var(--border); padding-bottom: .3rem; }
+  h3 { font-size: 1.1rem; color: #e6edf3; margin: 1.5rem 0 .5rem; }
+  h4 { color: #fff; margin-bottom: .5rem; }
+  p, li { margin-bottom: .6rem; }
+  a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+  code { font-family: var(--font-mono); font-size: .9em; background: var(--surface2); padding: .15em .4em; border-radius: 4px; }
+  pre { font-family: var(--font-mono); font-size: .85rem; background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.2rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.2rem 1.5rem; margin: 1.5rem 0 2rem; }
+  .toc h3 { margin-top: 0; margin-bottom: .5rem; }
+  .toc ol { padding-left: 1.3rem; }
+  .toc li { margin-bottom: .25rem; font-size: .95rem; }
+  .badges { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 1.5rem; }
+  .badge { font-size: .8rem; font-weight: 600; padding: .25rem .75em; border-radius: 99px; border: 1px solid; }
+  .badge-green { color: var(--green); border-color: var(--green); }
+  .badge-red { color: var(--red); border-color: var(--red); }
+  .badge-yellow { color: var(--yellow); border-color: var(--yellow); }
+  .badge-purple { color: var(--purple); border-color: var(--purple); }
+  .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0 1.5rem; align-items: start; }
+  .cmp-pane { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .cmp-head { padding: .4rem 1rem; font-weight: 700; font-size: .85rem; letter-spacing: .02em; }
+  .cmp-head.before { background: #3d1e1e; color: var(--red); }
+  .cmp-head.after { background: #1e3d24; color: var(--green); }
+  .cmp-body pre { border: none; border-radius: 0; margin: 0; font-size: .78rem; }
+  .flow { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .6rem; margin: 1.2rem 0 1.5rem; font-family: var(--font-mono); font-size: .85rem; }
+  .flow-box { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: .5rem 1rem; text-align: center; }
+  .flow-box.highlight { border-color: var(--accent); background: #0a1a2e; }
+  .flow-arrow { color: var(--muted); font-size: 1.2rem; }
+  .quiz { margin: 1.5rem 0; }
+  .quiz-q { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.2rem 1.3rem; margin-bottom: 1rem; }
+  .quiz-q ul { list-style: none; padding-left: 0; }
+  .quiz-q li { margin-bottom: .3rem; padding: .4rem .6rem; border-radius: 4px; cursor: pointer; transition: background .15s; }
+  .quiz-q li:hover { background: var(--surface2); }
+  .quiz-q li.correct { background: #1e3d24; color: var(--green); font-weight: 600; pointer-events: none; }
+  .quiz-q li.wrong { background: #3d1e1e; color: var(--red); font-weight: 600; pointer-events: none; }
+  .feedback { margin-top: .6rem; padding: .5rem .8rem; border-radius: 4px; font-size: .85rem; display: none; }
+  .feedback.show { display: block; }
+  .feedback.correct { background: #1e3d24; border: 1px solid var(--green); color: var(--green); }
+  .feedback.wrong { background: #3d1e1e; border: 1px solid var(--red); color: var(--red); }
+  .gate { background: linear-gradient(135deg,#1e3d24,#0d1b10); border: 1px solid var(--green); border-radius: var(--radius); padding: 1rem 1.3rem; margin: 1.5rem 0; display: flex; align-items: center; gap: .8rem; }
+  .gate-icon { font-size: 1.8rem; }
+  .gate-body { font-size: .9rem; }
+  .gate-body strong { color: var(--green); }
+  .decisions { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0 1.5rem; }
+  .decision { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.2rem; }
+  .decision h4 { color: var(--accent); margin-bottom: .3rem; font-size: .95rem; }
+  .decision p { font-size: .9rem; margin: 0; }
+  .checklist { list-style: none; padding: 0; margin: 1rem 0; }
+  .checklist li { padding: .3rem 0; }
+  .checklist li::before { content: " V "; color: var(--green); font-weight: 700; }
+  .sub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+  .sub-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.2rem; }
+  .sub-card h4 { margin-bottom: .3rem; }
+  .sub-card p { font-size: .88rem; margin: 0; }
+  @media (max-width:700px) { .cmp, .decisions, .sub-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<h1>M7: Remaining Security Controls</h1>
+
+<div class="badges">
+  <span class="badge badge-green">Security</span>
+  <span class="badge badge-purple">Backend</span>
+  <span class="badge badge-red">Hardening</span>
+  <span class="badge badge-yellow">5 sub-items</span>
+</div>
+
+<p>
+<strong>M7 closed five independent security gaps in one milestone.</strong>
+Each sub-item shipped with its own targeted tests and reasoning. Together
+they raise Kora's security posture across auth, CSP, Pub/Sub, and PII storage.
+</p>
+
+<div class="toc">
+<h3>Table of Contents</h3>
+<ol>
+  <li><a href="#background">Background</a></li>
+  <li><a href="#intuition">Intuition — The Five Gaps</a></li>
+  <li><a href="#walkthrough">Code Walkthrough — M7a through M7e</a></li>
+  <li><a href="#decisions">Key Design Decisions</a></li>
+  <li><a href="#gate">Gate &amp; Verification</a></li>
+  <li><a href="#quiz">Quiz — 5 Questions</a></li>
+</ol>
+</div>
+
+<h2 id="background">1. Background</h2>
+<p>
+  M7 was the security-hardening milestone in Kora's Phase 1 (30-90 day) hardening
+  track. Five independently-assignable sub-items, each targeting a known gap. The
+  key insight: these are not large refactors — they are surgical additions to
+  existing code paths, with tests that prove the old behavior was insecure and the
+  new behavior closes the gap.
+</p>
+<p>
+  Each sub-item addresses a different trust boundary:
+</p>
+<div class="sub-grid">
+  <div class="sub-card"><h4>M7a — Authorization</h4><p>Stripe downgrade must actually block premium endpoints.</p></div>
+  <div class="sub-card"><h4>M7b — OAuth State</h4><p>Redirect callback state must be tamper-proof, not a raw user ID.</p></div>
+  <div class="sub-card"><h4>M7c — Pub/Sub JWT</h4><p>Gmail push endpoint must authenticate the sender (Google), not just accept any POST.</p></div>
+  <div class="sub-card"><h4>M7d — CSP Headers</h4><p>Content-Security-Policy must not allow 'unsafe-inline' or 'unsafe-eval' in production.</p></div>
+  <div class="sub-card"><h4>M7e — PII Encryption</h4><p>Tax IDs and bank details need application-layer encryption, not just DB-at-rest.</p></div>
+</div>
+
+<h2 id="intuition">2. Intuition — The Five Gaps</h2>
+<p>Each sub-item can be understood as "what used to happen" vs "what happens now."</p>
+
+<h3>M7a: Authorization — Stripe downgrade is tested</h3>
+<div class="cmp">
+  <div class="cmp-pane"><div class="cmp-head before">BEFORE</div><div class="cmp-body"><pre>enforce_plan("premium") existed on routes.
+But no test proved that a user whose
+Stripe plan was downgraded actually got
+403 on the contract/business-intel endpoints.</pre></div></div>
+  <div class="cmp-pane"><div class="cmp-head after">AFTER</div><div class="cmp-body"><pre>A downgraded Stripe plan -> 403 on every
+gated route. test_plan_gating.py has
+ 19 tests covering the full policy set.</pre></div></div>
+</div>
+
+<h3>M7b: OAuth state — from raw UUID to HMAC token</h3>
+<div class="cmp">
+  <div class="cmp-pane"><div class="cmp-head before">BEFORE (state=user_id)</div><div class="cmp-body"><pre># auth_google.py (old)
+redirect_url = f"https://..."
+ + "&state=" + user.id
+# Attacker observing URL sees target account.</pre></div></div>
+  <div class="cmp-pane"><div class="cmp-head after">AFTER (HMAC-signed token)</div><div class="cmp-body"><pre># oauth_state.py creates signed token
+state_token = sign({
+  user_id: user.id,
+  expiry: now + 5min,
+})
+# Attacker sees opaque HMAC token.
+# Server verifies via shared secret.</pre></div></div>
+</div>
+
+<h3>M7c: Gmail Pub/Sub — from open door to JWT gated</h3>
+<div class="cmp">
+  <div class="cmp-pane"><div class="cmp-head before">BEFORE</div><div class="cmp-body"><pre>POST /api/gmail/push
+# No authentication.
+# Any caller could trigger a
+# re-pull of Gmail data.</pre></div></div>
+  <div class="cmp-pane"><div class="cmp-head after">AFTER</div><div class="cmp-body"><pre>POST /api/gmail/push
+# pub_auth.verify(payload)
+  -> OIDC JWT + audience check
+# 401 if invalid JWT
+# Skip if GMAIL_PUBSUB_AUDIENCE empty</pre></div></div>
+</div>
+
+<h3>M7d: CSP — lock down the Content-Security-Policy</h3>
+<div class="cmp">
+  <div class="cmp-pane"><div class="cmp-head before">BEFORE</div><div class="cmp-body"><pre>Content-Security-Policy:
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' 'unsafe-eval';
+  style-src 'self' 'unsafe-inline';
+# Attacker injecting a script on any page
+# gets execution via XSS-friendly settings.</pre></div></div>
+  <div class="cmp-pane"><div class="cmp-head after">AFTER</div><div class="cmp-body"><pre>Content-Security-Policy:
+  default-src 'self';
+  script-src 'self' 'nonce-{rand}';
+  style-src 'self' 'nonce-{rand}';
+# Also: COOP, COEP, Expect-CT
+# unsafe-* removed from production.</pre></div></div>
+</div>
+
+<h3>M7e: PII field encryptionInRest</h3>
+<div class="cmp">
+  <div class="cmp-pane"><div class="cmp-head before">BEFORE</div><div class="cmp-body"><pre># tax_id stored plaintext in DB
+client.tax_id = "DE12345678"
+# Insider with DB access sees it directly.</pre></div></div>
+  <div class="cmp-pane"><div class="cmp-head after">AFTER</div><div class="cmp-body"><pre># store boundary: enc_v1 prefix
+def _set(client): row["tax_id"] = enc("v1:<cipher>")
+def _get(row):
+  if row.tax_id.startswith("enc_v1:"):
+    return decrypt(row.tax_id[7:])
+  return row.tax_id  # legacy plaintext</pre></div></div>
+</div>
+
+<h2 id="walkthrough">3. Code Walkthrough</h2>
+
+<h3>M7b — oauth_state.py</h3>
+<p>
+The OAuth state token is a <strong>HMAC-SHA256</strong> of <code>{user_id, expiry, nonce}</code>.
+The server verifies by recomputing the HMAC. The secret is the existing
+<code>TOKEN_ENCRYPTION_KEY</code> (already fail-closed per M3). No server-side
+session store needed — the state is self-encoding, self-authenticating.
+</p>
+<pre># oauth_state.py
+import hmac, hashlib, json, time, os
+
+def sign(user_id: str, ttl: int = 300) -> str:
+    payload = {"kid": user_id, "exp": time.time() + ttl, "jti": os.urandom(8).hex()}
+    return hmac.new(KEY, json.dumps(payload).encode(), hashlib.sha256).hexdigest()[:24] + ":" + b64(payload)
+
+def verify(token: str) -> str | None:
+    mac, rest = token.split(":", 1)
+    expected = hmac.new(KEY, rest.encode(), hashlib.sha256).hexdigest()[:24]
+    if not hmac.compare_digest(mac, expected):
+        return None
+    payload = json.loads(b64decode(rest))
+    if time.time() > payload["exp"]:
+        return None
+    return payload["kid"]   # the user_id</pre>
+
+<h3>M7c — pubsub_auth.py</h3>
+<p>Google's Pub/Sub push endpoints carry an OIDC JWT in the <code>Authorization: Bearer</code> header.
+<code>pubsub_auth.py</code> verifies the JWT against Google's OIDC discovery endpoint and
+checks that the audience matches <code>GMAIL_PUB_AUDIENCE</code> (the push).
+</p>
+<pre>
+def verify_push_token(token: str) -> bool:
+    if not settings.GMAIL_PUB_AUDIENCE:
+        return True  # dev/local no-op
+    from oauthlib.oidc import verify_token
+    claims = verify_token(token, issuer="accounts.google.com", audience=settings.GMAIL_PUB_AUDIENCE)
+    return claims is not None</pre>
+
+<h3>M7e — PII encryption at store boundary</h3>
+<p>A prefix-based encoding at the store boundary, modeled on the pattern used by Supabase's PGP extension: new writes prefix <code>v1:<ciphertext> "read" strips the prefix and decrypts. Legacy plaintext has no prefix, so it passes through as-is.</p>
+<pre>def _encrypt_pii(value: str) -> str:
+    if not value or value.startswith("enc:v1:"):
+        return value
+    return "enc:v1: " + encrypt(value)
+
+def _decrypt_pii(value: str) -> str:
+    if value and value.startswith("enc:v1:"):
+        return decrypt(value[7:])
+    return value  # legacy plaintext</pre>
+
+<h2 id="decisions">4. Key Design Decisions</h2>
+
+<div class=decisions>
+<div class="decision"><h4>HMAC over server-side session</h4><p>HMAC tokens are self-contained (no server store). Multi-worker safe. OAuth callbacks must survive process restarts and multi-instance deploys. HMAC avoids a shared session store.</p></div>
+<div class="decision"><h4>Pub/Sub JWT optional</h4><p>If GNOTPUB_AUDIENCE is unset -> skip JWT verify. Useful for local zero-config dev. In production, must be set or gmail events are not authenticated.</p></div>
+<div class="decision"><h4>Nonce CSP, not hash CSP</h4><p>Nonce-based CSP lets the server control which scripts are trusted per-request (inject a fresh nonce in the response header). Hash CSP requires the inline script content to be known at server-start-up — impossible for dynamic docs.</p></div>
+<div class="decision"><h4>Prefix-based PII encryption</h4><p>Pure backward-compatible: legacy plaintext passes through unchanged. New writes are encrypted, Pre-migration rows are readable forever. No migration needed to back-fill.</p></div>
+</div>
+
+<p><h2 id="gate">5. Gate &amp; Verification</h2>
+
+<div class="gate"><div class="gate-icon">&#10003;</div><div class="gate-body"><strong>Passed.</strong> 73 of 73 security tests pass. Full suite: 349 passed, 3 skipped, coverage 43.21%. flake8 and black --check clean on all M7 files. L4 APPROVED.</div></div>
+
+<div class="checklist">
+  <div class="checklist"><li>M7a: 19 plan-gating tests — Stripe downgrade returns 403</li><li>M7b: OAuth state HMAC verified via oauth_state.py</li><li>M7c: Pub/Sub JWT OIDC verification active</li><li>M7d: App CSP sans 'unsafe-inline'/'unsafe-eval'</li><li>M7e: PII encrypted at store boundary; backward-visible</div></li>
+</div>
+
+<h2 id="quiz">6. Quiz — 5 Questions</h2>
+
+<div class="quiz">
+  <div class="quiz-q" id="q1">
+    <h4>Q1. Why was HMAC-signed OAuth state chosen over storing session state server-side?</h4>
+    <ul>
+      <li data-correct="false">It's faster than database lookups for OAuth URL routing</li>
+      <li data-correct="true/li>
+      <li data-correct="false">Stripe's API requires HMAC tokens for state parameters</li>
+      <li data-correct="false">Crimson OAuth 2.0 mandate</li>
+    </ul>
+    <div class="feedback wrongC is correct. HMAC makes the token self-contained — the server can verify without storing state. This survives multi-worker deploys and process restarts cleanly.</div>
+    <div class="feedback correct">B is correct. HMAC-signed tokens are verifiable without server-side storage. The expiry ensures freshness.</div>
+    <div class="feedback wrong">Incorrect. HMAC-signed state tokens are indeed faster than DB lookups but the primary win is the elimination of session state altogether for multi-worker safety.</div>
+    <div class="feedback wrong">OAuth state mechanism has no built-in encryption requirement — this is Kora's design choice.</div>
+  </div>
+
+  <div class="quiz-q" id="q2">
+    <h4>Q2. What protects /api/gmail/push when GMAIL_PUBSUB_AUDIENCE is left empty?</h4>
+    <ul>
+      <li data-correct="false">Push notifications are blocked entirely</li>
+      <li data-correct="true">Verification is skipped — behavior is opt-in for local development
+      <li data-correct="false">A fixed static token is used instead</li>
+      <li data-correct="false">A session cookie is shared with Google</all>
+    </ul>
+    <div class="feedback wrong">Push is still accepted — but in production, the audience must be set for real JWT checking.</div>
+    <div class="feedback correct">B is correct. When audience is unset, JWT verification is skipped. This keeps localdev zero-config while real production deployments set the audience for actual security.</div>
+    <div class="feedback wrong">No static token is involved — the audience is dynamically configured.</div>
+    <div class="feedback wrong">Google OIDC JWT tokens are not session cookies.</div>
+  </div>
+
+  <div class="quiz-q" id="q3">
+    <h4>Q3. After M7, what does an attacker see when intercepting the OAuth redirect URL?</h4>
+    <ul>
+      <li data-correct="false">The raw user UUID in the state parameter</li>
+      <li data-correct="false">Nothing — OAuth parameters are encrypted</li>
+      <li data-correct="true">An HMAC-protected token that is tamper-proof</li>
+      <li data-correct="false">The server session ID</li>
+    </ul>
+    <div class="feedback wrong">In M7, state is no longer a raw UUID — it's an HMAC token.</div>
+    <div class="feedback wrong">OAuth parameters are not encrypted — but state token is signed (HMAC), so tampering is detectable.</div>
+    <div class="feedback correct">C is correct. The attacker sees a Base64 + HMAC token. The user identity is still embedded but it's cryptographically sealed — any alteration breaks the HMAC verification.</div>
+    <div class="feedback wrong">M7 replaced server-side session with HMAC — no session ID needed.</div>
+  </div>
+
+  <div class="quiz-q" id="q4">
+    <h4>Q4. How does M7e handle an existing plaintext invoice_footer created BEFORE the migration?</h4>
+    <ul>
+      <li data-correct="false">It is automatically encrypted the next time any user reads the invoice</li>
+      <li data-correct="false">It is silently deleted since the string doesn't match the new format</li>
+      <li data-correct="true">It passes through unchanged — no "enc:v1:" prefix means plaintext in the response</li>
+      <li data-correct="false">The endpoint returns 400 for raw plaintext rows</li>
+    </ul>
+    <div class="feedback wrong">Read operations are non-mutating — they never auto-encrypt existing data.</div>
+    <div class="feedback wrong">Deletion would be a data loss bug.</div>
+    <div class="feedback correct">C is correct. If the value doesn't start with "enc:v1:", the decrypt step is skipped. Legacy plaintext turns back as-is. New writes get the prefix.</div>
+    <div class="feedback wrong">It does not 400. The row is returned normally.</div>
+  </div>
+
+  <div class="quiz-q" id="q5">
+    <h4>Q5. Which M7 control requires a frontend change?</h4>
+    <ul>
+      <li data-correct="false">M7a — plan gating just returns 403, frontend already handles it</li>
+      <li data-correct="false">M7b — OAuth redirect flow is entirely server-side</li>
+      <li data-correct="false">M7d — CSP nonces are injected server-side in response headers</li>
+      <li data-correct="true">None of them require frontend changes — all M7 items are backend-only</li>
+    </ul>
+    <div class="feedback wrong">Plan gating simply returns 403 — frontend would already handle this.</div>
+    <div class="feedback wrong">M7b is purely server-side.</div>
+    <div class="feedback wrong">CSP nonces are server-managed — the browser enforces them, not the frontend code.</div>
+    <div class="feedback correct">D is correct. All five M7 sub-items are backend-only hardenings. The frontend needs zero changes: it already handles 403, the OAuth flow is server-side, CSP nonces are injected server-side, and PII encryption is transparent at the API layer.</div>
+  </div>
+</div>
+
+<p style="text-align:center;margin-top:3rem;color:var(--muted);font-size:.85rem;">Kora AI Back Office · M7: Remaining Security Controls · 2026-07-31</p>
+
+<script>
+(function() {
+  var answered = {};
+  document.querySelectorAll('.quiz-q').forEach(function(q) {
+    var lis = q.querySelectorAll('li');
+    var fbs = q.querySelectorAll('.feedback');
+    lis.forEach(function(li) {
+      li.addEventListener('click', function() {
+        if (answered[q.id]) return;
+        answered[q.id] = true;
+        var correct = li.dataset.correct === 'true';
+        li.classList.add(correct ? 'correct' : 'wrong');
+        lis.forEach(function(o) { if (o !== li) { o.style.pointerEvents = 'none'; o.style.opacity = '0.5'; } });
+        if (correct) fbs.forEach(function(f) { if (f.classList.contains('correct')) f.classList.add('show'); });
+        else { var idx = Array.from(lis).indexOf(li); var wf = q.querySelectorAll('.feedback.wrong'); if (wf[idx]) wf[idx].classList.add('show'); }
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>
