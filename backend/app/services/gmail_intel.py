@@ -242,7 +242,9 @@ def _process_client_threads(user_id: str, client: dict, service, db, force_refre
             {
                 "last_activity_at": now.isoformat(),
             }
-        ).eq("id", client_id).eq("user_id", user_id).execute()
+        ).eq(
+            "id", client_id
+        ).eq("user_id", user_id).execute()
 
 
 def _fetch_client_threads(service, query: str) -> list:

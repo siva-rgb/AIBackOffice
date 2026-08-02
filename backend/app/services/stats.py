@@ -26,9 +26,7 @@ def compute_agent_stats(logs: list[AgentLog]) -> dict:
 
     for log_entry in logs:
         by_type[log_entry.agent_type] = by_type.get(log_entry.agent_type, 0) + 1
-        by_trigger[log_entry.triggered_by] = (
-            by_trigger.get(log_entry.triggered_by, 0) + 1
-        )
+        by_trigger[log_entry.triggered_by] = by_trigger.get(log_entry.triggered_by, 0) + 1
         try:
             age = (now - datetime.fromisoformat(log_entry.created_at)).total_seconds()
         except ValueError:
@@ -120,9 +118,7 @@ def compute_dashboard_stats(logs: list[AgentLog], *, window_days: int = 14) -> d
         # cost_by_model: only count when a model is named
         if log_entry.cost_usd:
             model = log_entry.model_used or "unknown"
-            cost_by_model[model] = cost_by_model.get(model, 0.0) + float(
-                log_entry.cost_usd
-            )
+            cost_by_model[model] = cost_by_model.get(model, 0.0) + float(log_entry.cost_usd)
         if log_entry.status != "success":
             error_actions[log_entry.action] += 1
         # Daily bucketing
@@ -143,14 +139,8 @@ def compute_dashboard_stats(logs: list[AgentLog], *, window_days: int = 14) -> d
     cost_by_model = {k: round(v, 4) for k, v in sorted(cost_by_model.items())}
     for b in daily_buckets.values():
         b["cost"] = round(float(b["cost"]), 4)
-    daily = [
-        daily_buckets[(cutoff_date + timedelta(days=i)).isoformat()]
-        for i in range(window_days)
-    ]
-    top_errors = [
-        {"action": action, "count": count}
-        for action, count in error_actions.most_common(3)
-    ]
+    daily = [daily_buckets[(cutoff_date + timedelta(days=i)).isoformat()] for i in range(window_days)]
+    top_errors = [{"action": action, "count": count} for action, count in error_actions.most_common(3)]
 
     base.update(
         {

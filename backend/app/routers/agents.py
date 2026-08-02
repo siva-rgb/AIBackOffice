@@ -38,9 +38,7 @@ async def log_dashboard(
     Includes everything `compute_agent_stats` returns, plus per-day series,
     cost-by-model, p50/p95 latency, total tokens and top-3 error actions.
     """
-    return compute_dashboard_stats(
-        store.list_agent_logs(user.id), window_days=window_days
-    )
+    return compute_dashboard_stats(store.list_agent_logs(user.id), window_days=window_days)
 
 
 @router.get("/log/export")

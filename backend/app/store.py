@@ -61,9 +61,7 @@ def insert_invoice(invoice):
 
 
 def update_invoice(user_id: str, invoice_id: str, patch: dict):
-    return _pii.decrypt_invoice(
-        _b.update_invoice(user_id, invoice_id, _pii.encrypt_invoice_patch(patch))
-    )
+    return _pii.decrypt_invoice(_b.update_invoice(user_id, invoice_id, _pii.encrypt_invoice_patch(patch)))
 
 
 update_invoice_pdf = _b.update_invoice_pdf
@@ -110,9 +108,7 @@ def insert_client(client):
 
 
 def update_client(user_id: str, client_id: str, patch: dict):
-    return _pii.decrypt_client(
-        _b.update_client(user_id, client_id, _pii.encrypt_client_patch(patch))
-    )
+    return _pii.decrypt_client(_b.update_client(user_id, client_id, _pii.encrypt_client_patch(patch)))
 
 
 delete_client = _b.delete_client

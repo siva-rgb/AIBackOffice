@@ -83,9 +83,7 @@ KINDS = (
 
 
 def _tokens(text: str) -> set[str]:
-    return {
-        w for w in _TOKEN.findall((text or "").lower()) if len(w) > 2 and w not in _STOP
-    }
+    return {w for w in _TOKEN.findall((text or "").lower()) if len(w) > 2 and w not in _STOP}
 
 
 def _cosine(a, b) -> float:
@@ -198,9 +196,7 @@ def recall(
     q_tokens = _tokens(query)
     q_vec = embeddings.embed(query)  # None → lexical-only ranking
 
-    use_pgvector = (
-        settings.AGENT_MEMORY_VECTOR_BACKEND == "pgvector" and q_vec is not None
-    )
+    use_pgvector = settings.AGENT_MEMORY_VECTOR_BACKEND == "pgvector" and q_vec is not None
 
     if use_pgvector:
         # Pull a wider candidate window than k — the index ranks by ANN
@@ -332,17 +328,8 @@ def reindex(user_id: str, *, embed_missing: bool = True) -> dict:
         if settings.SUPABASE_URL:
             from supabase import create_client
 
-            db = create_client(
-                settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY
-            )
-            rows = (
-                db.table("email_intel_cache")
-                .select("client_id, client_name, summary")
-                .eq("user_id", user_id)
-                .execute()
-                .data
-                or []
-            )
+            db = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+            rows = db.table("email_intel_cache").select("client_id, client_name, summary").eq("user_id", user_id).execute().data or []
             for row in rows:
                 summ = (row.get("summary") or "").strip()
                 if summ:

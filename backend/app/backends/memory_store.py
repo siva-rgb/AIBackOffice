@@ -157,13 +157,7 @@ def list_transactions(user_id: str) -> list[Transaction]:
 def insert_transactions(rows: list[Transaction]) -> list[Transaction]:
     inserted: list[Transaction] = []
     for row in rows:
-        dupe = any(
-            t.user_id == row.user_id
-            and t.date == row.date
-            and t.description == row.description
-            and t.amount == row.amount
-            for t in _transactions
-        )
+        dupe = any(t.user_id == row.user_id and t.date == row.date and t.description == row.description and t.amount == row.amount for t in _transactions)
         if not dupe:
             _transactions.append(row)
             inserted.append(row)
@@ -176,9 +170,7 @@ def upsert_transactions(rows: list[Transaction]) -> list[Transaction]:
     return rows
 
 
-def update_transaction(
-    user_id: str, transaction_id: str, patch: dict
-) -> Transaction | None:
+def update_transaction(user_id: str, transaction_id: str, patch: dict) -> Transaction | None:
     txn = next(
         (t for t in _transactions if t.id == transaction_id and t.user_id == user_id),
         None,
@@ -197,9 +189,7 @@ def list_invoices(user_id: str) -> list[Invoice]:
 
 
 def get_invoice(user_id: str, invoice_id: str) -> Invoice | None:
-    return next(
-        (i for i in _invoices if i.id == invoice_id and i.user_id == user_id), None
-    )
+    return next((i for i in _invoices if i.id == invoice_id and i.user_id == user_id), None)
 
 
 def insert_invoice(invoice: Invoice) -> Invoice:
@@ -220,9 +210,7 @@ def update_invoice_pdf(user_id: str, invoice_id: str, pdf_path: str) -> Invoice 
     return update_invoice(user_id, invoice_id, {"pdf_path": pdf_path})
 
 
-def update_invoice_email(
-    user_id: str, invoice_id: str, message_id: str
-) -> Invoice | None:
+def update_invoice_email(user_id: str, invoice_id: str, message_id: str) -> Invoice | None:
     from datetime import datetime, timezone
 
     return update_invoice(
@@ -240,9 +228,7 @@ def next_invoice_number(user_id: str) -> str:
     from datetime import datetime, timezone
 
     year = datetime.now(timezone.utc).year
-    count = sum(
-        1 for i in _invoices if i.user_id == user_id and i.created_at[:4] == str(year)
-    )
+    count = sum(1 for i in _invoices if i.user_id == user_id and i.created_at[:4] == str(year))
     return f"INV-{year}-{count + 1:03d}"
 
 
@@ -287,9 +273,7 @@ def alert_fired_recently(user_id: str, type_: str, within_days: int = 7) -> bool
 
 
 def mark_alert_read(user_id: str, alert_id: str) -> Alert | None:
-    alert = next(
-        (a for a in _alerts if a.id == alert_id and a.user_id == user_id), None
-    )
+    alert = next((a for a in _alerts if a.id == alert_id and a.user_id == user_id), None)
     if alert:
         alert.read = True
     return alert
@@ -302,9 +286,7 @@ def list_contracts(user_id: str) -> list[Contract]:
 
 
 def get_contract(user_id: str, contract_id: str) -> Contract | None:
-    return next(
-        (c for c in _contracts if c.id == contract_id and c.user_id == user_id), None
-    )
+    return next((c for c in _contracts if c.id == contract_id and c.user_id == user_id), None)
 
 
 def insert_contract(contract: Contract) -> Contract:
@@ -323,32 +305,17 @@ def update_contract(user_id: str, contract_id: str, patch: dict) -> Contract | N
 
 # --- Manager tasks (supervisor approval queue) ------------------------------
 def list_manager_tasks(user_id: str, status: str | None = None) -> list[ManagerTask]:
-    rows = [
-        t
-        for t in _manager_tasks
-        if t.user_id == user_id and (status is None or t.status == status)
-    ]
+    rows = [t for t in _manager_tasks if t.user_id == user_id and (status is None or t.status == status)]
     return sorted(rows, key=lambda t: t.created_at, reverse=True)
 
 
 def get_manager_task(user_id: str, task_id: str) -> ManagerTask | None:
-    return next(
-        (t for t in _manager_tasks if t.id == task_id and t.user_id == user_id), None
-    )
+    return next((t for t in _manager_tasks if t.id == task_id and t.user_id == user_id), None)
 
 
-def find_open_manager_task(
-    user_id: str, kind: str, source_record_id: str | None
-) -> ManagerTask | None:
+def find_open_manager_task(user_id: str, kind: str, source_record_id: str | None) -> ManagerTask | None:
     return next(
-        (
-            t
-            for t in _manager_tasks
-            if t.user_id == user_id
-            and t.kind == kind
-            and t.source_record_id == source_record_id
-            and t.status == "proposed"
-        ),
+        (t for t in _manager_tasks if t.user_id == user_id and t.kind == kind and t.source_record_id == source_record_id and t.status == "proposed"),
         None,
     )
 
@@ -379,18 +346,12 @@ def set_manager_memory(user_id: str, memory: dict) -> dict:
 
 # --- Butler: clients --------------------------------------------------------
 def list_clients(user_id: str, status: str | None = None) -> list[Client]:
-    rows = [
-        c
-        for c in _clients
-        if c.user_id == user_id and (status is None or c.status == status)
-    ]
+    rows = [c for c in _clients if c.user_id == user_id and (status is None or c.status == status)]
     return sorted(rows, key=lambda c: c.last_activity_at or c.created_at, reverse=True)
 
 
 def get_client(user_id: str, client_id: str) -> Client | None:
-    return next(
-        (c for c in _clients if c.id == client_id and c.user_id == user_id), None
-    )
+    return next((c for c in _clients if c.id == client_id and c.user_id == user_id), None)
 
 
 def insert_client(client: Client) -> Client:
@@ -419,11 +380,7 @@ def delete_client(user_id: str, client_id: str) -> bool:
 
 # --- Butler: engagements ----------------------------------------------------
 def list_engagements(user_id: str, client_id: str | None = None) -> list[Engagement]:
-    rows = [
-        e
-        for e in _engagements
-        if e.user_id == user_id and (client_id is None or e.client_id == client_id)
-    ]
+    rows = [e for e in _engagements if e.user_id == user_id and (client_id is None or e.client_id == client_id)]
     return sorted(rows, key=lambda e: e.created_at, reverse=True)
 
 
@@ -439,9 +396,7 @@ def insert_engagement(engagement: Engagement) -> Engagement:
     return engagement
 
 
-def update_engagement(
-    user_id: str, engagement_id: str, patch: dict
-) -> Engagement | None:
+def update_engagement(user_id: str, engagement_id: str, patch: dict) -> Engagement | None:
     e = get_engagement(user_id, engagement_id)
     if not e:
         return None
@@ -479,9 +434,7 @@ def get_task(user_id: str, task_id: str):
 
 
 def find_task_by_source_ref(user_id: str, source_ref: str):
-    return next(
-        (t for t in _tasks if t.user_id == user_id and t.source_ref == source_ref), None
-    )
+    return next((t for t in _tasks if t.user_id == user_id and t.source_ref == source_ref), None)
 
 
 def find_task_by_external_ref(user_id: str, external_ref: str):
@@ -539,9 +492,7 @@ def list_stories(
 
 
 def get_story(user_id: str, story_id: str):
-    return next(
-        (s for s in _stories if s.id == story_id and s.user_id == user_id), None
-    )
+    return next((s for s in _stories if s.id == story_id and s.user_id == user_id), None)
 
 
 def insert_story(story):
@@ -575,9 +526,7 @@ def delete_stories_for_task(user_id: str, task_id: str) -> int:
 
 # --- Butler: client notes ---------------------------------------------------
 def list_client_notes(user_id: str, client_id: str) -> list[ClientNote]:
-    rows = [
-        n for n in _client_notes if n.user_id == user_id and n.client_id == client_id
-    ]
+    rows = [n for n in _client_notes if n.user_id == user_id and n.client_id == client_id]
     return sorted(rows, key=lambda n: n.created_at, reverse=True)
 
 
@@ -587,22 +536,13 @@ def insert_client_note(note: ClientNote) -> ClientNote:
 
 
 # --- Butler: quick captures -------------------------------------------------
-def list_captures(
-    user_id: str, requires_review: bool | None = None
-) -> list[QuickCapture]:
-    rows = [
-        c
-        for c in _captures
-        if c.user_id == user_id
-        and (requires_review is None or c.requires_review == requires_review)
-    ]
+def list_captures(user_id: str, requires_review: bool | None = None) -> list[QuickCapture]:
+    rows = [c for c in _captures if c.user_id == user_id and (requires_review is None or c.requires_review == requires_review)]
     return sorted(rows, key=lambda c: c.created_at, reverse=True)
 
 
 def get_capture(user_id: str, capture_id: str) -> QuickCapture | None:
-    return next(
-        (c for c in _captures if c.id == capture_id and c.user_id == user_id), None
-    )
+    return next((c for c in _captures if c.id == capture_id and c.user_id == user_id), None)
 
 
 def insert_capture(capture: QuickCapture) -> QuickCapture:
@@ -626,9 +566,7 @@ def list_proposals(user_id: str) -> list[Proposal]:
 
 
 def get_proposal(user_id: str, proposal_id: str) -> Proposal | None:
-    return next(
-        (p for p in _proposals if p.id == proposal_id and p.user_id == user_id), None
-    )
+    return next((p for p in _proposals if p.id == proposal_id and p.user_id == user_id), None)
 
 
 def insert_proposal(proposal: Proposal) -> Proposal:
@@ -647,18 +585,12 @@ def update_proposal(user_id: str, proposal_id: str, patch: dict) -> Proposal | N
 
 # --- Butler: retainers ------------------------------------------------------
 def list_retainers(user_id: str, status: str | None = None) -> list[Retainer]:
-    rows = [
-        r
-        for r in _retainers
-        if r.user_id == user_id and (status is None or r.status == status)
-    ]
+    rows = [r for r in _retainers if r.user_id == user_id and (status is None or r.status == status)]
     return sorted(rows, key=lambda r: r.created_at, reverse=True)
 
 
 def get_retainer(user_id: str, retainer_id: str) -> Retainer | None:
-    return next(
-        (r for r in _retainers if r.id == retainer_id and r.user_id == user_id), None
-    )
+    return next((r for r in _retainers if r.id == retainer_id and r.user_id == user_id), None)
 
 
 def insert_retainer(retainer: Retainer) -> Retainer:
@@ -694,9 +626,7 @@ def get_client_view(user_id: str, client_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def upsert_client_view(
-    user_id: str, client_id: str, view: dict, token_cost: dict, refreshed_at: str
-) -> dict:
+def upsert_client_view(user_id: str, client_id: str, view: dict, token_cost: dict, refreshed_at: str) -> dict:
     row = {
         "user_id": user_id,
         "client_id": client_id,
@@ -724,13 +654,7 @@ def upsert_playbook_entry(user_id: str, entry: dict) -> dict:
     now = datetime.now(timezone.utc).isoformat()
 
     existing = next(
-        (
-            e
-            for e in entries
-            if e["category"] == category
-            and e["key"] == key
-            and e["client_id"] == client_id
-        ),
+        (e for e in entries if e["category"] == category and e["key"] == key and e["client_id"] == client_id),
         None,
     )
     if existing:
@@ -854,22 +778,12 @@ def upsert_kg_node(user_id: str, node: dict) -> dict:
 
     if entity_id is not None:
         existing = next(
-            (
-                n
-                for n in nodes
-                if n["node_type"] == node_type and n.get("entity_id") == entity_id
-            ),
+            (n for n in nodes if n["node_type"] == node_type and n.get("entity_id") == entity_id),
             None,
         )
     else:
         existing = next(
-            (
-                n
-                for n in nodes
-                if n["node_type"] == node_type
-                and n.get("entity_id") is None
-                and n["label"] == label
-            ),
+            (n for n in nodes if n["node_type"] == node_type and n.get("entity_id") is None and n["label"] == label),
             None,
         )
 
@@ -881,9 +795,7 @@ def upsert_kg_node(user_id: str, node: dict) -> dict:
         }
         existing["salience"] = min(
             1.0,
-            round(
-                max(float(existing.get("salience", 0.5)), incoming_salience) + 0.02, 4
-            ),
+            round(max(float(existing.get("salience", 0.5)), incoming_salience) + 0.02, 4),
         )
         existing["last_seen"] = now
         return existing
@@ -913,17 +825,11 @@ def upsert_kg_edge(user_id: str, edge: dict) -> dict:
     incoming_weight = float(edge.get("weight", 1))
 
     existing = next(
-        (
-            e
-            for e in edges
-            if e["src_id"] == src_id and e["dst_id"] == dst_id and e["rel"] == rel
-        ),
+        (e for e in edges if e["src_id"] == src_id and e["dst_id"] == dst_id and e["rel"] == rel),
         None,
     )
     if existing:
-        existing["weight"] = max(
-            float(existing.get("weight", 1)), incoming_weight
-        )  # max → idempotent
+        existing["weight"] = max(float(existing.get("weight", 1)), incoming_weight)  # max → idempotent
         existing["props"] = {
             **(existing.get("props") or {}),
             **(edge.get("props") or {}),
@@ -1037,17 +943,13 @@ def delete_agent_memory_for_user(user_id: str) -> None:
     _agent_memory[user_id] = []
 
 
-def delete_agent_memory(
-    user_id: str, *, kind: str | None = None, ref_id_prefix: str | None = None
-) -> int:
+def delete_agent_memory(user_id: str, *, kind: str | None = None, ref_id_prefix: str | None = None) -> int:
     """Delete a user's agent_memory rows, narrowed by kind and/or ref_id prefix."""
     rows = _agent_memory.get(user_id, [])
     keep, removed = [], 0
     for r in rows:
         kind_match = kind is None or r.get("kind") == kind
-        prefix_match = ref_id_prefix is None or str(r.get("ref_id") or "").startswith(
-            ref_id_prefix
-        )
+        prefix_match = ref_id_prefix is None or str(r.get("ref_id") or "").startswith(ref_id_prefix)
         if kind_match and prefix_match:
             removed += 1
         else:
@@ -1159,17 +1061,9 @@ def list_user_data(user_id: str) -> dict[str, list[dict]]:
     out: dict[str, list[dict]] = {}
     for table in USER_DATA_TABLES:
         if table in _USER_DATA_DICTS:
-            out[table] = [
-                _to_dict(r)
-                for r in _USER_DATA_DICTS[table]
-                if getattr(r, "user_id", None) == user_id
-            ]
+            out[table] = [_to_dict(r) for r in _USER_DATA_DICTS[table] if getattr(r, "user_id", None) == user_id]
         elif table in _TRANSACTIONAL_USER_DATA_DICTS:
-            out[table] = [
-                _to_dict(r)
-                for r in _TRANSACTIONAL_USER_DATA_DICTS[table]
-                if getattr(r, "user_id", None) == user_id
-            ]
+            out[table] = [_to_dict(r) for r in _TRANSACTIONAL_USER_DATA_DICTS[table] if getattr(r, "user_id", None) == user_id]
         elif table == "tasks":
             out[table] = []
         elif table == "stories":
@@ -1181,29 +1075,15 @@ def list_user_data(user_id: str) -> dict[str, list[dict]]:
         elif table == "kg_edges":
             out[table] = list(_manager_memory.get(user_id, {}).get("kg_edges", []))
         elif table == "client_view_cache":
-            out[table] = list(
-                _manager_memory.get(user_id, {}).get("client_view_cache", [])
-            )
+            out[table] = list(_manager_memory.get(user_id, {}).get("client_view_cache", []))
         elif table == "business_playbook":
             out[table] = list(_playbook.get(user_id, []))
         elif table == "google_connections":
-            out[table] = (
-                [_google_connection_row(user_id)]
-                if user_id in _google_connections
-                else []
-            )
+            out[table] = [_google_connection_row(user_id)] if user_id in _google_connections else []
         elif table == "stripe_connections":
-            out[table] = (
-                [_stripe_connection_row(user_id)]
-                if user_id in _stripe_connections
-                else []
-            )
+            out[table] = [_stripe_connection_row(user_id)] if user_id in _stripe_connections else []
         elif table == "notion_connections":
-            out[table] = (
-                [_notion_connection_row(user_id)]
-                if user_id in _notion_connections
-                else []
-            )
+            out[table] = [_notion_connection_row(user_id)] if user_id in _notion_connections else []
         elif table in (
             "reports",
             "cashflow_forecasts",
@@ -1245,17 +1125,11 @@ def delete_user_data(user_id: str) -> dict[str, int]:
             counts["kg_edges"] = len(mm.pop("kg_edges", []))
             counts["client_view_cache"] = len(mm.pop("client_view_cache", []))
         elif table == "google_connections":
-            counts[table] = (
-                1 if _google_connections.pop(user_id, None) is not None else 0
-            )
+            counts[table] = 1 if _google_connections.pop(user_id, None) is not None else 0
         elif table == "stripe_connections":
-            counts[table] = (
-                1 if _stripe_connections.pop(user_id, None) is not None else 0
-            )
+            counts[table] = 1 if _stripe_connections.pop(user_id, None) is not None else 0
         elif table == "notion_connections":
-            counts[table] = (
-                1 if _notion_connections.pop(user_id, None) is not None else 0
-            )
+            counts[table] = 1 if _notion_connections.pop(user_id, None) is not None else 0
         elif table in ("tasks", "stories"):
             counts[table] = 0  # mock has no live state; covered by supabase backend
         else:

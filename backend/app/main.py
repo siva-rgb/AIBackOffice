@@ -140,9 +140,7 @@ async def request_cache_middleware(request: Request, call_next):
 async def unhandled_error(request: Request, exc: Exception):
     # Never leak stack traces to the client (SKILL.md §19).
     logger.exception("Unhandled error on %s", request.url.path)
-    return JSONResponse(
-        status_code=500, content={"error": "An unexpected error occurred"}
-    )
+    return JSONResponse(status_code=500, content={"error": "An unexpected error occurred"})
 
 
 @app.get("/health")

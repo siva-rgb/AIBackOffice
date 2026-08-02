@@ -141,9 +141,7 @@ async def _delete_payload(user: User) -> dict:
         try:
             from supabase import create_client
 
-            admin = create_client(
-                settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY
-            )
+            admin = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
             admin.auth.admin.delete_user(user_id)
             side_effects["auth_delete"] = "deleted"
         except Exception as exc:

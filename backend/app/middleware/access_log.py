@@ -68,11 +68,7 @@ def _safe_emit(line: dict[str, Any]) -> None:
 
 
 def _client_ip(scope: dict) -> str | None:
-    headers = {
-        k[5:].lower().decode(): v.decode()
-        for k, v in scope.get("headers") or []
-        if k.startswith(b"x-forwarded-for")
-    }
+    headers = {k[5:].lower().decode(): v.decode() for k, v in scope.get("headers") or [] if k.startswith(b"x-forwarded-for")}
     fwd = headers.get("x-forwarded-for")
     if fwd:
         return fwd.split(",")[0].strip()

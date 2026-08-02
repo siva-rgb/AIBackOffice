@@ -70,9 +70,7 @@ def require_plan(min_plan: str):
 
     async def _dep(user: User = Depends(get_current_user)) -> User:
         if _PLAN_RANK.get(user.plan, 0) < _PLAN_RANK.get(min_plan, 0):
-            raise HTTPException(
-                status_code=403, detail=f"Upgrade to {min_plan} required"
-            )
+            raise HTTPException(status_code=403, detail=f"Upgrade to {min_plan} required")
         return user
 
     return _dep

@@ -1330,11 +1330,7 @@ async def chat_agentic_async(user_id: str, message: str, history: list[dict] | N
                 except Exception:
                     args = {}
                 handler = _HANDLERS.get(name)
-                result = (
-                    await asyncio.to_thread(handler, user_id, args)
-                    if handler
-                    else {"error": "unknown tool"}
-                )
+                result = await asyncio.to_thread(handler, user_id, args) if handler else {"error": "unknown tool"}
                 if result.get("new"):
                     queued += 1
                 tools_used.append(name)

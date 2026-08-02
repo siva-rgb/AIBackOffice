@@ -87,9 +87,7 @@ class Settings(BaseSettings):
     GOOGLE_OAUTH_CLIENT_SECRET: str = ""
     GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:8000/api/auth/google/callback"
     NEXT_PUBLIC_APP_URL: str = "http://localhost:3000"
-    TOKEN_ENCRYPTION_KEY: str = (
-        ""  # Fernet key — run: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-    )
+    TOKEN_ENCRYPTION_KEY: str = ""  # Fernet key — run: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     # Gmail real-time push (watch → Pub/Sub). e.g. projects/<proj>/topics/gmail-intel.
     # Empty = push disabled (sync stays scheduled/manual).
     GMAIL_PUBSUB_TOPIC: str = ""

@@ -51,6 +51,4 @@ def run_import_job(job_id: str, user_id: str, currency: str, rows) -> None:
             },
         )
     except Exception as exc:
-        store.update_import_job(
-            user_id, job_id, {"status": "error", "error": str(exc)[:200]}
-        )
+        store.update_import_job(user_id, job_id, {"status": "error", "error": str(exc)[:200]})

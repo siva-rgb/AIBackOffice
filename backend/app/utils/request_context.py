@@ -43,9 +43,7 @@ def _is_uuid_hex(value: str) -> bool:
     return u.hex == value
 
 
-def begin_request_context(
-    *, inbound_request_id: str | None = None, user_id: str | None = None
-) -> str:
+def begin_request_context(*, inbound_request_id: str | None = None, user_id: str | None = None) -> str:
     """Open a new request scope.
 
     Returns the request id that was actually used (either re-used from the

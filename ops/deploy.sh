@@ -71,7 +71,7 @@ deploy_backend() {
     --region="${REGION}" \
     --platform=managed \
     --allow-unauthenticated \
-    --set-env-vars="ENVIRONMENT=production,KORA_DATA_BACKEND=supabase,FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-}" \
+    --set-env-vars="ENVIRONMENT=${ENVIRONMENT},KORA_DATA_BACKEND=supabase,FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-}" \
     "$@"
 }
 

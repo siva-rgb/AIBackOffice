@@ -48,9 +48,7 @@ async def update_me(patch: ProfileUpdate, user: User = Depends(get_current_user)
         from ..services.playbook import seed_from_onboarding
 
         try:
-            profile_dict = (
-                updated.profile.model_dump(by_alias=False) if updated.profile else {}
-            )
+            profile_dict = updated.profile.model_dump(by_alias=False) if updated.profile else {}
             seed_from_onboarding(user.id, profile_dict)
         except Exception:
             pass
@@ -78,11 +76,7 @@ async def profile_completeness(user: User = Depends(get_current_user)):
     """Per-domain completeness so the Settings UI can nudge the user to fill the
     high-value sections for their business type."""
     # Coerce to the model — some store paths hold profile as a raw JSONB dict.
-    p = (
-        user.profile
-        if isinstance(user.profile, BusinessProfile)
-        else BusinessProfile(**(user.profile or {}))
-    )
+    p = user.profile if isinstance(user.profile, BusinessProfile) else BusinessProfile(**(user.profile or {}))
     return _profile_completeness(p)
 
 
@@ -105,13 +99,8 @@ def _profile_completeness(p: BusinessProfile) -> dict:
     m = p.marketing
     lf = p.legal_financial
     sections = {
-        "identity": any(
-            _has(x) for x in (p.display_name, p.role_title, p.industry, p.description)
-        ),
-        "brand": any(
-            _has(x)
-            for x in (b.mission, b.vision, b.values, b.usp, b.voice, b.style_guidelines)
-        ),
+        "identity": any(_has(x) for x in (p.display_name, p.role_title, p.industry, p.description)),
+        "brand": any(_has(x) for x in (b.mission, b.vision, b.values, b.usp, b.voice, b.style_guidelines)),
         "offerings": _has(p.offerings),
         "customers": any(
             _has(x)
@@ -123,10 +112,7 @@ def _profile_completeness(p: BusinessProfile) -> dict:
                 c.goals,
             )
         ),
-        "operations": any(
-            _has(x)
-            for x in (o.team_members, o.working_hours, o.tools, o.workflows, o.sops)
-        ),
+        "operations": any(_has(x) for x in (o.team_members, o.working_hours, o.tools, o.workflows, o.sops)),
         "marketing": any(
             _has(x)
             for x in (
@@ -164,15 +150,11 @@ def _profile_completeness(p: BusinessProfile) -> dict:
 
 
 @router.patch("/profile", response_model=BusinessProfile)
-async def update_profile(
-    patch: BusinessProfile, request: Request, user: User = Depends(get_current_user)
-):
+async def update_profile(patch: BusinessProfile, request: Request, user: User = Depends(get_current_user)):
     # Merge only the fields the client actually sent into the existing profile
     # JSONB, so a partial save never wipes other fields.
     sent = await request.json()
-    provided = patch.model_dump(
-        mode="json", by_alias=False, include=_provided_keys(patch, sent)
-    )
+    provided = patch.model_dump(mode="json", by_alias=False, include=_provided_keys(patch, sent))
     current = user.profile.model_dump(mode="json", by_alias=False)
     merged = {**current, **provided}
     try:
@@ -180,8 +162,7 @@ async def update_profile(
     except Exception as exc:  # most likely: migration not applied
         raise HTTPException(
             status_code=500,
-            detail="Could not save profile. Ensure the 'profile' column exists "
-            "(run migrations/2026-05-31_add_user_profile.sql). " + str(exc)[:160],
+            detail="Could not save profile. Ensure the 'profile' column exists " "(run migrations/2026-05-31_add_user_profile.sql). " + str(exc)[:160],
         )
     if not updated:
         raise HTTPException(status_code=404, detail="User not found")

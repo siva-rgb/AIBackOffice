@@ -88,7 +88,9 @@ def process_transcript(
                 {
                     "last_activity_at": _now(),
                 }
-            ).eq("id", meeting["client_id"]).eq("user_id", user_id).execute()
+            ).eq(
+                "id", meeting["client_id"]
+            ).eq("user_id", user_id).execute()
 
         if extracted.get("commitments") or extracted.get("next_steps"):
             _queue_meeting_followup(user_id, meeting, extracted, db)
@@ -119,7 +121,9 @@ def process_transcript(
                 "parse_status": "failed",
                 "updated_at": _now(),
             }
-        ).eq("id", meeting_id).eq("user_id", user_id).execute()
+        ).eq(
+            "id", meeting_id
+        ).eq("user_id", user_id).execute()
 
 
 def _build_mom_prompt(transcript: str, client_context: str) -> str:
@@ -289,7 +293,9 @@ def _queue_meeting_followup(user_id: str, meeting: dict, extracted: dict, db) ->
         {
             "followup_queued_at": _now(),
         }
-    ).eq("id", meeting["id"]).eq("user_id", user_id).execute()
+    ).eq(
+        "id", meeting["id"]
+    ).eq("user_id", user_id).execute()
 
 
 def _build_followup_email(client_name: str, meeting_title: str, extracted: dict) -> dict:

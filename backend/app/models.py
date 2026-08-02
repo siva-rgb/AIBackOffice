@@ -238,9 +238,7 @@ class BusinessProfile(CamelModel):
     role_title: str | None = None  # e.g. "Freelance Brand Designer"
     phone: str | None = None
     # Business
-    business_type: str | None = (
-        None  # BusinessType: freelancer | online_seller | small_business | agency | startup
-    )
+    business_type: str | None = None  # BusinessType: freelancer | online_seller | small_business | agency | startup
     industry: str | None = None  # design, development, writing, crafts, consulting…
     description: str | None = None  # what the business does, in plain English
     website: str | None = None
@@ -265,9 +263,7 @@ class BusinessProfile(CamelModel):
     financial_goals: str | None = None  # free-text priorities / targets
     business_priorities: list[str] = []
     # Invoice sender info (invoice_artifact)
-    invoice_footer: str | None = (
-        None  # bank details, payment instructions, thank-you note
-    )
+    invoice_footer: str | None = None  # bank details, payment instructions, thank-you note
     # Communication
     brand_tone: str | None = None  # friendly | professional | concise | formal
     # Notification preferences (owner emails — opt-out, default on)
@@ -523,9 +519,7 @@ class UpdateContractStatusRequest(CamelModel):
 class ReviewFinding(CamelModel):
     title: str
     severity: Literal["high", "medium", "low"] = "medium"
-    category: str | None = (
-        None  # payment | liability | ip | termination | confidentiality | scope | jurisdiction | other
-    )
+    category: str | None = None  # payment | liability | ip | termination | confidentiality | scope | jurisdiction | other
     issue: str
     recommendation: str | None = None
     clause_reference: str | None = None
@@ -585,12 +579,8 @@ ClientType = Literal["individual", "company", "agency", "marketplace"]
 ClientStatus = Literal["active", "inactive", "prospect", "churned"]
 HealthLabel = Literal["on_track", "at_risk", "needs_attention", "critical"]
 EngagementType = Literal["project", "retainer", "one_off", "ongoing"]
-EngagementStatus = Literal[
-    "planning", "active", "on_track", "at_risk", "paused", "done", "cancelled"
-]
-NoteType = Literal[
-    "meeting", "call", "email", "decision", "blocker", "update", "general"
-]
+EngagementStatus = Literal["planning", "active", "on_track", "at_risk", "paused", "done", "cancelled"]
+NoteType = Literal["meeting", "call", "email", "decision", "blocker", "update", "general"]
 CaptureStatus = Literal["pending", "parsed", "failed", "partial"]
 ProposalStatus = Literal["draft", "sent", "viewed", "accepted", "declined", "expired"]
 PricingType = Literal["fixed", "hourly", "retainer", "milestone"]
@@ -611,9 +601,7 @@ TaskSource = Literal["manual", "meeting", "email", "contract", "agent", "notion"
 StoryStatus = Literal["todo", "in_progress", "blocked", "done", "cancelled"]
 QualitativeKind = Literal["blocker", "going_well", "not_going_well"]
 # Where an observation's evidence came from. `user` means a human wrote or corrected it.
-EvidenceSource = Literal[
-    "email", "meeting", "drive", "task", "invoice", "agent", "user"
-]
+EvidenceSource = Literal["email", "meeting", "drive", "task", "invoice", "agent", "user"]
 
 
 class Client(CamelModel):

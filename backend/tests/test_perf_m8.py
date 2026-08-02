@@ -30,9 +30,12 @@ def test_dashboard_indexes_migration_exists():
     assert "idx_agent_logs_user_created" in text
 
 
+_FAKE_SUPABASE_JWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSJ9.test-signature"
+
+
 def test_supabase_client_is_singleton(monkeypatch):
     monkeypatch.setattr("app.clients.pool.settings.SUPABASE_URL", "http://localhost:54321")
-    monkeypatch.setattr("app.clients.pool.settings.SUPABASE_SERVICE_ROLE_KEY", "test-key")
+    monkeypatch.setattr("app.clients.pool.settings.SUPABASE_SERVICE_ROLE_KEY", _FAKE_SUPABASE_JWT)
     pool.close_pools()
     a = pool.get_supabase()
     b = pool.get_supabase()
