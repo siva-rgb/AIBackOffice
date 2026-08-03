@@ -16,6 +16,7 @@ Two failure modes are made loud rather than silent, and both are pinned by
 So adding a premium route without gating it, or gating one without a policy
 entry, breaks the suite.
 """
+
 from __future__ import annotations
 
 from fastapi import Depends, HTTPException, Request
@@ -73,10 +74,7 @@ async def enforce_plan(request: Request, user: User = Depends(get_current_user))
     path = getattr(route, "path", request.url.path)
     need = min_plan_for(request.method, path)
     if need is None:
-        raise RuntimeError(
-            f"enforce_plan is attached to {request.method} {path} but it has no "
-            f"POLICY entry — add one to app/entitlements.POLICY."
-        )
+        raise RuntimeError(f"enforce_plan is attached to {request.method} {path} but it has no " f"POLICY entry — add one to app/entitlements.POLICY.")
     if rank(user.plan) < _RANK[need]:
         raise HTTPException(
             status_code=403,

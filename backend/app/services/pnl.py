@@ -41,11 +41,7 @@ def compute_pnl(transactions: list[Transaction]) -> PnL:
     margin = round((net / total_income) * 100, 1) if total_income > 0 else 0.0
 
     top = sorted(transactions, key=lambda t: abs(t.amount), reverse=True)[:10]
-    top_transactions = [
-        {"description": t.description, "amount": t.amount, "date": t.date,
-         "category": t.category or "uncategorized"}
-        for t in top
-    ]
+    top_transactions = [{"description": t.description, "amount": t.amount, "date": t.date, "category": t.category or "uncategorized"} for t in top]
 
     return PnL(
         total_income=round(total_income, 2),

@@ -41,16 +41,13 @@ async def create_task(payload: TaskCreate, user: User = Depends(get_current_user
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail="Could not create the task. Ensure the 'tasks' table exists "
-                   "(run migrations/2026-07-17_add_tasks.sql). " + str(exc)[:160],
+            detail="Could not create the task. Ensure the 'tasks' table exists " "(run migrations/2026-07-17_add_tasks.sql). " + str(exc)[:160],
         )
 
 
 @router.patch("/{task_id}", response_model=Task)
 async def update_task(task_id: str, payload: TaskUpdate, user: User = Depends(get_current_user)):
-    updated = task_ledger.update_task(
-        user.id, task_id, payload.model_dump(by_alias=False, exclude_unset=True)
-    )
+    updated = task_ledger.update_task(user.id, task_id, payload.model_dump(by_alias=False, exclude_unset=True))
     if not updated:
         raise HTTPException(status_code=404, detail="Task not found")
     return updated

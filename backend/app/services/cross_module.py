@@ -39,10 +39,14 @@ def on_contract_signed(user_id: str, contract: Contract) -> list[Invoice]:
             invoice_number=store.next_invoice_number(user_id),
             client_name=contract.client_name,
             client_email=contract.client_email or "",
-            line_items=[LineItem(description=f"{contract.title or 'Contract'} — {label}",
-                                 quantity=1, rate=amount, amount=amount)],
-            subtotal=amount, tax_rate=0, tax_amount=0, total=amount,
-            currency="USD", status="draft", due_date=due,
+            line_items=[LineItem(description=f"{contract.title or 'Contract'} — {label}", quantity=1, rate=amount, amount=amount)],
+            subtotal=amount,
+            tax_rate=0,
+            tax_amount=0,
+            total=amount,
+            currency="USD",
+            status="draft",
+            due_date=due,
             contract_id=contract.id,
             notes=f"Auto-created from signed contract {contract.id}",
             created_at=datetime.now(timezone.utc).isoformat(),
@@ -51,22 +55,27 @@ def on_contract_signed(user_id: str, contract: Contract) -> list[Invoice]:
         created.append(inv)
 
     if created:
-        store.insert_alert(Alert(
-            id=store.uid("alert"), user_id=user_id, type="contract_signed", severity="info",
-            title="Contract signed — invoices created",
-            body=f"Contract signed with {contract.client_name}. Kora created {len(created)} "
-                 f"invoice(s) matching your payment schedule.",
-            action_label="View invoices", action_url="/invoices", read=False,
-            created_at=datetime.now(timezone.utc).isoformat(),
-        ))
+        store.insert_alert(
+            Alert(
+                id=store.uid("alert"),
+                user_id=user_id,
+                type="contract_signed",
+                severity="info",
+                title="Contract signed — invoices created",
+                body=f"Contract signed with {contract.client_name}. Kora created {len(created)} " f"invoice(s) matching your payment schedule.",
+                action_label="View invoices",
+                action_url="/invoices",
+                read=False,
+                created_at=datetime.now(timezone.utc).isoformat(),
+            )
+        )
 
     # Task ledger — the invoices above cover the money owed; these cover the
     # WORK owed, so delivery milestones are tracked too. Best-effort.
     try:
         from .task_ledger import auto_capture_from_contract
-        matched = next((c for c in store.list_clients(user_id)
-                        if (c.name or "").strip().lower()
-                        == (contract.client_name or "").strip().lower()), None)
+
+        matched = next((c for c in store.list_clients(user_id) if (c.name or "").strip().lower() == (contract.client_name or "").strip().lower()), None)
         auto_capture_from_contract(user_id, contract, matched.id if matched else None)
     except Exception as exc:
         print(f"[cross_module] contract task capture skipped: {exc}")
@@ -76,8 +85,7 @@ def on_contract_signed(user_id: str, contract: Contract) -> list[Invoice]:
         agent_type="cross_module",
         action=f"Contract signed with {contract.client_name} → created {len(created)} invoice(s)",
         input={"contractId": contract.id, "milestones": milestones},
-        output={"invoiceNumbers": [i.invoice_number for i in created],
-                "total": sum(i.total for i in created)},
+        output={"invoiceNumbers": [i.invoice_number for i in created], "total": sum(i.total for i in created)},
         triggered_by="cross_module",
         source_record_type="contract",
         source_record_id=contract.id,
@@ -95,8 +103,7 @@ def on_contract_signed(user_id: str, contract: Contract) -> list[Invoice]:
 # open invoices of the same amount for the same client) are never auto-applied;
 # they raise a "needs review" alert for the human to resolve.
 
-_NAME_NOISE = {"inc", "llc", "corp", "co", "ltd", "limited", "the",
-               "studio", "agency", "group", "company", "and"}
+_NAME_NOISE = {"inc", "llc", "corp", "co", "ltd", "limited", "the", "studio", "agency", "group", "company", "and"}
 
 
 def _tokens(s: str) -> list[str]:
@@ -150,8 +157,7 @@ def reconcile_payments(
     triggered_by: str = "scheduler",
 ) -> dict:
     """Match income transactions to open invoices. Returns a summary dict."""
-    open_invoices = [i for i in store.list_invoices(user_id)
-                     if i.status in ("sent", "viewed", "overdue")]
+    open_invoices = [i for i in store.list_invoices(user_id) if i.status in ("sent", "viewed", "overdue")]
     if not open_invoices:
         return {"matched": 0, "ambiguous": 0, "details": []}
 
@@ -164,59 +170,79 @@ def reconcile_payments(
     ambiguous = 0
 
     for t in income:
-        cands = [inv for inv in pool
-                 if _amount_eq(t.amount, inv.total)
-                 and _client_matches(inv.client_name, t.description)
-                 and _paid_after_sent(t, inv)]
+        cands = [inv for inv in pool if _amount_eq(t.amount, inv.total) and _client_matches(inv.client_name, t.description) and _paid_after_sent(t, inv)]
 
         if len(cands) == 1:
             inv = cands[0]
             pool.remove(inv)
-            store.update_invoice(user_id, inv.id, {
-                "status": "paid", "paid_at": _txn_date_to_iso(t.date),
-            })
+            store.update_invoice(
+                user_id,
+                inv.id,
+                {
+                    "status": "paid",
+                    "paid_at": _txn_date_to_iso(t.date),
+                },
+            )
             try:
                 from .playbook import observe_payment
+
                 observe_payment(user_id, inv.model_dump(by_alias=False), {"date": t.date, "amount": t.amount, "description": t.description})
             except Exception:
                 pass
-            store.insert_alert(Alert(
-                id=store.uid("alert"), user_id=user_id, type="payment_reconciled", severity="info",
-                title="Payment received — invoice marked paid",
-                body=f"A {inv.currency} {inv.total:,.2f} payment matched {inv.invoice_number} "
-                     f"({inv.client_name}). Kora marked it paid and stopped follow-ups.",
-                action_label="View invoices", action_url="/invoices", read=False,
-                created_at=datetime.now(timezone.utc).isoformat(),
-            ))
+            store.insert_alert(
+                Alert(
+                    id=store.uid("alert"),
+                    user_id=user_id,
+                    type="payment_reconciled",
+                    severity="info",
+                    title="Payment received — invoice marked paid",
+                    body=f"A {inv.currency} {inv.total:,.2f} payment matched {inv.invoice_number} "
+                    f"({inv.client_name}). Kora marked it paid and stopped follow-ups.",
+                    action_label="View invoices",
+                    action_url="/invoices",
+                    read=False,
+                    created_at=datetime.now(timezone.utc).isoformat(),
+                )
+            )
             agent_logger.log_action(
-                user_id=user_id, agent_type="cross_module",
+                user_id=user_id,
+                agent_type="cross_module",
                 action=f"Payment reconciled — marked {inv.invoice_number} paid ({inv.client_name})",
                 input={"transactionId": t.id, "amount": t.amount, "description": t.description},
-                output={"invoiceNumber": inv.invoice_number, "invoiceId": inv.id,
-                        "reconciledTransactionId": t.id},
-                triggered_by="cross_module", source_record_type="invoice", source_record_id=inv.id,
+                output={"invoiceNumber": inv.invoice_number, "invoiceId": inv.id, "reconciledTransactionId": t.id},
+                triggered_by="cross_module",
+                source_record_type="invoice",
+                source_record_id=inv.id,
             )
-            matched.append({"invoiceNumber": inv.invoice_number, "amount": inv.total,
-                            "clientName": inv.client_name})
+            matched.append({"invoiceNumber": inv.invoice_number, "amount": inv.total, "clientName": inv.client_name})
 
         elif len(cands) > 1:
             ambiguous += 1
             nums = ", ".join(c.invoice_number for c in cands)
-            store.insert_alert(Alert(
-                id=store.uid("alert"), user_id=user_id, type="payment_review", severity="warning",
-                title="Payment needs review",
-                body=f"A payment of {t.amount:,.2f} from \"{t.description[:60]}\" matches "
-                     f"{len(cands)} open invoices ({nums}). Confirm which one it settles.",
-                action_label="Review invoices", action_url="/invoices", read=False,
-                created_at=datetime.now(timezone.utc).isoformat(),
-            ))
+            store.insert_alert(
+                Alert(
+                    id=store.uid("alert"),
+                    user_id=user_id,
+                    type="payment_review",
+                    severity="warning",
+                    title="Payment needs review",
+                    body=f'A payment of {t.amount:,.2f} from "{t.description[:60]}" matches '
+                    f"{len(cands)} open invoices ({nums}). Confirm which one it settles.",
+                    action_label="Review invoices",
+                    action_url="/invoices",
+                    read=False,
+                    created_at=datetime.now(timezone.utc).isoformat(),
+                )
+            )
             agent_logger.log_action(
-                user_id=user_id, agent_type="cross_module", status="partial",
+                user_id=user_id,
+                agent_type="cross_module",
+                status="partial",
                 action=f"Payment needs review — {t.amount:,.2f} matched {len(cands)} invoices",
                 input={"transactionId": t.id, "amount": t.amount, "description": t.description},
-                output={"candidates": [c.invoice_number for c in cands],
-                        "reconciledTransactionId": t.id},
-                triggered_by="cross_module", source_record_type="invoice",
+                output={"candidates": [c.invoice_number for c in cands], "reconciledTransactionId": t.id},
+                triggered_by="cross_module",
+                source_record_type="invoice",
             )
 
     return {"matched": len(matched), "ambiguous": ambiguous, "details": matched}
@@ -229,14 +255,16 @@ def on_reconciliation_done(user_id: str, reconcile_result: dict) -> None:
         return  # nothing changed — no need to refresh
     try:
         from .cashflow_agent import compute_forecast
+
         compute_forecast(user_id, with_insights=False)
         agent_logger.log_action(
-            user_id=user_id, agent_type="cross_module",
-            action=f"Post-reconciliation cashflow refresh triggered "
-                   f"({reconcile_result['matched']} payment(s) matched)",
+            user_id=user_id,
+            agent_type="cross_module",
+            action=f"Post-reconciliation cashflow refresh triggered " f"({reconcile_result['matched']} payment(s) matched)",
             input={"matched": reconcile_result["matched"]},
             output={"refreshed": True},
-            triggered_by="cross_module", source_record_type="cashflow",
+            triggered_by="cross_module",
+            source_record_type="cashflow",
         )
     except Exception as exc:
         print(f"[cross_module] cashflow refresh after reconciliation failed: {exc}")
@@ -252,21 +280,23 @@ def on_supervisor_run(user_id: str, advisories: list[dict], status_line: str) ->
     except Exception:
         butler_mem = {}
     try:
-        store.set_butler_memory(user_id, {
-            **butler_mem,
-            "lastSupervisorAdvisories": [
-                {"title": a["title"], "severity": a["severity"]}
-                for a in advisories[:5]
-            ],
-            "lastSupervisorStatusLine": status_line,
-            "lastSupervisorRunAt": datetime.now(timezone.utc).isoformat(),
-        })
+        store.set_butler_memory(
+            user_id,
+            {
+                **butler_mem,
+                "lastSupervisorAdvisories": [{"title": a["title"], "severity": a["severity"]} for a in advisories[:5]],
+                "lastSupervisorStatusLine": status_line,
+                "lastSupervisorRunAt": datetime.now(timezone.utc).isoformat(),
+            },
+        )
         agent_logger.log_action(
-            user_id=user_id, agent_type="cross_module",
+            user_id=user_id,
+            agent_type="cross_module",
             action=f"Pushed {len(advisories)} supervisor advisory/ies to butler memory",
             input={"advisoryCount": len(advisories)},
             output={"statusLine": status_line},
-            triggered_by="cross_module", source_record_type="butler",
+            triggered_by="cross_module",
+            source_record_type="butler",
         )
     except Exception as exc:
         print(f"[cross_module] supervisor→butler advisory push failed: {exc}")
@@ -289,11 +319,14 @@ def on_invoice_demand_sent(user_id: str, invoice_id: str, invoice_number: str) -
     try:
         store.set_manager_memory(user_id, {**mem, "escalationState": escalation})
         agent_logger.log_action(
-            user_id=user_id, agent_type="cross_module",
+            user_id=user_id,
+            agent_type="cross_module",
             action=f"Updated escalation state after demand sent for {invoice_number}",
             input={"invoiceId": invoice_id, "invoiceNumber": invoice_number},
             output={"escalationState": escalation[invoice_id]},
-            triggered_by="cross_module", source_record_type="invoice", source_record_id=invoice_id,
+            triggered_by="cross_module",
+            source_record_type="invoice",
+            source_record_id=invoice_id,
         )
     except Exception as exc:
         print(f"[cross_module] escalation state update after demand failed: {exc}")

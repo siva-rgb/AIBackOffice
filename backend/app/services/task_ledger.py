@@ -14,6 +14,7 @@ lives here:
 
 All auto-capture is best-effort and never raises into its caller.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -55,9 +56,11 @@ def create_task(user_id: str, data: dict) -> Task:
     if source_ref:
         existing = store.find_task_by_source_ref(user_id, source_ref)
         if existing:
-            patch = {k: v for k, v in data.items()
-                     if k in ("title", "description_md", "due_date", "owner",
-                              "client_id", "engagement_id", "priority") and v is not None}
+            patch = {
+                k: v
+                for k, v in data.items()
+                if k in ("title", "description_md", "due_date", "owner", "client_id", "engagement_id", "priority") and v is not None
+            }
             if patch:
                 patch["updated_at"] = _now()
                 return store.update_task(user_id, existing.id, patch) or existing
@@ -116,8 +119,7 @@ def stats(user_id: str) -> dict:
 
 
 # ── Auto-capture: commitments → tracked work ────────────────────────────────
-def auto_capture_from_meeting(user_id: str, client_id: str | None,
-                              next_steps: list, meeting_id: str | None = None) -> int:
+def auto_capture_from_meeting(user_id: str, client_id: str | None, next_steps: list, meeting_id: str | None = None) -> int:
     """Meeting action items / next steps → tasks. Idempotent per (meeting, action)."""
     created = 0
     for step in next_steps or []:
@@ -127,16 +129,19 @@ def auto_capture_from_meeting(user_id: str, client_id: str | None,
         if not action:
             continue
         try:
-            create_task(user_id, {
-                "title": action,
-                "client_id": client_id,
-                "due_date": step.get("by_when") or step.get("due_date"),
-                "owner": step.get("owner") or "me",
-                "source": "meeting",
-                "source_ref": _ref("meeting", meeting_id, action),
-                "description_md": f"Captured from a meeting on {_today()}.",
-                "priority": "high" if step.get("by_when") else "medium",
-            })
+            create_task(
+                user_id,
+                {
+                    "title": action,
+                    "client_id": client_id,
+                    "due_date": step.get("by_when") or step.get("due_date"),
+                    "owner": step.get("owner") or "me",
+                    "source": "meeting",
+                    "source_ref": _ref("meeting", meeting_id, action),
+                    "description_md": f"Captured from a meeting on {_today()}.",
+                    "priority": "high" if step.get("by_when") else "medium",
+                },
+            )
             created += 1
         except Exception as exc:
             print(f"[tasks] meeting capture skipped: {exc}")
@@ -156,15 +161,18 @@ def auto_capture_from_email(user_id: str, client_id: str | None, intel: dict) ->
             continue
         who = (c.get("who") or "me").strip()
         try:
-            create_task(user_id, {
-                "title": what if who == "me" else f"Follow up: {what}",
-                "client_id": client_id,
-                "due_date": c.get("mentioned_date") or c.get("by_when"),
-                "owner": who,
-                "source": "email",
-                "source_ref": _ref("email", client_id, who, what),
-                "description_md": f"Commitment detected in email with {client_name or 'the client'}.",
-            })
+            create_task(
+                user_id,
+                {
+                    "title": what if who == "me" else f"Follow up: {what}",
+                    "client_id": client_id,
+                    "due_date": c.get("mentioned_date") or c.get("by_when"),
+                    "owner": who,
+                    "source": "email",
+                    "source_ref": _ref("email", client_id, who, what),
+                    "description_md": f"Commitment detected in email with {client_name or 'the client'}.",
+                },
+            )
             created += 1
         except Exception as exc:
             print(f"[tasks] email capture skipped: {exc}")
@@ -183,18 +191,21 @@ def auto_capture_from_contract(user_id: str, contract, client_id: str | None = N
         if not label:
             continue
         try:
-            create_task(user_id, {
-                "title": f"Deliver: {label}",
-                "client_id": client_id,
-                "owner": "me",
-                "source": "contract",
-                "source_ref": _ref("contract", getattr(contract, "id", ""), label),
-                "description_md": (
-                    f"Milestone from contract '{getattr(contract, 'title', '') or 'contract'}'"
-                    f" with {getattr(contract, 'client_name', '') or 'the client'}."
-                ),
-                "priority": "high",
-            })
+            create_task(
+                user_id,
+                {
+                    "title": f"Deliver: {label}",
+                    "client_id": client_id,
+                    "owner": "me",
+                    "source": "contract",
+                    "source_ref": _ref("contract", getattr(contract, "id", ""), label),
+                    "description_md": (
+                        f"Milestone from contract '{getattr(contract, 'title', '') or 'contract'}'"
+                        f" with {getattr(contract, 'client_name', '') or 'the client'}."
+                    ),
+                    "priority": "high",
+                },
+            )
             created += 1
         except Exception as exc:
             print(f"[tasks] contract capture skipped: {exc}")
@@ -202,8 +213,7 @@ def auto_capture_from_contract(user_id: str, contract, client_id: str | None = N
 
 
 # ── Agent-facing context ────────────────────────────────────────────────────
-def build_task_brief(user_id: str, client_id: str | None = None,
-                     max_chars: int = 450) -> str:
+def build_task_brief(user_id: str, client_id: str | None = None, max_chars: int = 450) -> str:
     """Compact open-work block for prompt injection, or "". Overdue and blocked
     lead — those are what an agent must not contradict or forget."""
     try:

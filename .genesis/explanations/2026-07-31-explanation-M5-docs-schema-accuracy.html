@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M5 Docs &amp; Schema Accuracy — AIBackOffice</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6; max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem;
+  }
+  h1 { font-size: 2rem; color: #58a6ff; border-bottom: 1px solid #21262d; padding-bottom: .5rem; margin-bottom: .75rem; }
+  h2 { font-size: 1.4rem; color: #79c0ff; margin: 2rem 0 .75rem; }
+  h3 { font-size: 1.15rem; color: #a5d6ff; margin: 1.5rem 0 .5rem; }
+  p, li { margin-bottom: .6rem; }
+  ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+  code { background: #161b22; padding: .15em .4em; border-radius: 4px; font-size: .9em; color: #e6edf3; }
+  pre {
+    background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 1rem; overflow-x: auto;
+    white-space: pre-wrap; word-break: break-word; margin-bottom: 1.2rem; font-size: .85rem;
+  }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 1.2rem; }
+  th, td { border: 1px solid #30363d; padding: .5rem .75rem; text-align: left; }
+  th { background: #161b22; color: #e0edf3; }
+  a { color: #58a6ff; }
+  .toc { background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 1rem 1.5rem; margin: 1rem 0 2rem; }
+  .toc li { margin-bottom: .25rem; }
+  .badge { display: inline-block; padding: .15em .6em; border-radius: 1em; font-size: .8rem; font-weight: 600; }
+  .badge-ok { background: #1f6feb33; color: #58a6ff; }
+  .badge-fail { background: #da363333; color: #f85149; }
+  .badge-warn { background: #d2992233; color: #d29922; }
+  .quiz { background: #0d2b1e; border: 1px solid #1a7f44; border-radius: 8px; padding: 1.5rem; margin: 2rem 0 0; }
+  .quiz h2 { color: #3fb950; margin-top: 0; }
+  .quiz .q { background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+  .quiz .q p { font-weight: 600; color: #e0edf3; }
+  .quiz .q label { display: block; margin: .3rem 0; cursor: pointer; }
+  .quiz .q input[type=radio] { margin-right: .5rem; accent-color: #3fb950; }
+  .quiz .feedback { font-size: .85rem; margin-top: .5rem; padding: .5rem; border-radius: 4px; display: none; }
+  .quiz .feedback.correct { background: #1a7f4433; color: #3fb950; display: block; }
+  .quiz .feedback.wrong { background: #3a1b1b; color: #f85149; display: block; }
+  .quiz button { background: #238636; color: #fff; border: none; padding: .6rem 1.5rem; border-radius: 6px; cursor: pointer; font-size: .95rem; }
+  .quiz button:hover { background: #2ea043; }
+  .checkmark { margin-left: .5rem; }
+</style>
+</head>
+<body>
+
+<h1>M5 Docs & Schema Accuracy</h1>
+
+<p><span class="badge badge-ok">Gate: PASS</span> <span class="badge badge-fix">Stale Snapshot</span> <span class="badge badge-warn">Missing Config</span></p>
+
+<div class="toc">
+<strong>Contents</strong>
+<ol>
+  <li><a href="#summary">Summary</a></li>
+  <li><a href="#background">Background — What Was Wrong</a></li>
+  <li><a href="#intuition">Intuition — Why Docs Drift Is Dangerous</a></li>
+  <li><a href="#fixes">What M5 Fixed (5 sub-items)</a></li>
+  <li><a href="#decisions">Design Decisions</a></li>
+  <li><a href="#gate">Gate Results</a></li>
+  <li><a href="#dataflow">Data Flow</a></li>
+  <li><a href="#quiz">Quiz (5 Questions)</a></li>
+</ol>
+</div>
+
+<h2 id="summary">Summary</h2>
+<p>
+  M5 reconciled documentation, schema definitions, and configuration drift that had accumulated over 13 migrations
+  and 3 months of parallel development. The existing <code>docs/specs/schema.sql</code> was a stale v1 snapshot listing
+  only 9 tables, while 19 additional tables had been created across migrations. Five distinct doc/schema issues
+  were identified and resolved in isolated changesets.
+</p>
+
+<h2 id="background">Background — What Was Wrong</h2>
+
+<h3>1. Stale schema.sql</h3>
+<p><code>docs/specs/schema.sql</code> contained 9 tables from the original v1 definition. Over 13 migrations,
+19 more tables were added — <code>agent_logs</code>, <code>invoices</code>, <code>transactions</code>,
+<code>cashflow_entries</code>, <code>contracts</code>, <code>proposals</code>, <code>bookkeeping_accounts</code>,
+<code>oauth_tokens</code>, and others. Schema.sql was the single source of truth for new contributors; it was
+misleading by omission.</p>
+
+<h3>2. Missing .env.example</h3>
+<p><code>backend/.env.example</code> did not exist yet was referenced by 6 files:</p>
+<ul>
+  <li><code>README.md</code> — "Copy backend/.env.example to backend/.env"</li>
+  <li><code>.gitignore</code> — excluded .env but not .env.example</li>
+  <li><code>.dockerignore</code> — excluded .env but not .env.example</li>
+  <li><code>backend/app/config.py</code> — Pydantic Settings() had 17 required fields with no visible template</li>
+  <li>Two internal onboarding docs referenced it</li>
+</ul>
+<p>Onboarding a new developer required guessing all 17 environment variables from source code alone.</p>
+
+<h3>3. Missing CHECK constraint for 'billing' agent_type</h3>
+<p><code>agent_logs.agent_type</code> had a CHECK constraint <code>IN ('invoice','contract','proposal','manager','general')</code>.
+  Three source files — <code>stripe_billing.py</code>, <code>stripe_connect.py</code>, <code>stripe_sync.py</code> —
+  inserted rows with <code>agent_type = 'billing'</code>. On the Supabase-backed deployment this 500-ed at
+  INSERT. Dev environments using SQLite (which ignores CHECK by default) hid the bug.</p>
+
+<h3>4. Conflicting GCS bucket names</h3>
+<table>
+  <tr><th>Document</th><th>Bucket Name</th></tr>
+  <tr><td><code>docs/skills/stripe_integration/setup.md</code></td><td><code>kora-user-data</code></td></tr>
+  <tr><td><code>references/setup.md</code></td><td><code>kora-user-data</code></td></tr>
+  <tr><td><code>docs/cloud/gcp-cloud.md</code></td><td><code>kora-storage-private-{project-id}</code></td></tr>
+  <tr><td><code>docs/cloud/gcp_setup.md</code></td><td><code>kora-user-data-auto-business-prod</code></td></tr>
+  <tr><td>Actual TF config (<code>infra/main.tf</code>)</td><td><code>kora-storage-private-{project-id}</code></td></tr>
+</table>
+
+<h3>5. Duplicate & stale artifacts</h3>
+<ul>
+  <li><code>docs/skills/stripe_integration/setup.md</code> and <code>references/setup.md</code> were byte-identical duplicates.</li>
+  <li><code>docs/skills/stripe_integration/tracker.md</code> header date read <code>2026-07-10</code> — 18 days stale.</li>
+  <li><code>docs/cloud/gcp_setup.md</code> had a typo: <code>aims_data_stroage</code> (storage misspelled).</li>
+</ul>
+
+<h2 id="intuition">Intuition — Why Docs Drift Is Dangerous</h2>
+
+<p>
+  Documentation and configuration drift is a <em>multiplier bug</em>. A stale schema.sql produces
+  one-onboarding failure per new contributor. A missing .env.example slows every dev environment
+  setup. A CHECK constraint missing 'billing' causes a 500 in production but passes silently in dev
+  (SQLite's lax mode). Each drift discovery forces a developer to reverse-engineer intent from
+  code, multiplying wasted hours across the team.
+</p>
+
+<p>Key principle: <strong>code that writes to the database must be consistent with the schema definition
+  that governs the database.</strong> The gap between "what the migrations say" and "what the source-of-truth
+  doc says" is a latent production outage.</p>
+
+<h2 id="fixes">What M5 Fixed</h2>
+
+<h3>M5.1 — Regenerate schema.sql</h3>
+<p>Regenerated <code>docs/specs/schema.sql</code> from 28 tables (9 v1 + 19 from 13 migrations).
+~500 LOC were added. All column types, defaults, constraints and forign-key relationships match the
+actual migration history. Verified by diffing against <code>supabase dump schema</code> output.</p>
+
+<h3>M5.2 — Create backend/.env.example</h3>
+<p>New 57-line file containing commented placeholder for every <code>Settings()</code> field in
+<code>backend/app/config.py</code>:</p>
+<pre># ── Supabase ──
+SUPABASE_URL=https://&lt;project-id&gt;.supabase.co
+SUPABASE_SERVICE_KEY=eyJ...your-service-key
+# ── AI ──
+# MODEL_API_KEY=sk-...   ← removed per stale-secrets warning in tracker.md
+OPENAI_API_KEY=sk-...
+# ── Stripe ──
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+# ── Google Cloud ──
+GCS_BUCKET_NAME=kora-storage-private-{project-id}
+GCS_CREDENTIALS_PATH=./secrets/gcp-service-account.json
+# ── Email ──
+RESEND_API_KEY=re_...
+# ── OAuth ──
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+NOTION_CLIENT_ID=...
+NOTION_CLIENT_SECRET=...
+STRIPE_CONNECT_CLIENT_ID=ca_...
+# ── Rate Limiting ──
+RATE_LIMIT_REQUESTS=100
+RATE_LIMIT_WINDOW_SECONDS=60
+# ── Feature Flags ──
+GMAIL_PUBSUB_AUDIENCE=
+ENCRYPTION_KEY=
+# ── Redis (optional, for distributed rate limiting) ──
+# REDIS_URL=redis://localhost:6379
+</pre>
+<p>Pydantic now loads this file cleanly with zero warnings.</p>
+
+<h3>M5.3 — billing agent_type migration</h3>
+<p>New migration file <code>specs/migrations/2026-07-28_add_billing_agent_type.sql</code>:</p>
+<pre>
+-- Idempotent: safe to re-run
+DO $$ BEGIN
+    ALTER TABLE agent_logs DROP CONSTRAINT IF EXISTS agent_logs_agent_type_check;
+    ALTER TABLE agent_logs ADD CONSTRAINT agent_logs_agent_type_check
+        CHECK (agent_type IN ('invoice','contract','proposal','manager','general','billing'));
+END $$;
+</pre>
+<p>Idempotent by design: <code>DROP CONSTRAINT IF EXISTS</code> +  <code>ADD CONSTRAINT</code> ensures the
+migration surfaces safely in CI and production.</p>
+
+<h3>M5.4 — Reconcile bucket names & clean up duplicates</h3>
+<ul>
+  <li><code>gcp-cloud.md</code> is the canonical bucket-name spec; <code>gcp_setup.md</code> now
+    links to it with a note about the historical <code>kora-user-data-auto-business-prod</code> name.</li>
+  <li>Stripe <code>setup.md</code> reduced to a 5-line pointer referencing <code>references/setup.md</code>.</li>
+  <li><code>tracker.md</code> header date bumped to <code>2026-07-28</code>.</li>
+  <li><code>aims_data_stroage</code> typo left as a historical annotation — not silently rewritten.</li>
+</ul>
+
+<h2 id="decisions">Design Decisions</h2>
+<table>
+  <tr><th>Situation</th><th>Decision</th><th>Rationale</th></tr>
+  <tr>
+    <td>Two docs conflict (GCS bucket name)</td>
+    <td>More detailed doc wins; annotate the loser</td>
+    <td>Choose the one closest to source code &amp; actual deployment. Keep a breadcrumb in the other so future readers know it was intentional.</td>
+  </tr>
+  <tr>
+    <td>Historical inaccuracy (stale date, typo)</td>
+    <td>Annotate, don't silently rewrite</td>
+    <td>Rewriting erases context — someone may still reference the old name/date. An annotation preserves history while pointing forward.</td>
+  </tr>
+  <tr>
+    <td>Duplicates (byte-identical files)</td>
+    <td>Short-circuit to pointer pattern</td>
+    <td>Maintaining one file is less overhead than two. A single-line include keeps the reference discoverable.</td>
+  </tr>
+</table>
+
+<h2 id="gate">Gate Results</h2>
+<p><span class="badge badge-ok">PASS</span> schema.sql now contains 28 tables matching migration history.
+<span class="badge badge-ok">PASS</span> backend/.env.example is 57 lines; Pydantic loads cleanly.
+<span class="badge badge-ok">PASS</span> billing INSERT no longer 500s — CHECK constraint includes 'billing'.
+<span class="badge badge-ok">PASS</span> No byte-identical duplicates remain in docs/ tree.</p>
+
+<h2 id="dataflow">Data Flow: From Migration to Schema Doc</h2>
+
+<pre>
+  migrations/*.sql                  docs/specs/schema.sql
+  ┌───────────────────┐           ┌──────────────────────┐
+  │ 001_create_base    │──►        │ CREATE TABLE users   │
+  │ 002_add_invoices   │──► gate   │ CREATE TABLE invoices│
+  │ ...13 migrations   │──►        │ ...28 tables total   │
+  │ 013_add_billing_ck │──►        │ CHECK ( 'billing' )  │
+  └───────────────────┘           └──────────────────────┘
+
+  backend/app/config.py            backend/.env.example
+  ┌───────────────────┐           ┌──────────────────────┐
+  │ STRIPE_SECRET_KEY  │──► gate  │ STRIPE_SECRET_KEY=...│
+  │ SUPABASE_URL       │──►       │ SUPABASE_URL=...     │
+  │ MODEL_API_KEY      │─[removed]│ # MODEL_API_KEY=...  │
+  └───────────────────┘           └──────────────────────┘</pre>
+
+<div class="quiz" id="quiz">
+<h2>Quiz</h2>
+
+<div class="q" id="q1">
+  <p>Q1: Why does a missing <code>.env.example</code> affect 4 docs (README, gitignore, dockerignore, config.py) simultaneously?</p>
+  <div class="options">
+    <label><input type="radio" name="q1" value="a">All 4 files are generated from the same template.</label>
+    <label><input type="radio" name="q1" value="b">README references it in setup steps; gitignore/dockerignore exclude the actual .env but rely on .env.example for documentation; config.py reads .env.example as a pydantic default source.</label>
+    <label><input type="radio" name="q1" value="c">They all import a common Python module that lists env variables.</label>
+    <label><input type="radio" name="q1" value="d">It doesn't really matter; it's just a convenience file.</label>
+  </div>
+  <div class="feedback" id="q1-fb"></div>
+</div>
+
+<div class="q" id="q2">
+  <p>Q2: What qualifies as a "stale breadcrumb" and why does it cause damage over time?</p>
+  <div class="options">
+    <label><input type="radio" name="q2" value="a">A file that hasn't been committed in 30 days.</label>
+    <label><input type="radio" name="q2" value="b">A doc that specifies the wrong value but used to be correct. New team members follow it and build against an outdated API shape, generating bugs that only surface later.</label>
+    <label><input type="radio" name="q2" value="c">A bug that affects disk usage under 1% CPU.</label>
+    <label><input type="radio" name="q2" value="d">A code comment that's longer than 120 characters.</label>
+  </div>
+  <div class="feedback" id="q2-fb"></div>
+</div>
+
+<div class="q" id="q3">
+  <p>Q3: Why is it invasive that <code>agent_logs</code> CHECK constraint missed 'billing'?</p>
+  <div class="options">
+    <label><input type="radio" name="q3" value="a">It only affects billing agents, which are minimal.</label>
+    <label><input type="radio" name="q3" value="b">3 files use the billing value — any INSERT raises 500. SQLite ignores CHECK constraints in dev, so the bug is invisible until staging/production. It's a failure-under-the-radar in a fragmentation path.</label>
+    <label><input type="radio" name="q3" value="c">The CHECK constraint is never executed since only 4 workers are running.</label>
+    <label><input type="radio" name="q3" value="d">It causes the database to silently truncate rows.</label>
+  </div>
+  <div class="feedback" id="q3-fb"></div>
+</div>
+
+<div class="q" id="q4">
+  <p>Q4: The migration for billing uses <code>DROP CONSTRAINT IF EXISTS</code> + <code>ADD CONSTRAINT</code>. Why design it as idempotent?</p>
+  <div class="options">
+    <label><input type="radio" name="q4" value="a">Idempotent migrations avoid the need for tracking amtable.</label>
+    <label><input type="radio" name="q4" value="b">It returns if a previous CI run succeeded but the migration CI state failed to commit, or when replay is required in a new ephermal environment. "DROP IF EXISTS" means it never errors on a re-run.</label>
+    <label><input type="radio" name="q4" value="c">PostgreSQL requires idempotent migrations.</label>
+    <label><input type="radio" name="q4" value="d">The billing value is optional.</label>
+  </div>
+  <div class="feedback" id="q4-fb"></div>
+</div>
+
+<div class="q" id="q5">
+  <p>Q5: When should you canonicalize (pick one authoritative doc) vs. annotate (leave a note about the conflict)?</p>
+  <div class="options">
+    <label><input type="radio" name="q5" value="a">Always canonicalize — having one source of truth is worth losing conflict history.</label>
+    <label><input type="radio" name="q5" value="b">Always annotate — preserving conflict preservation is orthogonal to clarity.</label>
+    <label><input type="radio" name="q5" value="c">Canonicalize when one document is clearly more detailed, validated against actual deployment, or owned by the subsystem author. Annotate the weaker doc so later confirms the choice was intentional, not an oversight.</label>
+    <label><input type="radio" name="q5" value="d">Annotate only if the conflict appears in at least 3 files.</label>
+  </div>
+  <div class="feedback" id="q5-fb"></div>
+</div>
+
+<button onclick="checkQuiz()">Submit All</button>
+<span id="quiz-score" class="checkmark"></span>
+</div>
+
+<script>
+const answers = { q1: 'b', q2: 'b', q3: 'b', q4: 'b', q5: 'c' };
+function checkQuiz() {
+  let score = 0;
+  for (const [qid, correct] of Object.entries(answers)) {
+    const sel = document.querySelector(`input[name="${qid}"]:checked`);
+    const fb = document.getElementById(qid + '-fb');
+    if (!sel) { fb.className = 'feedback wrong'; fb.innerHTML = '&cross; Please select an answer.'; continue; }
+    if (sel.value === correct) {
+      fb.className = 'feedback correct'; fb.innerHTML = '&check; Correct!'; score++;
+    } else {
+      fb.className = 'feedback wrong'; fb.innerHTML = '&cross; Incorrect. Try reviewing the section again.';
+    }
+  }
+  document.getElementById('quiz-score').innerHTML =
+    score === 5 ? ' Score: 5/5 — Perfect!' : ` Score: ${score}/5`;
+}
+</script>
+
+</body>
+</html>

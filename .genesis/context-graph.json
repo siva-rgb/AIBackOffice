@@ -1,7 +1,7 @@
 {
   "$comment": "nodes=modules, edges=[cause,effect] where cause is imported-by effect. ADD invariants by hand.",
-  "project": ".",
-  "generated": "2026-07-23T07:25:11.462Z",
+  "project": "AIBackOffice",
+  "generated": "2026-07-26T19:37:17.578Z",
   "nodes": [
     "__future__",
     "__init__",
@@ -13,6 +13,7 @@
     "alert_agent",
     "alias_generators",
     "app",
+    "auth",
     "auth-form",
     "auth_google",
     "backend-down",
@@ -35,12 +36,15 @@
     "cashflow_agent",
     "casing",
     "client",
+    "client-canvas",
     "client-form",
     "client-workspace",
     "clients",
     "cloud",
+    "codeMirrorModule-LEHpjmcn",
     "collections",
     "config",
+    "conftest",
     "contract-list",
     "contract-review",
     "contract-reviewer",
@@ -56,6 +60,7 @@
     "dashboard",
     "dataclasses",
     "datetime",
+    "defaultSettingsView-BNmKHKpQ",
     "dependencies",
     "discovery",
     "document_text",
@@ -63,9 +68,11 @@
     "download-button",
     "drive-view",
     "drive_intel",
+    "e2e-fixtures",
     "email-intel-view",
     "email_service",
     "embeddings",
+    "entitlements",
     "enum",
     "fastapi",
     "fernet",
@@ -73,6 +80,7 @@
     "flow",
     "forecast-chart",
     "formatted-text",
+    "futures",
     "globals",
     "gmail_agent",
     "gmail_intel",
@@ -84,6 +92,7 @@
     "hashlib",
     "html",
     "httpx",
+    "index.DMMX1gXU",
     "invoice-list",
     "invoice_agent",
     "invoice_pdf",
@@ -108,6 +117,7 @@
     "memory_recall",
     "memory_store",
     "middleware",
+    "mock",
     "models",
     "multipart",
     "new-invoice-form",
@@ -116,6 +126,7 @@
     "notion",
     "notion-connect-card",
     "notion_connector",
+    "notion_ingest",
     "onboarding-wizard",
     "openai",
     "os",
@@ -129,10 +140,13 @@
     "platypus",
     "playbook",
     "playbook-viewer",
+    "playwright.config",
+    "pm_agent",
     "pnl",
     "postcss.config",
     "profile-form",
     "profile_context",
+    "project-tree",
     "proposal-detail",
     "proposal-list",
     "proposal-wizard",
@@ -142,6 +156,7 @@
     "pydantic",
     "pydantic_settings",
     "pypdf",
+    "pytest",
     "quick-capture",
     "rate_limit",
     "re",
@@ -150,6 +165,7 @@
     "responses",
     "retainer-list",
     "retainers",
+    "rollup",
     "route",
     "routers",
     "run-digest-button",
@@ -161,9 +177,13 @@
     "server",
     "services",
     "sidebar",
+    "snapshot.v8KI4P3m",
     "stats",
     "storage",
     "store",
+    "stories",
+    "story-card",
+    "story_ledger",
     "stripe",
     "stripe-connect-card",
     "stripe_billing",
@@ -173,12 +193,35 @@
     "supabase",
     "supabase_store",
     "supervisor",
+    "sw.bundle",
     "sys",
     "tailwind.config",
     "task_ledger",
     "tasks",
     "templates",
     "tenacity",
+    "test_agent_logger",
+    "test_auth",
+    "test_billing",
+    "test_cashflow_forecast",
+    "test_cross_module",
+    "test_csv_parser",
+    "test_digest_delivery",
+    "test_llm_boundary",
+    "test_llm_safety_boundary",
+    "test_memory_recall",
+    "test_notion_connector",
+    "test_notion_ingest",
+    "test_plan_gating",
+    "test_pm_agent",
+    "test_profile_completeness",
+    "test_rollup",
+    "test_store_boundary",
+    "test_stories",
+    "test_stripe_boundary",
+    "test_stripe_webhook",
+    "test_task_ledger",
+    "testclient",
     "text",
     "threading",
     "time",
@@ -187,8 +230,11 @@
     "types",
     "typing",
     "ui",
+    "uiMode.Ut8wwJNp",
     "units",
     "upload-zone",
+    "urlMatch-BYQrIQwR",
+    "user-journeys.spec",
     "users",
     "utils",
     "uuid",
@@ -266,6 +312,10 @@
     ],
     [
       "__future__",
+      "conftest"
+    ],
+    [
+      "__future__",
       "contract_agent"
     ],
     [
@@ -307,6 +357,10 @@
     [
       "__future__",
       "embeddings"
+    ],
+    [
+      "__future__",
+      "entitlements"
     ],
     [
       "__future__",
@@ -386,6 +440,10 @@
     ],
     [
       "__future__",
+      "notion_ingest"
+    ],
+    [
+      "__future__",
       "owner_notify"
     ],
     [
@@ -395,6 +453,10 @@
     [
       "__future__",
       "playbook"
+    ],
+    [
+      "__future__",
+      "pm_agent"
     ],
     [
       "__future__",
@@ -426,6 +488,10 @@
     ],
     [
       "__future__",
+      "rollup"
+    ],
+    [
+      "__future__",
       "security"
     ],
     [
@@ -451,6 +517,14 @@
     [
       "__future__",
       "store"
+    ],
+    [
+      "__future__",
+      "stories"
+    ],
+    [
+      "__future__",
+      "story_ledger"
     ],
     [
       "__future__",
@@ -482,6 +556,90 @@
     ],
     [
       "__future__",
+      "test_agent_logger"
+    ],
+    [
+      "__future__",
+      "test_auth"
+    ],
+    [
+      "__future__",
+      "test_billing"
+    ],
+    [
+      "__future__",
+      "test_cashflow_forecast"
+    ],
+    [
+      "__future__",
+      "test_cross_module"
+    ],
+    [
+      "__future__",
+      "test_csv_parser"
+    ],
+    [
+      "__future__",
+      "test_digest_delivery"
+    ],
+    [
+      "__future__",
+      "test_llm_boundary"
+    ],
+    [
+      "__future__",
+      "test_llm_safety_boundary"
+    ],
+    [
+      "__future__",
+      "test_memory_recall"
+    ],
+    [
+      "__future__",
+      "test_notion_connector"
+    ],
+    [
+      "__future__",
+      "test_notion_ingest"
+    ],
+    [
+      "__future__",
+      "test_plan_gating"
+    ],
+    [
+      "__future__",
+      "test_pm_agent"
+    ],
+    [
+      "__future__",
+      "test_profile_completeness"
+    ],
+    [
+      "__future__",
+      "test_rollup"
+    ],
+    [
+      "__future__",
+      "test_store_boundary"
+    ],
+    [
+      "__future__",
+      "test_stories"
+    ],
+    [
+      "__future__",
+      "test_stripe_boundary"
+    ],
+    [
+      "__future__",
+      "test_stripe_webhook"
+    ],
+    [
+      "__future__",
+      "test_task_ledger"
+    ],
+    [
+      "__future__",
       "token_encryption"
     ],
     [
@@ -509,6 +667,10 @@
       "stripe_sync"
     ],
     [
+      "agent_logger",
+      "test_llm_safety_boundary"
+    ],
+    [
       "alert_agent",
       "dashboard"
     ],
@@ -529,12 +691,76 @@
       "stripe_sync"
     ],
     [
+      "app",
+      "test_agent_logger"
+    ],
+    [
+      "app",
+      "test_auth"
+    ],
+    [
+      "app",
+      "test_billing"
+    ],
+    [
+      "app",
+      "test_cross_module"
+    ],
+    [
+      "app",
+      "test_digest_delivery"
+    ],
+    [
+      "app",
+      "test_llm_safety_boundary"
+    ],
+    [
+      "app",
+      "test_notion_ingest"
+    ],
+    [
+      "app",
+      "test_plan_gating"
+    ],
+    [
+      "app",
+      "test_pm_agent"
+    ],
+    [
+      "app",
+      "test_rollup"
+    ],
+    [
+      "app",
+      "test_store_boundary"
+    ],
+    [
+      "app",
+      "test_stories"
+    ],
+    [
+      "app",
+      "test_stripe_boundary"
+    ],
+    [
+      "app",
+      "test_task_ledger"
+    ],
+    [
+      "auth",
+      "user-journeys.spec"
+    ],
+    [
       "backends",
       "seed_supabase"
     ],
     [
       "backends",
       "store"
+    ],
+    [
+      "backends",
+      "test_store_boundary"
     ],
     [
       "base64",
@@ -551,6 +777,10 @@
     [
       "base",
       "security_headers"
+    ],
+    [
+      "billing",
+      "test_billing"
     ],
     [
       "bookkeeper",
@@ -625,6 +855,10 @@
       "meetings"
     ],
     [
+      "client-canvas",
+      "client-workspace"
+    ],
+    [
       "cloud",
       "storage"
     ],
@@ -663,6 +897,14 @@
     [
       "config",
       "calendar_intel"
+    ],
+    [
+      "config",
+      "clients"
+    ],
+    [
+      "config",
+      "conftest"
     ],
     [
       "config",
@@ -825,6 +1067,10 @@
       "bookkeeping"
     ],
     [
+      "csv_parser",
+      "test_csv_parser"
+    ],
+    [
       "csv",
       "agents"
     ],
@@ -847,6 +1093,10 @@
     [
       "dataclasses",
       "llm"
+    ],
+    [
+      "dataclasses",
+      "pm_agent"
     ],
     [
       "dataclasses",
@@ -982,7 +1232,15 @@
     ],
     [
       "datetime",
+      "notion_ingest"
+    ],
+    [
+      "datetime",
       "playbook"
+    ],
+    [
+      "datetime",
+      "pm_agent"
     ],
     [
       "datetime",
@@ -1002,6 +1260,10 @@
     ],
     [
       "datetime",
+      "rollup"
+    ],
+    [
+      "datetime",
       "seed"
     ],
     [
@@ -1011,6 +1273,10 @@
     [
       "datetime",
       "storage"
+    ],
+    [
+      "datetime",
+      "story_ledger"
     ],
     [
       "datetime",
@@ -1031,6 +1297,46 @@
     [
       "datetime",
       "task_ledger"
+    ],
+    [
+      "datetime",
+      "test_auth"
+    ],
+    [
+      "datetime",
+      "test_billing"
+    ],
+    [
+      "datetime",
+      "test_cross_module"
+    ],
+    [
+      "datetime",
+      "test_digest_delivery"
+    ],
+    [
+      "datetime",
+      "test_notion_ingest"
+    ],
+    [
+      "datetime",
+      "test_plan_gating"
+    ],
+    [
+      "datetime",
+      "test_pm_agent"
+    ],
+    [
+      "datetime",
+      "test_rollup"
+    ],
+    [
+      "datetime",
+      "test_store_boundary"
+    ],
+    [
+      "datetime",
+      "test_stripe_boundary"
     ],
     [
       "datetime",
@@ -1082,6 +1388,10 @@
     ],
     [
       "dependencies",
+      "entitlements"
+    ],
+    [
+      "dependencies",
       "gmail_intel"
     ],
     [
@@ -1126,6 +1436,10 @@
     ],
     [
       "dependencies",
+      "stories"
+    ],
+    [
+      "dependencies",
       "stripe_billing"
     ],
     [
@@ -1135,6 +1449,14 @@
     [
       "dependencies",
       "tasks"
+    ],
+    [
+      "dependencies",
+      "test_auth"
+    ],
+    [
+      "dependencies",
+      "test_plan_gating"
     ],
     [
       "dependencies",
@@ -1189,12 +1511,32 @@
       "supervisor"
     ],
     [
+      "e2e-fixtures",
+      "server"
+    ],
+    [
       "email_service",
       "invoices"
     ],
     [
       "email_service",
       "owner_notify"
+    ],
+    [
+      "entitlements",
+      "cashflow"
+    ],
+    [
+      "entitlements",
+      "contracts"
+    ],
+    [
+      "entitlements",
+      "graph"
+    ],
+    [
+      "entitlements",
+      "memory"
     ],
     [
       "enum",
@@ -1247,6 +1589,10 @@
     [
       "fastapi",
       "drive_intel"
+    ],
+    [
+      "fastapi",
+      "entitlements"
     ],
     [
       "fastapi",
@@ -1306,6 +1652,10 @@
     ],
     [
       "fastapi",
+      "stories"
+    ],
+    [
+      "fastapi",
       "stripe_billing"
     ],
     [
@@ -1315,6 +1665,10 @@
     [
       "fastapi",
       "tasks"
+    ],
+    [
+      "fastapi",
+      "test_auth"
     ],
     [
       "fastapi",
@@ -1331,6 +1685,10 @@
     [
       "flow",
       "auth_google"
+    ],
+    [
+      "futures",
+      "pm_agent"
     ],
     [
       "globals",
@@ -1395,6 +1753,10 @@
     [
       "graph_memory",
       "playbook"
+    ],
+    [
+      "graph_memory",
+      "pm_agent"
     ],
     [
       "graph_memory",
@@ -1525,12 +1887,28 @@
       "pdf_generator"
     ],
     [
+      "llm",
+      "test_llm_boundary"
+    ],
+    [
       "logging",
       "main"
     ],
     [
       "logging",
       "manager"
+    ],
+    [
+      "main",
+      "test_plan_gating"
+    ],
+    [
+      "main",
+      "test_stripe_boundary"
+    ],
+    [
+      "main",
+      "test_stripe_webhook"
     ],
     [
       "manager-chat",
@@ -1567,6 +1945,22 @@
     [
       "memory_recall",
       "supervisor"
+    ],
+    [
+      "mock",
+      "test_auth"
+    ],
+    [
+      "mock",
+      "test_billing"
+    ],
+    [
+      "mock",
+      "test_llm_boundary"
+    ],
+    [
+      "mock",
+      "test_stripe_boundary"
     ],
     [
       "models",
@@ -1635,6 +2029,10 @@
     [
       "models",
       "drive_intel"
+    ],
+    [
+      "models",
+      "entitlements"
     ],
     [
       "models",
@@ -1714,6 +2112,14 @@
     ],
     [
       "models",
+      "stories"
+    ],
+    [
+      "models",
+      "story_ledger"
+    ],
+    [
+      "models",
       "stripe_billing"
     ],
     [
@@ -1735,6 +2141,54 @@
     [
       "models",
       "tasks"
+    ],
+    [
+      "models",
+      "test_auth"
+    ],
+    [
+      "models",
+      "test_billing"
+    ],
+    [
+      "models",
+      "test_cashflow_forecast"
+    ],
+    [
+      "models",
+      "test_cross_module"
+    ],
+    [
+      "models",
+      "test_digest_delivery"
+    ],
+    [
+      "models",
+      "test_notion_ingest"
+    ],
+    [
+      "models",
+      "test_plan_gating"
+    ],
+    [
+      "models",
+      "test_pm_agent"
+    ],
+    [
+      "models",
+      "test_profile_completeness"
+    ],
+    [
+      "models",
+      "test_rollup"
+    ],
+    [
+      "models",
+      "test_store_boundary"
+    ],
+    [
+      "models",
+      "test_stripe_boundary"
     ],
     [
       "models",
@@ -1763,6 +2217,10 @@
     [
       "os",
       "butler_google_sync"
+    ],
+    [
+      "os",
+      "conftest"
     ],
     [
       "os",
@@ -1889,6 +2347,10 @@
       "playbook"
     ],
     [
+      "project-tree",
+      "client-workspace"
+    ],
+    [
       "pydantic_settings",
       "config"
     ],
@@ -1915,6 +2377,58 @@
     [
       "pypdf",
       "meeting_agent"
+    ],
+    [
+      "pytest",
+      "conftest"
+    ],
+    [
+      "pytest",
+      "test_auth"
+    ],
+    [
+      "pytest",
+      "test_billing"
+    ],
+    [
+      "pytest",
+      "test_digest_delivery"
+    ],
+    [
+      "pytest",
+      "test_llm_boundary"
+    ],
+    [
+      "pytest",
+      "test_llm_safety_boundary"
+    ],
+    [
+      "pytest",
+      "test_notion_ingest"
+    ],
+    [
+      "pytest",
+      "test_plan_gating"
+    ],
+    [
+      "pytest",
+      "test_pm_agent"
+    ],
+    [
+      "pytest",
+      "test_rollup"
+    ],
+    [
+      "pytest",
+      "test_store_boundary"
+    ],
+    [
+      "pytest",
+      "test_stories"
+    ],
+    [
+      "pytest",
+      "test_stripe_boundary"
     ],
     [
       "rate_limit",
@@ -1967,6 +2481,10 @@
     [
       "re",
       "playbook"
+    ],
+    [
+      "re",
+      "pm_agent"
     ],
     [
       "requests",
@@ -2029,6 +2547,14 @@
       "main"
     ],
     [
+      "routers",
+      "test_stripe_boundary"
+    ],
+    [
+      "routers",
+      "test_stripe_webhook"
+    ],
+    [
       "security_headers",
       "main"
     ],
@@ -2077,8 +2603,16 @@
       "retainers"
     ],
     [
+      "security",
+      "test_llm_safety_boundary"
+    ],
+    [
       "seed",
       "butler"
+    ],
+    [
+      "seed",
+      "clients"
     ],
     [
       "seed",
@@ -2121,6 +2655,14 @@
       "seed_supabase"
     ],
     [
+      "seed",
+      "test_store_boundary"
+    ],
+    [
+      "seed",
+      "test_stripe_boundary"
+    ],
+    [
       "sentry_sdk",
       "main"
     ],
@@ -2135,6 +2677,10 @@
     [
       "services",
       "clients"
+    ],
+    [
+      "services",
+      "conftest"
     ],
     [
       "services",
@@ -2162,11 +2708,59 @@
     ],
     [
       "services",
+      "stories"
+    ],
+    [
+      "services",
       "stripe_billing"
     ],
     [
       "services",
       "tasks"
+    ],
+    [
+      "services",
+      "test_agent_logger"
+    ],
+    [
+      "services",
+      "test_cashflow_forecast"
+    ],
+    [
+      "services",
+      "test_cross_module"
+    ],
+    [
+      "services",
+      "test_digest_delivery"
+    ],
+    [
+      "services",
+      "test_memory_recall"
+    ],
+    [
+      "services",
+      "test_notion_connector"
+    ],
+    [
+      "services",
+      "test_notion_ingest"
+    ],
+    [
+      "services",
+      "test_pm_agent"
+    ],
+    [
+      "services",
+      "test_rollup"
+    ],
+    [
+      "services",
+      "test_stories"
+    ],
+    [
+      "services",
+      "test_task_ledger"
     ],
     [
       "stats",
@@ -2189,6 +2783,14 @@
       "invoices"
     ],
     [
+      "story-card",
+      "project-tree"
+    ],
+    [
+      "stripe_billing",
+      "test_stripe_boundary"
+    ],
+    [
       "stripe_sync",
       "stripe_connect"
     ],
@@ -2207,6 +2809,14 @@
     [
       "stripe",
       "stripe_sync"
+    ],
+    [
+      "stripe",
+      "test_stripe_boundary"
+    ],
+    [
+      "stripe",
+      "test_stripe_webhook"
     ],
     [
       "styles",
@@ -2306,10 +2916,6 @@
     ],
     [
       "task_ledger",
-      "notion_connector"
-    ],
-    [
-      "task_ledger",
       "playbook"
     ],
     [
@@ -2333,12 +2939,28 @@
       "vertex_ai"
     ],
     [
+      "testclient",
+      "test_plan_gating"
+    ],
+    [
+      "testclient",
+      "test_stripe_boundary"
+    ],
+    [
+      "testclient",
+      "test_stripe_webhook"
+    ],
+    [
       "text",
       "gmail_agent"
     ],
     [
       "threading",
       "rate_limit"
+    ],
+    [
+      "threading",
+      "test_pm_agent"
     ],
     [
       "time",
@@ -2377,6 +2999,14 @@
       "_bootstrap"
     ],
     [
+      "types",
+      "test_llm_boundary"
+    ],
+    [
+      "types",
+      "test_task_ledger"
+    ],
+    [
       "typing",
       "casing"
     ],
@@ -2409,8 +3039,28 @@
       "pdf_generator"
     ],
     [
+      "urlMatch-BYQrIQwR",
+      "codeMirrorModule-LEHpjmcn"
+    ],
+    [
+      "urlMatch-BYQrIQwR",
+      "index.DMMX1gXU"
+    ],
+    [
+      "urlMatch-BYQrIQwR",
+      "uiMode.Ut8wwJNp"
+    ],
+    [
+      "users",
+      "test_profile_completeness"
+    ],
+    [
       "utils",
       "gmail_intel"
+    ],
+    [
+      "uuid",
+      "conftest"
     ],
     [
       "uuid",
@@ -2423,6 +3073,10 @@
     [
       "uuid",
       "store"
+    ],
+    [
+      "uuid",
+      "story_ledger"
     ],
     [
       "uuid",
@@ -2494,42 +3148,18 @@
     ]
   ],
   "invariants": {
-    "$comment": "Health rules that define 'not broken' for KORA. Each has a CHECK command that must be RUN, not narrated. Added by hand at genesis 2026-07-23; all four verified holding at that time.",
-    "dependency_direction_inward": {
-      "rule": "Services never import routers. app/routers/** may import app/services/** and app/store; the reverse is a layering violation.",
-      "why": "Routers are the delivery mechanism (a detail). Business logic must stay callable from cron jobs and agent tool-calls, not just HTTP.",
-      "check": "cd backend && grep -rnE '^\\s*(from|import)\\s+.*routers' app/services/ | wc -l",
-      "expect": "0",
-      "verified_at_genesis": "0 violations"
-    },
-    "every_outbound_call_has_a_timeout": {
-      "rule": "Every outbound network call (LLM gateway, Supabase, Stripe, Google, Notion) sets an explicit timeout. No naked requests/httpx call without one.",
-      "why": "Integration points are the #1 source of cascading failure; an untimed call turns a slow dependency into a hung worker.",
-      "check": "cd backend && grep -rn 'timeout' app/services/llm.py",
-      "expect": "a timeout= kwarg on the client construction / request",
-      "verified_at_genesis": "app/services/llm.py:32 timeout=60.0"
-    },
-    "all_llm_input_is_sanitized": {
-      "rule": "Untrusted text (CSV descriptions, email bodies, uploaded contracts, Notion pages, user chat) passes sanitize_prompt_input() before reaching a prompt.",
-      "why": "Prompt injection is the live threat for an agent that can send email and move money. Instruction hierarchy + sanitization is the Phase 11 gate.",
-      "check": "cd backend && grep -rn 'sanitize_prompt_input' app/ | wc -l",
-      "expect": ">= 21 (never decreases without an explicit decision record)",
-      "verified_at_genesis": "21 call sites"
-    },
-    "no_outbound_send_without_human_approval": {
-      "rule": "No code path sends email/money without passing an explicit approval step. deliver=True is reachable only from an approve_* handler; preview, bulk, and cron paths stay draft-only.",
-      "why": "This is the project's core autonomy contract (DONE.html section 1). Violating it is the single worst failure mode: mass-emailing a client list by surprise.",
-      "check": "cd backend && grep -rn 'deliver=True' app/ ",
-      "expect": "every hit sits inside an approval handler (today: supervisor.approve_task)",
-      "verified_at_genesis": "holds - preview + cron paths default deliver=False"
-    }
+    "$comment": "These health rules define 'not broken'. Violations fail the G5 Verify gate.",
+    "inv_tenant_isolation": "Every Supabase query in backends/ MUST auto-inject tenant_id (user_id) filtering. No raw query may reach the database without tenant scoping. RLS policies must exist as backup enforcement layer.",
+    "inv_llm_timeout": "Every outbound call (LLM, Gmail API, Notion API, Stripe, Supabase) MUST have an explicit timeout <= 30s and a circuit-breaker. No unbounded waits. Audit: grep for 'async with' and ensure timeout is set.",
+    "inv_domain_boundary": "Modules under agents/ and backends/ MUST NOT import from routers/ or app.py. Dependency direction flows inward: routers -> backends/agents -> util. Violations detectable via: grep -r 'from routers' agents/ backends/  # must be empty",
+    "inv_token_encryption_startup": "token_encryption.load_key() MUST raise StartupError (not fall back to random key) if TOKEN_ENCRYPTION_KEY is unset in production mode. No silent data loss.",
+    "inv_audit_trail_coverage": "Every HTTP write request (POST/PUT/DELETE) MUST generate an audit log entry with actor, action, target, timestamp, and result. PII fields MUST be scrubbed before writing to audit store.",
+    "inv_llm_input_sanitization": "Every string that crosses into an LLM prompt MUST pass through sanitize_prompt_input() (reject-on-flag) for direct user input, or safe_sanitize() (redact-on-flag) for stored fields. No raw user text may reach generate_with_retry() without one of these two functions adjacent. Enforced by tests/security/test_prompt_injection.py and tests/security/test_llm_input_lint.py.",
+    "inv_llm_sanitizer_consistency": "safe_sanitize() delegates to sanitize_prompt_input() and inherits control-character stripping. Any future change to either function MUST keep the delegation so callers that use safe_sanitize() (batch paths) get the same defense as sanitize_prompt_input() (request boundaries).",
+    "inv_schema_env_billing": "docs/specs/schema.sql MUST reflect the full migration history (~20+ tables). backend/.env.example MUST exist with placeholder-only values (no secrets). agent_logs.agent_type CHECK MUST include 'billing' — stripe_billing.py/stripe_connect.py/stripe_sync.py log it.",
+    "inv_rate_limit_distributed": "When REDIS_URL is set in a multi-instance deployment, check_rate_limit() MUST use shared Redis state (sorted-set sliding window), not per-process memory. Enforced by tests/test_rate_limit.py -k multi_worker and ADR 0001."
   },
   "freeze_boundary": [
-    "backend/app/**",
-    "backend/tests/**",
-    "backend/migrations/**",
-    "frontend/app/**",
-    "frontend/components/**",
-    "frontend/lib/**"
+    "src/**"
   ]
 }

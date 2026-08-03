@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from pydantic import Field
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from .. import store
+from ..backends.user_data import CURRENT_CONSENT_VERSION
 from ..dependencies import get_current_user
 from ..models import BusinessProfile, CamelModel, User
 
@@ -43,11 +46,23 @@ async def update_me(patch: ProfileUpdate, user: User = Depends(get_current_user)
         raise HTTPException(status_code=404, detail="User not found")
     if patch.onboarding_completed and not user.onboarding_completed:
         from ..services.playbook import seed_from_onboarding
+
         try:
             profile_dict = updated.profile.model_dump(by_alias=False) if updated.profile else {}
             seed_from_onboarding(user.id, profile_dict)
         except Exception:
             pass
+        # M9.3 — first-time onboarding completion captures consent. Idempotent:
+        # we never downgrade an existing consent_version.
+        if not updated.consent_version:
+            store.update_user(
+                user.id,
+                {
+                    "consent_version": CURRENT_CONSENT_VERSION,
+                    "consent_given_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            updated = store.get_user(user.id) or updated
     return updated
 
 
@@ -87,11 +102,47 @@ def _profile_completeness(p: BusinessProfile) -> dict:
         "identity": any(_has(x) for x in (p.display_name, p.role_title, p.industry, p.description)),
         "brand": any(_has(x) for x in (b.mission, b.vision, b.values, b.usp, b.voice, b.style_guidelines)),
         "offerings": _has(p.offerings),
-        "customers": any(_has(x) for x in (c.buyer_personas, c.industries_served, c.locations, c.pain_points, c.goals)),
+        "customers": any(
+            _has(x)
+            for x in (
+                c.buyer_personas,
+                c.industries_served,
+                c.locations,
+                c.pain_points,
+                c.goals,
+            )
+        ),
         "operations": any(_has(x) for x in (o.team_members, o.working_hours, o.tools, o.workflows, o.sops)),
-        "marketing": any(_has(x) for x in (m.competitors, m.channels, m.social_accounts, m.testimonials, m.case_studies, m.sales_scripts)),
-        "legalFinancial": any(_has(x) for x in (lf.registration_details, lf.tax_info, lf.invoicing_preferences, lf.payment_methods, lf.contract_notes)),
-        "goals": any(_has(x) for x in (p.monthly_revenue_goal, p.annual_revenue_goal, p.financial_goals, p.business_priorities)),
+        "marketing": any(
+            _has(x)
+            for x in (
+                m.competitors,
+                m.channels,
+                m.social_accounts,
+                m.testimonials,
+                m.case_studies,
+                m.sales_scripts,
+            )
+        ),
+        "legalFinancial": any(
+            _has(x)
+            for x in (
+                lf.registration_details,
+                lf.tax_info,
+                lf.invoicing_preferences,
+                lf.payment_methods,
+                lf.contract_notes,
+            )
+        ),
+        "goals": any(
+            _has(x)
+            for x in (
+                p.monthly_revenue_goal,
+                p.annual_revenue_goal,
+                p.financial_goals,
+                p.business_priorities,
+            )
+        ),
     }
     filled = sum(1 for v in sections.values() if v)
     percent = round(100 * filled / len(sections)) if sections else 0
@@ -111,8 +162,7 @@ async def update_profile(patch: BusinessProfile, request: Request, user: User = 
     except Exception as exc:  # most likely: migration not applied
         raise HTTPException(
             status_code=500,
-            detail="Could not save profile. Ensure the 'profile' column exists "
-                   "(run migrations/2026-05-31_add_user_profile.sql). " + str(exc)[:160],
+            detail="Could not save profile. Ensure the 'profile' column exists " "(run migrations/2026-05-31_add_user_profile.sql). " + str(exc)[:160],
         )
     if not updated:
         raise HTTPException(status_code=404, detail="User not found")

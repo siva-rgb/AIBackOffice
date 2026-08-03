@@ -38,6 +38,30 @@ def _tx(days_ago: int = 0) -> Transaction:
     )
 
 
+def _month_start() -> datetime:
+    return datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _tx_this_month(seq: int = 0) -> Transaction:
+    """Transaction with created_at inside the current calendar month (UTC)."""
+    ts = (_month_start() + timedelta(hours=seq + 1)).isoformat()
+    return Transaction(
+        id=f"tx-month-{seq}", user_id="u-1", date=ts[:10],
+        description="test", amount=-10.0, type="expense",
+        created_at=ts,
+    )
+
+
+def _tx_before_month(seq: int = 0) -> Transaction:
+    """Transaction with created_at before the current calendar month (UTC)."""
+    ts = (_month_start() - timedelta(days=1 + seq)).isoformat()
+    return Transaction(
+        id=f"tx-old-{seq}", user_id="u-1", date=ts[:10],
+        description="test", amount=-10.0, type="expense",
+        created_at=ts,
+    )
+
+
 # ── get_user_plan ─────────────────────────────────────────────────────────────
 
 def test_get_user_plan_returns_plan(monkeypatch):
@@ -142,7 +166,7 @@ def test_transaction_limit_free_under_limit(monkeypatch):
 def test_transaction_limit_free_at_limit(monkeypatch):
     from app import store
     monkeypatch.setattr(store, "get_user", lambda uid: _user("free"))
-    txs = [_tx(i) for i in range(20)]
+    txs = [_tx_this_month(i) for i in range(20)]
     monkeypatch.setattr(store, "list_transactions", lambda uid: txs)
     result = check_transaction_limit("u-1")
     assert result["allowed"] is False
@@ -152,9 +176,9 @@ def test_transaction_limit_free_at_limit(monkeypatch):
 def test_transaction_limit_excludes_old_transactions(monkeypatch):
     from app import store
     monkeypatch.setattr(store, "get_user", lambda uid: _user("free"))
-    # 19 this month + 5 from last month (>31 days ago)
-    this_month = [_tx(i) for i in range(19)]
-    old = [_tx(40 + i) for i in range(5)]
+    # 19 this month + 5 from before month_start
+    this_month = [_tx_this_month(i) for i in range(19)]
+    old = [_tx_before_month(i) for i in range(5)]
     monkeypatch.setattr(store, "list_transactions", lambda uid: this_month + old)
     result = check_transaction_limit("u-1")
     assert result["allowed"] is True

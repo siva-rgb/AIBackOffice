@@ -9,7 +9,7 @@ from pydantic import Field
 
 from app.dependencies import get_current_user
 from app import store
-from app.models import AgentType, Alert, CamelModel
+from app.models import Alert, CamelModel
 from app.services.agent_logger import log_action
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
@@ -38,6 +38,7 @@ def _log_billing_event(user_id: str, action: str, data: dict) -> None:
 
 # ── Request bodies ────────────────────────────────────────────────────────────
 
+
 class CheckoutRequest(CamelModel):
     price_id: str = Field(..., min_length=1)
     success_url: str = Field(default="")
@@ -49,6 +50,7 @@ class UpgradeRequest(CamelModel):
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @router.post("/checkout")
 async def create_checkout_session(
@@ -132,10 +134,14 @@ async def cancel_subscription(user=Depends(get_current_user)):
 
     try:
         sub = stripe.Subscription.modify(stripe_sub_id, cancel_at_period_end=True)
-        _log_billing_event(user.id, "Subscription set to cancel at period end", {
-            "subscription_id": stripe_sub_id,
-            "period_end": sub.current_period_end,
-        })
+        _log_billing_event(
+            user.id,
+            "Subscription set to cancel at period end",
+            {
+                "subscription_id": stripe_sub_id,
+                "period_end": sub.current_period_end,
+            },
+        )
         return {"cancelled_at_period_end": True, "period_end": sub.current_period_end}
     except stripe.error.StripeError as e:
         raise HTTPException(400, f"Stripe error: {str(e)}")
@@ -177,18 +183,21 @@ async def upgrade_or_downgrade(body: UpgradeRequest, user=Depends(get_current_us
             proration_behavior="create_prorations",
         )
 
-        starter_price = os.environ.get("STRIPE_STARTER_PRICE_ID", "")
         pro_price = os.environ.get("STRIPE_PRO_PRICE_ID", "")
         new_plan = "pro" if body.new_price_id == pro_price else "starter"
 
         old_plan = user_data.plan if user_data else "free"
         store.update_user(user.id, {"plan": new_plan})
 
-        _log_billing_event(user.id, f"Plan changed to {new_plan}", {
-            "old_plan": old_plan,
-            "new_plan": new_plan,
-            "subscription_id": stripe_sub_id,
-        })
+        _log_billing_event(
+            user.id,
+            f"Plan changed to {new_plan}",
+            {
+                "old_plan": old_plan,
+                "new_plan": new_plan,
+                "subscription_id": stripe_sub_id,
+            },
+        )
 
         return {"plan": new_plan, "status": updated.status, "proration": True}
     except stripe.error.StripeError as e:
@@ -216,6 +225,7 @@ async def create_customer_portal(user=Depends(get_current_user)):
 
 
 # ── Webhook ───────────────────────────────────────────────────────────────────
+
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request):
@@ -275,10 +285,14 @@ async def _handle_checkout_completed(session: dict) -> None:
         credits = user_data.contract_credits if user_data else 0
         store.update_user(user_id, {"contract_credits": credits + 1})
 
-    _log_billing_event(user_id, f"Checkout completed ({mode})", {
-        "customer_id": customer_id,
-        "mode": mode,
-    })
+    _log_billing_event(
+        user_id,
+        f"Checkout completed ({mode})",
+        {
+            "customer_id": customer_id,
+            "mode": mode,
+        },
+    )
 
 
 async def _handle_subscription_change(subscription: dict) -> None:
@@ -297,7 +311,7 @@ async def _handle_subscription_change(subscription: dict) -> None:
     items = subscription.get("items", {}).get("data", [])
     price_id = items[0]["price"]["id"] if items else ""
 
-    starter_price = os.environ.get("STRIPE_STARTER_PRICE_ID", "")
+    starter_price = os.environ.get("STRIPE_STARTER_PRICE_ID", "")  # noqa: F841
     pro_price = os.environ.get("STRIPE_PRO_PRICE_ID", "")
 
     if status in ("active", "trialing"):
@@ -307,12 +321,16 @@ async def _handle_subscription_change(subscription: dict) -> None:
 
     store.update_user(user_id, {"plan": plan, "stripe_subscription_id": sub_id})
 
-    _log_billing_event(user_id, f"Subscription {status} → plan={plan}", {
-        "plan": plan,
-        "subscription_id": sub_id,
-        "status": status,
-        "price_id": price_id,
-    })
+    _log_billing_event(
+        user_id,
+        f"Subscription {status} → plan={plan}",
+        {
+            "plan": plan,
+            "subscription_id": sub_id,
+            "status": status,
+            "price_id": price_id,
+        },
+    )
 
 
 async def _handle_subscription_deleted(subscription: dict) -> None:
@@ -326,9 +344,13 @@ async def _handle_subscription_deleted(subscription: dict) -> None:
 
     store.update_user(user.id, {"plan": "free", "stripe_subscription_id": None})
 
-    _log_billing_event(user.id, "Subscription cancelled → downgraded to free", {
-        "previous_subscription": subscription.get("id"),
-    })
+    _log_billing_event(
+        user.id,
+        "Subscription cancelled → downgraded to free",
+        {
+            "previous_subscription": subscription.get("id"),
+        },
+    )
 
 
 async def _handle_payment_failed(invoice: dict) -> None:
@@ -342,25 +364,27 @@ async def _handle_payment_failed(invoice: dict) -> None:
 
     _fail_body = "Your subscription payment failed. Please update your payment method to avoid losing access."
     try:
-        store.insert_alert(Alert(
-            id=store.uid("alert"),
-            user_id=user.id,
-            type="payment_failed",
-            severity="critical",
-            title="Payment failed",
-            body=_fail_body,
-            action_label="Manage billing",
-            action_url="/settings/billing",
-            read=False,
-            created_at=_now(),
-        ))
+        store.insert_alert(
+            Alert(
+                id=store.uid("alert"),
+                user_id=user.id,
+                type="payment_failed",
+                severity="critical",
+                title="Payment failed",
+                body=_fail_body,
+                action_label="Manage billing",
+                action_url="/settings/billing",
+                read=False,
+                created_at=_now(),
+            )
+        )
     except Exception:
         pass
     # Email the owner immediately — a failed payment is time-sensitive.
     try:
         from app.services import owner_notify
-        owner_notify.notify_critical_alert(user.id, title="Payment failed",
-                                           body=_fail_body, action_url="/settings/billing")
+
+        owner_notify.notify_critical_alert(user.id, title="Payment failed", body=_fail_body, action_url="/settings/billing")
     except Exception:
         pass
 

@@ -32,8 +32,7 @@ async def list_contracts(user: User = Depends(get_current_user)):
     return store.list_contracts(user.id)
 
 
-@router.post("/generate", response_model=Contract, status_code=201,
-             dependencies=[Depends(enforce_plan)])
+@router.post("/generate", response_model=Contract, status_code=201, dependencies=[Depends(enforce_plan)])
 async def generate(body: GenerateContractRequest, user: User = Depends(get_current_user)):
     # Rate limit the AI endpoint (SKILL.md §16 Rule 5: contracts 10/hour/user).
     rl = check_rate_limit(f"ai:contract:{user.id}", max_requests=10, window_seconds=3600)
@@ -66,8 +65,8 @@ async def review_pasted(body: ReviewTextRequest, user: User = Depends(get_curren
     saved = None
     if body.save or body.client_id:
         saved = save_received_contract(
-            user, text=body.text, review=review, source="paste", title=body.title,
-            client_id=body.client_id, client_name=body.client_name)
+            user, text=body.text, review=review, source="paste", title=body.title, client_id=body.client_id, client_name=body.client_name
+        )
     return _review_response(review, saved)
 
 
@@ -94,13 +93,20 @@ async def review_upload(
     saved = None
     if save or client_id:
         saved = save_received_contract(
-            user, text=text, review=review, source="upload", title=title or file.filename,
-            client_id=client_id, raw_bytes=raw, filename=file.filename, content_type=file.content_type)
+            user,
+            text=text,
+            review=review,
+            source="upload",
+            title=title or file.filename,
+            client_id=client_id,
+            raw_bytes=raw,
+            filename=file.filename,
+            content_type=file.content_type,
+        )
     return _review_response(review, saved)
 
 
-@router.post("/{contract_id}/review", response_model=ContractReview,
-             dependencies=[Depends(enforce_plan)])
+@router.post("/{contract_id}/review", response_model=ContractReview, dependencies=[Depends(enforce_plan)])
 async def review_existing(contract_id: str, user: User = Depends(get_current_user)):
     """Review a contract Kora generated."""
     _check_review_limit(user.id)
@@ -109,8 +115,7 @@ async def review_existing(contract_id: str, user: User = Depends(get_current_use
         raise HTTPException(status_code=404, detail="Not found")
     if not c.content_md:
         raise HTTPException(status_code=409, detail="Contract has no content to review")
-    return review_contract(user, text=c.content_md, source="kora",
-                           contract_id=contract_id, title=c.title)
+    return review_contract(user, text=c.content_md, source="kora", contract_id=contract_id, title=c.title)
 
 
 @router.get("/{contract_id}", response_model=Contract)
@@ -131,15 +136,14 @@ async def contract_pdf(contract_id: str, user: User = Depends(get_current_user))
     pdf = generate_contract_pdf(c.title or "Contract", c.content_md)
     safe = (c.title or "contract").lower().replace(" ", "-").replace("—", "-")
     return Response(
-        content=pdf, media_type="application/pdf",
+        content=pdf,
+        media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="kora-{safe}.pdf"'},
     )
 
 
 @router.patch("/{contract_id}/status", response_model=Contract)
-async def update_status(
-    contract_id: str, body: UpdateContractStatusRequest, user: User = Depends(get_current_user)
-):
+async def update_status(contract_id: str, body: UpdateContractStatusRequest, user: User = Depends(get_current_user)):
     c = store.get_contract(user.id, contract_id)
     if not c:
         raise HTTPException(status_code=404, detail="Not found")
@@ -150,8 +154,7 @@ async def update_status(
     updated = store.update_contract(user.id, contract_id, patch)
 
     # Cross-module trigger: contract signed → auto-create invoices (once).
-    created = []
     if body.status == "signed" and not was_signed and updated:
-        created = on_contract_signed(user.id, updated)
+        on_contract_signed(user.id, updated)
 
     return updated

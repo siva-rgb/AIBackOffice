@@ -13,6 +13,7 @@ real environment variables above the dotenv file — so mutating `os.environ` he
 at module scope, is what keeps the suite hermetic. Without it, running the tests
 would read and write production data.
 """
+
 from __future__ import annotations
 
 import os
@@ -41,6 +42,13 @@ os.environ["NOTION_PARENT_PAGE_ID"] = ""
 os.environ["SUPABASE_URL"] = ""
 os.environ["SUPABASE_SERVICE_ROLE_KEY"] = ""
 
+# Token encryption (M3): pin a known Fernet key so the suite remains hermetic
+# and the module-level `load_key()` succeeds. Tests that exercise the
+# missing-key / malformed-key failure path set TOKEN_ENCRYPTION_KEY="" or a
+# bad value locally (via monkeypatch) and import a fresh module instance.
+# This fixed key is deterministic across runs — never use it outside tests.
+os.environ["TOKEN_ENCRYPTION_KEY"] = "7Xa5l8OaKCyJqfqJdSG1fRXPtga_ofNl8v2EbfsAIWM="
+
 import pytest  # noqa: E402  — must follow the env setup above
 
 
@@ -64,6 +72,7 @@ def settings():
     takes effect, not re-reading the environment.
     """
     from app.config import settings as _settings
+
     return _settings
 
 
@@ -71,6 +80,7 @@ def settings():
 def no_embeddings(monkeypatch):
     """Force the lexical-only recall path, regardless of ambient config."""
     from app.services import embeddings
+
     monkeypatch.setattr(embeddings, "is_enabled", lambda: False)
     monkeypatch.setattr(embeddings, "embed", lambda _text: None)
     return embeddings

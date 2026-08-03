@@ -1,4 +1,4 @@
-# AGENT-ADAPTERS.md — one spine, any agent
+﻿# AGENT-ADAPTERS.md — one spine, any agent
 
 The Genesis spine (`.genesis/` + `wiki/`) is **plain markdown + JSON + HTML**. Every agent can read and
 write those. What differs between agents is only four verbs. This table is the single place that

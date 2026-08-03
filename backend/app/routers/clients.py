@@ -49,17 +49,22 @@ async def list_clients(status: str | None = None, user: User = Depends(get_curre
 @router.post("")
 async def create_client(body: ClientCreate, user: User = Depends(get_current_user)):
     client = Client(
-        id=store.uid("cli"), user_id=user.id,
+        id=store.uid("cli"),
+        user_id=user.id,
         name=safe_sanitize(body.name, max_len=200),
         email=body.email,
         contact_emails=[str(e).lower() for e in (body.contact_emails or [])],
         phone=body.phone,
         company=(safe_sanitize(body.company, max_len=200) if body.company else None),
-        industry=body.industry, client_type=body.client_type, status=body.status,
+        industry=body.industry,
+        client_type=body.client_type,
+        status=body.status,
         what_we_do=(safe_sanitize(body.what_we_do, max_len=500) if body.what_we_do else None),
         notes_md=(safe_sanitize(body.notes_md, max_len=5000) if body.notes_md else None),
-        timezone=body.timezone, currency=body.currency,
-        last_activity_at=_now(), created_at=_now(),
+        timezone=body.timezone,
+        currency=body.currency,
+        last_activity_at=_now(),
+        created_at=_now(),
     )
     store.insert_client(client)
     return client.model_dump(by_alias=True)
@@ -161,13 +166,20 @@ async def create_engagement(client_id: str, body: EngagementCreate, user: User =
     if not store.get_client(user.id, client_id):
         raise HTTPException(status_code=404, detail="Client not found")
     eng = Engagement(
-        id=store.uid("eng"), user_id=user.id, client_id=client_id,
+        id=store.uid("eng"),
+        user_id=user.id,
+        client_id=client_id,
         title=safe_sanitize(body.title, max_len=200),
         description_md=(safe_sanitize(body.description_md, max_len=2000) if body.description_md else None),
-        engagement_type=body.engagement_type, status=body.status,
-        start_date=body.start_date, target_end_date=body.target_end_date,
-        budget=body.budget, budget_currency=body.budget_currency, contract_id=body.contract_id,
-        created_at=_now(), updated_at=_now(),
+        engagement_type=body.engagement_type,
+        status=body.status,
+        start_date=body.start_date,
+        target_end_date=body.target_end_date,
+        budget=body.budget,
+        budget_currency=body.budget_currency,
+        contract_id=body.contract_id,
+        created_at=_now(),
+        updated_at=_now(),
     )
     store.insert_engagement(eng)
     butler.touch_client(user.id, client_id)
@@ -175,8 +187,7 @@ async def create_engagement(client_id: str, body: EngagementCreate, user: User =
 
 
 @router.patch("/{client_id}/engagements/{engagement_id}")
-async def update_engagement(client_id: str, engagement_id: str, body: EngagementUpdate,
-                            user: User = Depends(get_current_user)):
+async def update_engagement(client_id: str, engagement_id: str, body: EngagementUpdate, user: User = Depends(get_current_user)):
     data = body.model_dump(exclude_none=True, by_alias=False)
     if data.get("description_md"):
         data["description_md"] = safe_sanitize(data["description_md"], max_len=2000)
@@ -201,10 +212,14 @@ async def create_note(client_id: str, body: NoteCreate, user: User = Depends(get
     if not store.get_client(user.id, client_id):
         raise HTTPException(status_code=404, detail="Client not found")
     note = ClientNote(
-        id=store.uid("note"), user_id=user.id, client_id=client_id,
-        engagement_id=body.engagement_id, note_type=body.note_type,
+        id=store.uid("note"),
+        user_id=user.id,
+        client_id=client_id,
+        engagement_id=body.engagement_id,
+        note_type=body.note_type,
         content_md=safe_sanitize(body.content_md, max_len=5000),
-        is_ai_generated=False, created_at=_now(),
+        is_ai_generated=False,
+        created_at=_now(),
     )
     store.insert_client_note(note)
     butler.touch_client(user.id, client_id)
@@ -228,6 +243,7 @@ async def compose_client_email(client_id: str, body: ComposeRequest, user: User 
     """Butler drafts an email to this client (brand voice + relationship history).
     Returns the draft for review — does NOT send."""
     from ..services.butler_comms import draft_client_email
+
     try:
         return draft_client_email(user.id, client_id, safe_sanitize(body.intent, max_len=2000), body.tone)
     except ValueError as exc:
@@ -239,6 +255,7 @@ async def queue_client_email_endpoint(client_id: str, body: QueueEmailRequest, u
     """Queue a (possibly edited) draft for the owner's approval. Sends via Gmail
     only after approval in the Business Manager."""
     from ..services.butler_comms import queue_client_email
+
     try:
         return queue_client_email(user.id, client_id, body.subject, body.body_text, body.body_html)
     except ValueError as exc:

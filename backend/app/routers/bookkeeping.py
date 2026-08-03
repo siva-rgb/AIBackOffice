@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+import asyncio
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from fastapi.responses import Response
 
 from .. import store
 from ..dependencies import get_current_user
 from ..models import CamelModel, Transaction, User
-from ..services.bookkeeper import ingest_transactions
+from ..services.import_jobs import create_job, get_job, run_import_job
 from ..services.pdf_generator import generate_pnl_pdf
 from ..services.pnl import compute_pnl
 from ..utils.csv_parser import parse_transactions_csv
@@ -35,6 +37,7 @@ async def patch_transaction_category(
     user: User = Depends(get_current_user),
 ):
     from ..services.playbook import observe_correction
+
     txn = next((t for t in store.list_transactions(user.id) if t.id == transaction_id), None)
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
@@ -53,7 +56,11 @@ async def patch_transaction_category(
 
 
 @router.post("/upload")
-async def upload_csv(file: UploadFile, user: User = Depends(get_current_user)):
+async def upload_csv(
+    file: UploadFile,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+):
     # Rate limit AI-heavy endpoint (SKILL.md §16 Rule 5).
     rl = check_rate_limit(f"ai:categorize:{user.id}", max_requests=20, window_seconds=3600)
     if not rl.allowed:
@@ -73,17 +80,23 @@ async def upload_csv(file: UploadFile, user: User = Depends(get_current_user)):
     if len(parsed.rows) > 10000:
         raise HTTPException(status_code=400, detail="File must have 2–10,000 rows")
 
-    result = ingest_transactions(user.id, user.currency, parsed.rows)
+    job_id = create_job(user.id)
+    background_tasks.add_task(run_import_job, job_id, user.id, user.currency, parsed.rows)
     return {
         "ok": True,
-        "inserted": result.inserted,
-        "duplicatesSkipped": result.duplicates_skipped,
-        "lowConfidence": result.low_confidence,
-        "avgConfidence": result.avg_confidence,
-        "reconciled": result.reconciled,
+        "status": "processing",
+        "jobId": job_id,
         "rowsParsed": len(parsed.rows),
         "parseWarnings": parsed.errors[:10],
     }
+
+
+@router.get("/upload/{job_id}")
+async def upload_status(job_id: str, user: User = Depends(get_current_user)):
+    job = get_job(job_id, user.id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Import job not found")
+    return job
 
 
 @router.get("/pnl")
@@ -108,7 +121,7 @@ async def download_report(user: User = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="No transactions to report on")
     dates = sorted(t.date for t in txns)
     pnl = compute_pnl(txns)
-    pdf = generate_pnl_pdf(user, pnl, dates[0], dates[-1])
+    pdf = await asyncio.to_thread(generate_pnl_pdf, user, pnl, dates[0], dates[-1])
     filename = f"kora-pnl-{dates[0]}_to_{dates[-1]}.pdf"
     return Response(
         content=pdf,

@@ -16,9 +16,16 @@ When embeddings aren't configured the semantic term drops out and recall falls
 back to lexical-only — so it always returns something useful and never hard-fails.
 
 Per-user memory is small (100s–1000s of rows), so we load the candidate rows and
-score in Python — the same design as `graph_memory`. A pgvector ANN index is a
-drop-in optimization later without changing this interface.
+score in Python — the same design as `graph_memory`.
+
+M10 (pgvector ANN): When `AGENT_MEMORY_VECTOR_BACKEND=pgvector` AND embeddings
+are configured, candidate selection delegates to the `match_agent_memory` RPC
+(2026-07-29_pgvector_agent_memory.sql) and the hybrid score is computed over the
+returned candidates. The public API surface (`remember` / `recall` /
+`build_recall_brief` / `reindex` / `stats`) is unchanged; the toggle is
+operational. Default backend is `jsonb` — the proven pre-M10 path.
 """
+
 from __future__ import annotations
 
 import math
@@ -26,17 +33,53 @@ import re
 from datetime import datetime, timezone
 
 from .. import store
+from ..config import settings
 from . import embeddings
 
 _TOKEN = re.compile(r"[a-z0-9]+")
 _STOP = {
-    "the", "a", "an", "and", "or", "of", "to", "for", "in", "on", "is", "are",
-    "with", "this", "that", "it", "at", "by", "be", "as", "we", "our", "you",
-    "your", "was", "has", "have", "had", "will", "about",
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "of",
+    "to",
+    "for",
+    "in",
+    "on",
+    "is",
+    "are",
+    "with",
+    "this",
+    "that",
+    "it",
+    "at",
+    "by",
+    "be",
+    "as",
+    "we",
+    "our",
+    "you",
+    "your",
+    "was",
+    "has",
+    "have",
+    "had",
+    "will",
+    "about",
 }
 
 # Kinds recalled by default (all). Callers can narrow with `kinds=`.
-KINDS = ("playbook", "graph_fact", "email_intel", "meeting", "note", "decision", "action")
+KINDS = (
+    "playbook",
+    "graph_fact",
+    "email_intel",
+    "meeting",
+    "note",
+    "decision",
+    "action",
+)
 
 
 def _tokens(text: str) -> set[str]:
@@ -62,7 +105,7 @@ def _lexical(q_tokens: set[str], text: str) -> float:
     t = _tokens(text)
     if not t:
         return 0.0
-    return len(q_tokens & t) / len(q_tokens)   # recall of the query's terms
+    return len(q_tokens & t) / len(q_tokens)  # recall of the query's terms
 
 
 def _recency(iso: str | None) -> float:
@@ -75,14 +118,23 @@ def _recency(iso: str | None) -> float:
         days = max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() / 86400.0)
     except Exception:
         return 0.5
-    return 0.5 ** (days / 30.0)   # 30-day half-life
+    return 0.5 ** (days / 30.0)  # 30-day half-life
 
 
 # ── Write ───────────────────────────────────────────────────────────────────
-def remember(user_id: str, kind: str, content: str, *, client_id: str | None = None,
-             ref_type: str | None = None, ref_id: str | None = None,
-             salience: float = 0.5, source: str | None = None,
-             metadata: dict | None = None, defer_embed: bool = False) -> None:
+def remember(
+    user_id: str,
+    kind: str,
+    content: str,
+    *,
+    client_id: str | None = None,
+    ref_type: str | None = None,
+    ref_id: str | None = None,
+    salience: float = 0.5,
+    source: str | None = None,
+    metadata: dict | None = None,
+    defer_embed: bool = False,
+) -> None:
     """Persist a recallable memory. Best-effort — never raises.
 
     Embeds the content when the provider is available (skip with defer_embed=True
@@ -94,34 +146,91 @@ def remember(user_id: str, kind: str, content: str, *, client_id: str | None = N
         return
     try:
         vec = None if defer_embed else embeddings.embed(content)
-        store.upsert_agent_memory(user_id, {
-            "kind": kind, "client_id": client_id, "ref_type": ref_type, "ref_id": ref_id,
-            "content": content[:2000], "embedding": vec, "salience": float(salience),
-            "source": source, "metadata": metadata or {},
-        })
+        store.upsert_agent_memory(
+            user_id,
+            {
+                "kind": kind,
+                "client_id": client_id,
+                "ref_type": ref_type,
+                "ref_id": ref_id,
+                "content": content[:2000],
+                "embedding": vec,
+                "salience": float(salience),
+                "source": source,
+                "metadata": metadata or {},
+            },
+        )
     except Exception as exc:
         print(f"[memory] remember failed: {exc}")
 
 
 # ── Read ────────────────────────────────────────────────────────────────────
-def recall(user_id: str, query: str, *, k: int = 6, client_id: str | None = None,
-           kinds: list[str] | None = None, min_score: float = 0.05) -> list[dict]:
+def recall(
+    user_id: str,
+    query: str,
+    *,
+    k: int = 6,
+    client_id: str | None = None,
+    kinds: list[str] | None = None,
+    min_score: float = 0.05,
+) -> list[dict]:
     """Top-k memories most relevant to `query`, hybrid-ranked. Each result carries
-    the original row plus `_score`, `_sim` (None if lexical-only) and `_lex`."""
+    the original row plus `_score`, `_sim` (None if lexical-only) and `_lex`.
+
+    Backend dispatch (M10):
+      - When settings.AGENT_MEMORY_VECTOR_BACKEND == "pgvector" AND embeddings
+        are enabled AND we got a query vector, we delegate the candidate
+        selection to `store.vector_search_agent_memory` (HNSW ANN over the
+        embedding_vec column) and re-score the returned candidates with the
+        same hybrid formula below. This is an O(log N) candidate selection
+        instead of O(N) Python cosine.
+      - Otherwise we load all rows for the tenant and score in Python —
+        identical to the pre-M10 path.
+
+    The public contract is unchanged: same return shape, same scoring
+    semantics. The flag is operational, not a code change for callers.
+    """
     query = (query or "").strip()
     if not query:
         return []
-    rows = store.get_agent_memory(user_id, client_id=client_id, kinds=kinds)
-    if not rows:
-        return []
-
     q_tokens = _tokens(query)
-    q_vec = embeddings.embed(query)   # None → lexical-only ranking
+    q_vec = embeddings.embed(query)  # None → lexical-only ranking
+
+    use_pgvector = settings.AGENT_MEMORY_VECTOR_BACKEND == "pgvector" and q_vec is not None
+
+    if use_pgvector:
+        # Pull a wider candidate window than k — the index ranks by ANN
+        # similarity alone, but the final score mixes lexical + salience +
+        # recency too, so some lower-similarity candidates can outrank a
+        # higher-similarity one. 3x k is a safe over-fetch at the per-user
+        # scale (hundreds–thousands of rows).
+        assert q_vec is not None  # use_pgvector already narrows on q_vec is not None
+        candidates = store.vector_search_agent_memory(
+            user_id,
+            q_vec,
+            max(1, k * 3),
+            client_id=client_id,
+            kinds=kinds,
+            min_similarity=0.0,
+        )
+        if not candidates:
+            return []
+    else:
+        candidates = store.get_agent_memory(user_id, client_id=client_id, kinds=kinds)
+        if not candidates:
+            return []
 
     scored: list[dict] = []
-    for r in rows:
-        emb = r.get("embedding")
-        sim = _cosine(q_vec, emb) if (q_vec and emb) else None
+    for r in candidates:
+        # When the candidate came from the RPC, the row already carries
+        # `_similarity` (cosine in [0,1]). Otherwise fall back to in-Python
+        # cosine against the JSONB embedding for parity with the pre-M10 path.
+        sim_val = r.pop("_similarity", None)
+        if sim_val is not None:
+            sim: float | None = float(sim_val)
+        else:
+            emb = r.get("embedding")
+            sim = _cosine(q_vec, emb) if (q_vec and emb) else None
         lex = _lexical(q_tokens, r.get("content", ""))
         sal = float(r.get("salience", 0.5) or 0.5)
         rec = _recency(r.get("updated_at") or r.get("created_at"))
@@ -130,18 +239,27 @@ def recall(user_id: str, query: str, *, k: int = 6, client_id: str | None = None
         else:
             score = 0.70 * lex + 0.18 * sal + 0.12 * rec
         if score >= min_score:
-            scored.append({
-                **r, "_score": round(score, 4),
-                "_sim": round(sim, 4) if sim is not None else None,
-                "_lex": round(lex, 4),
-            })
+            scored.append(
+                {
+                    **r,
+                    "_score": round(score, 4),
+                    "_sim": round(sim, 4) if sim is not None else None,
+                    "_lex": round(lex, 4),
+                }
+            )
     scored.sort(key=lambda x: x["_score"], reverse=True)
     return scored[:k]
 
 
-def build_recall_brief(user_id: str, query: str, *, k: int = 5,
-                       client_id: str | None = None, kinds: list[str] | None = None,
-                       max_chars: int = 500) -> str:
+def build_recall_brief(
+    user_id: str,
+    query: str,
+    *,
+    k: int = 5,
+    client_id: str | None = None,
+    kinds: list[str] | None = None,
+    max_chars: int = 500,
+) -> str:
     """Serialize the top recalled memories into a prompt-injection block, or ""."""
     hits = recall(user_id, query, k=k, client_id=client_id, kinds=kinds)
     if not hits:
@@ -168,11 +286,17 @@ def reindex(user_id: str, *, embed_missing: bool = True) -> dict:
             summ = (e.get("summary") or "").strip()
             if not summ:
                 continue
-            remember(user_id, "playbook", summ,
-                     client_id=e.get("client_id"), ref_type="playbook",
-                     ref_id=str(e.get("id") or e.get("key") or summ[:60]),
-                     salience=float(e.get("confidence", 0.5) or 0.5),
-                     source=e.get("source"), defer_embed=True)
+            remember(
+                user_id,
+                "playbook",
+                summ,
+                client_id=e.get("client_id"),
+                ref_type="playbook",
+                ref_id=str(e.get("id") or e.get("key") or summ[:60]),
+                salience=float(e.get("confidence", 0.5) or 0.5),
+                source=e.get("source"),
+                defer_embed=True,
+            )
             counts["playbook"] += 1
     except Exception as exc:
         print(f"[memory] reindex playbook failed: {exc}")
@@ -184,9 +308,15 @@ def reindex(user_id: str, *, embed_missing: bool = True) -> dict:
                 continue
             label = (n.get("label") or "").strip()
             if label:
-                remember(user_id, "graph_fact", label, ref_type="kg_node",
-                         ref_id=str(n.get("id")),
-                         salience=float(n.get("salience", 0.6) or 0.6), defer_embed=True)
+                remember(
+                    user_id,
+                    "graph_fact",
+                    label,
+                    ref_type="kg_node",
+                    ref_id=str(n.get("id")),
+                    salience=float(n.get("salience", 0.6) or 0.6),
+                    defer_embed=True,
+                )
                 counts["graph_fact"] += 1
     except Exception as exc:
         print(f"[memory] reindex graph failed: {exc}")
@@ -194,19 +324,26 @@ def reindex(user_id: str, *, embed_missing: bool = True) -> dict:
     # Email intel summaries (Supabase only; best-effort).
     try:
         from ..config import settings
+
         if settings.SUPABASE_URL:
             from supabase import create_client
+
             db = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
-            rows = db.table("email_intel_cache").select(
-                "client_id, client_name, summary").eq("user_id", user_id).execute().data or []
+            rows = db.table("email_intel_cache").select("client_id, client_name, summary").eq("user_id", user_id).execute().data or []
             for row in rows:
                 summ = (row.get("summary") or "").strip()
                 if summ:
-                    remember(user_id, "email_intel",
-                             f"{row.get('client_name', '')}: {summ}".strip(": "),
-                             client_id=row.get("client_id"), ref_type="email_intel_cache",
-                             ref_id=str(row.get("client_id")), salience=0.6,
-                             source="email", defer_embed=True)
+                    remember(
+                        user_id,
+                        "email_intel",
+                        f"{row.get('client_name', '')}: {summ}".strip(": "),
+                        client_id=row.get("client_id"),
+                        ref_type="email_intel_cache",
+                        ref_id=str(row.get("client_id")),
+                        salience=0.6,
+                        source="email",
+                        defer_embed=True,
+                    )
                     counts["email_intel"] += 1
     except Exception as exc:
         print(f"[memory] reindex email failed: {exc}")

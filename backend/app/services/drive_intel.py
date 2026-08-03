@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import io
-import json
 from datetime import datetime, timedelta, timezone
 
 from ..config import settings
-from . import agent_logger
 from .google_auth import get_user_credentials
 
 _FILE_TYPE_MAP = {
@@ -22,6 +19,7 @@ _FILE_TYPE_MAP = {
 
 def _db():
     from supabase import create_client
+
     return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
 
@@ -31,6 +29,7 @@ def _resolve_client_id(user_id: str, name: str = "", text: str = "") -> str | No
     document body. Returns the client id or None."""
     try:
         from .. import store
+
         clients = store.list_clients(user_id)
     except Exception:
         return None
@@ -62,12 +61,11 @@ def sync_drive_intel(user_id: str) -> None:
         return
 
     from googleapiclient.discovery import build
+
     service = build("drive", "v3", credentials=creds)
     db = _db()
 
-    conn_rows = db.table("google_connections").select(
-        "kora_folder_id"
-    ).eq("user_id", user_id).single().execute().data
+    conn_rows = db.table("google_connections").select("kora_folder_id").eq("user_id", user_id).single().execute().data
     kora_folder_id = (conn_rows or {}).get("kora_folder_id")
 
     files_to_process: list[dict] = []
@@ -95,6 +93,7 @@ def download_drive_file_text(user_id: str, file_id: str, mime_type: str = "") ->
         raise ValueError("Google account not connected")
 
     from googleapiclient.discovery import build
+
     service = build("drive", "v3", credentials=creds)
 
     if mime_type == "application/vnd.google-apps.document":
@@ -111,32 +110,35 @@ def download_drive_file_text(user_id: str, file_id: str, mime_type: str = "") ->
     except Exception:
         name = "document"
     from ..utils.document_text import extract_text
+
     return extract_text(name, mime_type or None, raw)
 
 
 def _list_folder_files(service, folder_id: str) -> list:
-    result = service.files().list(
-        q=f"'{folder_id}' in parents and trashed = false",
-        fields="files(id, name, mimeType, modifiedTime, size)",
-        pageSize=50,
-    ).execute()
+    result = (
+        service.files()
+        .list(
+            q=f"'{folder_id}' in parents and trashed = false",
+            fields="files(id, name, mimeType, modifiedTime, size)",
+            pageSize=50,
+        )
+        .execute()
+    )
     return result.get("files", [])
 
 
 def _find_meet_transcripts(service) -> list:
-    thirty_days_ago = (
-        datetime.now(timezone.utc) - timedelta(days=30)
-    ).strftime("%Y-%m-%dT%H:%M:%S")
-    query = (
-        f"(name contains 'transcript' or name contains 'Transcript') "
-        f"and modifiedTime > '{thirty_days_ago}' "
-        f"and trashed = false"
+    thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
+    query = f"(name contains 'transcript' or name contains 'Transcript') " f"and modifiedTime > '{thirty_days_ago}' " f"and trashed = false"
+    result = (
+        service.files()
+        .list(
+            q=query,
+            fields="files(id, name, mimeType, modifiedTime)",
+            pageSize=20,
+        )
+        .execute()
     )
-    result = service.files().list(
-        q=query,
-        fields="files(id, name, mimeType, modifiedTime)",
-        pageSize=20,
-    ).execute()
     return result.get("files", [])
 
 
@@ -144,9 +146,14 @@ def _filter_unprocessed(user_id: str, files: list, db) -> list:
     if not files:
         return []
     file_ids = [f["id"] for f in files]
-    cached = db.table("drive_doc_cache").select(
-        "drive_file_id, processed_at, drive_modified_time"
-    ).eq("user_id", user_id).in_("drive_file_id", file_ids).execute().data
+    cached = (
+        db.table("drive_doc_cache")
+        .select("drive_file_id, processed_at, drive_modified_time")
+        .eq("user_id", user_id)
+        .in_("drive_file_id", file_ids)
+        .execute()
+        .data
+    )
     cached_map = {c["drive_file_id"]: c for c in cached}
 
     new_files = []
@@ -172,16 +179,19 @@ def _route_file(user_id: str, file_meta: dict, service, db) -> None:
     # Link to a client by file name now; transcript/note handlers below refine it
     # with the document body.
     client_id = _resolve_client_id(user_id, file_meta.get("name", ""))
-    db.table("drive_doc_cache").upsert({
-        "user_id": user_id,
-        "drive_file_id": file_meta["id"],
-        "file_name": file_meta.get("name"),
-        "mime_type": mime,
-        "doc_type": doc_type,
-        "client_id": client_id,
-        "drive_modified_time": file_meta.get("modifiedTime"),
-        "processed_at": datetime.now(timezone.utc).isoformat(),
-    }, on_conflict="user_id,drive_file_id").execute()
+    db.table("drive_doc_cache").upsert(
+        {
+            "user_id": user_id,
+            "drive_file_id": file_meta["id"],
+            "file_name": file_meta.get("name"),
+            "mime_type": mime,
+            "doc_type": doc_type,
+            "client_id": client_id,
+            "drive_modified_time": file_meta.get("modifiedTime"),
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+        },
+        on_conflict="user_id,drive_file_id",
+    ).execute()
 
     if doc_type == "transcript" or _is_transcript_name(name):
         _handle_transcript(user_id, file_meta, service, db)
@@ -207,22 +217,19 @@ def _classify_doc_type(name: str, file_type: str, mime: str) -> str:
 
 
 def _is_transcript_name(name: str) -> bool:
-    return any(kw in name for kw in (
-        "transcript", "meet recording", "recorded meeting", "call transcript"
-    ))
+    return any(kw in name for kw in ("transcript", "meet recording", "recorded meeting", "call transcript"))
 
 
 def _handle_transcript(user_id: str, file_meta: dict, service, db) -> None:
     """Download a Drive transcript file and trigger meeting agent processing."""
     try:
         from .meeting_agent import process_transcript
+
         mime = file_meta.get("mimeType", "")
         file_id = file_meta["id"]
 
         if mime == "application/vnd.google-apps.document":
-            content = service.files().export(
-                fileId=file_id, mimeType="text/plain"
-            ).execute()
+            content = service.files().export(fileId=file_id, mimeType="text/plain").execute()
             text = content.decode("utf-8", errors="ignore") if isinstance(content, bytes) else str(content)
         else:
             content = service.files().get_media(fileId=file_id).execute()
@@ -233,25 +240,35 @@ def _handle_transcript(user_id: str, file_meta: dict, service, db) -> None:
 
         # Create a meeting record then process
         now = datetime.now(timezone.utc)
-        res = db.table("meetings").insert({
-            "user_id": user_id,
-            "client_id": client_id,
-            "title": file_meta.get("name", "Drive transcript"),
-            "meeting_type": "video",
-            "meeting_date": now.isoformat(),
-            "source": "drive_transcript",
-            "raw_transcript": text[:10000],
-            "parse_status": "pending",
-        }).execute()
+        res = (
+            db.table("meetings")
+            .insert(
+                {
+                    "user_id": user_id,
+                    "client_id": client_id,
+                    "title": file_meta.get("name", "Drive transcript"),
+                    "meeting_type": "video",
+                    "meeting_date": now.isoformat(),
+                    "source": "drive_transcript",
+                    "raw_transcript": text[:10000],
+                    "parse_status": "pending",
+                }
+            )
+            .execute()
+        )
         if res.data:
             meeting_id = res.data[0]["id"]
             process_transcript(user_id, meeting_id, text, "drive_transcript")
 
             # Link drive cache entry to the meeting (and the resolved client).
-            db.table("drive_doc_cache").update({
-                "meeting_id": meeting_id,
-                "client_id": client_id,
-            }).eq("user_id", user_id).eq("drive_file_id", file_id).execute()
+            db.table("drive_doc_cache").update(
+                {
+                    "meeting_id": meeting_id,
+                    "client_id": client_id,
+                }
+            ).eq(
+                "user_id", user_id
+            ).eq("drive_file_id", file_id).execute()
 
     except Exception as exc:
         print(f"[drive-intel] transcript processing failed: {exc}")
@@ -265,40 +282,40 @@ def _queue_document_review(user_id: str, file_meta: dict, doc_type: str, db) -> 
     title = f"Review {doc_type} from Drive: {file_meta.get('name', 'Document')}"
     if store.find_open_manager_task(user_id, "review_contract", file_meta["id"]):
         return
-    store.insert_manager_task(ManagerTask(
-        id=store.uid("task"),
-        user_id=user_id,
-        kind="review_contract",
-        title=title,
-        rationale=f"A new {doc_type} file was detected in your Kora Drive folder.",
-        severity="info",
-        status="proposed",
-        payload={"driveFileId": file_meta["id"], "fileName": file_meta.get("name"),
-                 "docType": doc_type, "mimeType": file_meta.get("mimeType", "")},
-        source_record_type="drive_file",
-        source_record_id=file_meta["id"],
-        created_at=datetime.now(timezone.utc).isoformat(),
-    ))
+    store.insert_manager_task(
+        ManagerTask(
+            id=store.uid("task"),
+            user_id=user_id,
+            kind="review_contract",
+            title=title,
+            rationale=f"A new {doc_type} file was detected in your Kora Drive folder.",
+            severity="info",
+            status="proposed",
+            payload={"driveFileId": file_meta["id"], "fileName": file_meta.get("name"), "docType": doc_type, "mimeType": file_meta.get("mimeType", "")},
+            source_record_type="drive_file",
+            source_record_id=file_meta["id"],
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+    )
 
 
 def _save_as_client_note(user_id: str, file_meta: dict, service, db) -> None:
     """Export a Google Doc (brief/scope) and save as a client note."""
     try:
-        content = service.files().export(
-            fileId=file_meta["id"], mimeType="text/plain"
-        ).execute()
+        content = service.files().export(fileId=file_meta["id"], mimeType="text/plain").execute()
         text = content.decode("utf-8", errors="ignore") if isinstance(content, bytes) else str(content)
 
         client_id = _resolve_client_id(user_id, file_meta.get("name", ""), text)
-        db.table("client_notes").insert({
-            "user_id": user_id,
-            "client_id": client_id,
-            "note_type": "general",
-            "content_md": f"**From Drive:** {file_meta.get('name')}\n\n{text[:5000]}",
-            "is_ai_generated": False,
-        }).execute()
+        db.table("client_notes").insert(
+            {
+                "user_id": user_id,
+                "client_id": client_id,
+                "note_type": "general",
+                "content_md": f"**From Drive:** {file_meta.get('name')}\n\n{text[:5000]}",
+                "is_ai_generated": False,
+            }
+        ).execute()
         if client_id:
-            db.table("drive_doc_cache").update({"client_id": client_id}).eq(
-                "user_id", user_id).eq("drive_file_id", file_meta["id"]).execute()
+            db.table("drive_doc_cache").update({"client_id": client_id}).eq("user_id", user_id).eq("drive_file_id", file_meta["id"]).execute()
     except Exception as exc:
         print(f"[drive-intel] save-as-note failed: {exc}")

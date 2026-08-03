@@ -5,6 +5,7 @@ and critical alerts.
 Delivery order: the owner's connected Gmail first (zero extra setup), then Resend
 as a fallback, else a graceful no-op. Never raises into the caller.
 """
+
 from __future__ import annotations
 
 import html as _html
@@ -17,9 +18,7 @@ def _text_to_html(text: str) -> str:
     esc = _html.escape(text or "")
     return (
         '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;'
-        'line-height:1.6;color:#14171f;max-width:600px">'
-        + esc.replace("\n", "<br>")
-        + "</div>"
+        'line-height:1.6;color:#14171f;max-width:600px">' + esc.replace("\n", "<br>") + "</div>"
     )
 
 
@@ -50,8 +49,7 @@ def _log(user_id: str, category: str, subject: str, to_email: str, via: str, msg
         pass
 
 
-def send_owner_email(user_id: str, subject: str, body_text: str,
-                     body_html: str = "", category: str = "notification") -> dict:
+def send_owner_email(user_id: str, subject: str, body_text: str, body_html: str = "", category: str = "notification") -> dict:
     """Email the owner. Gmail → Resend → no-op. Returns a small status dict."""
     user = store.get_user(user_id)
     to_email = getattr(user, "email", None) if user else None
@@ -64,6 +62,7 @@ def send_owner_email(user_id: str, subject: str, body_text: str,
     # 1) Owner's connected Gmail (sends to their own inbox).
     try:
         from .gmail_agent import is_gmail_connected, send_via_gmail
+
         if is_gmail_connected(user_id):
             msg_id = send_via_gmail(user_id, to_email, to_name, subject, body_text, html)
             _log(user_id, category, subject, to_email, "gmail", msg_id)
@@ -74,6 +73,7 @@ def send_owner_email(user_id: str, subject: str, body_text: str,
     # 2) Resend fallback.
     try:
         from .email_service import EMAIL_FROM, _send
+
         msg_id = _send(from_addr=EMAIL_FROM["alerts"], to=[to_email], subject=subject, html=html)
         if msg_id:
             _log(user_id, category, subject, to_email, "resend", msg_id)

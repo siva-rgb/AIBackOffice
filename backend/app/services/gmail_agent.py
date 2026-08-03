@@ -13,6 +13,7 @@ from .google_auth import get_user_credentials
 
 def _db():
     from supabase import create_client
+
     return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
 
@@ -21,9 +22,7 @@ def _text_to_html(text: str) -> str:
     escaped = _html.escape(text or "")
     return (
         '<div style="white-space:pre-wrap;font-family:Arial,Helvetica,sans-serif;'
-        'font-size:14px;line-height:1.5;color:#111">'
-        + escaped.replace("\n", "<br>")
-        + "</div>"
+        'font-size:14px;line-height:1.5;color:#111">' + escaped.replace("\n", "<br>") + "</div>"
     )
 
 
@@ -53,6 +52,7 @@ def send_via_gmail(
         raise ValueError("Google account not connected")
 
     from googleapiclient.discovery import build
+
     service = build("gmail", "v1", credentials=creds)
 
     msg = MIMEMultipart("alternative")
@@ -81,26 +81,30 @@ def queue_gmail_send(
     if not settings.SUPABASE_URL:
         return
     db = _db()
-    conn_rows = db.table("google_connections").select("google_email").eq(
-        "user_id", user_id).execute().data
+    conn_rows = db.table("google_connections").select("google_email").eq("user_id", user_id).execute().data
     from_email = conn_rows[0]["google_email"] if conn_rows else "your Gmail"
-    db.table("manager_tasks").insert({
-        "user_id": user_id,
-        "kind": "send_email_gmail",
-        "title": f"Send email to {to_name}: {subject}",
-        "rationale": context,
-        "severity": "info",
-        "status": "proposed",
-        "payload": {
-            "to_email": to_email, "to_name": to_name,
-            "subject": subject, "body_html": body_html,
-            "body_text": body_text, "from_email": from_email,
-            "related_client_id": related_client_id,
-            "related_meeting_id": related_meeting_id,
-        },
-        "source_record_type": "meeting" if related_meeting_id else "client",
-        "source_record_id": related_meeting_id or related_client_id,
-    }).execute()
+    db.table("manager_tasks").insert(
+        {
+            "user_id": user_id,
+            "kind": "send_email_gmail",
+            "title": f"Send email to {to_name}: {subject}",
+            "rationale": context,
+            "severity": "info",
+            "status": "proposed",
+            "payload": {
+                "to_email": to_email,
+                "to_name": to_name,
+                "subject": subject,
+                "body_html": body_html,
+                "body_text": body_text,
+                "from_email": from_email,
+                "related_client_id": related_client_id,
+                "related_meeting_id": related_meeting_id,
+            },
+            "source_record_type": "meeting" if related_meeting_id else "client",
+            "source_record_id": related_meeting_id or related_client_id,
+        }
+    ).execute()
 
 
 def execute_gmail_send(user_id: str, task_payload: dict) -> str | None:
@@ -112,6 +116,7 @@ def execute_gmail_send(user_id: str, task_payload: dict) -> str | None:
         raise ValueError("Google account not connected")
 
     from googleapiclient.discovery import build
+
     service = build("gmail", "v1", credentials=creds)
 
     msg = MIMEMultipart("alternative")
@@ -121,9 +126,7 @@ def execute_gmail_send(user_id: str, task_payload: dict) -> str | None:
     msg.attach(MIMEText(task_payload.get("body_html", ""), "html"))
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    result = service.users().messages().send(
-        userId="me", body={"raw": raw}
-    ).execute()
+    result = service.users().messages().send(userId="me", body={"raw": raw}).execute()
 
     latency_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
     agent_logger.log_action(

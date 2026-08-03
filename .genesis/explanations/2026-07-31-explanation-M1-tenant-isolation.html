@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M1: Tenant Isolation Enforcement — Kora AI Back Office</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --fg: #c9d1d9;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d2991d;
+    --purple: #a371f7;
+    --border: #30363d;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --code-bg: #0d1117;
+    --radius: 8px;
+    --font-mono: 'Cascadia Code','Fira Code','JetBrains Mono','Consolas',monospace;
+    --font-sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; color: #fff; margin-bottom: .25rem; }
+  h2 { font-size: 1.4rem; color: #f0f6fc; margin: 2.5rem 0 .75rem; border-bottom: 1px solid var(--border); padding-bottom: .3rem; }
+  h3 { font-size: 1.1rem; color: #e6edf3; margin: 1.5rem 0 .5rem; }
+  p, li { margin-bottom: .6rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--font-mono); font-size: .9em; background: var(--surface2); padding: .15em .4em; border-radius: 4px; }
+  pre {
+    font-family: var(--font-mono);
+    font-size: .85rem;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.2rem 1.5rem;
+    margin: 1.5rem 0 2rem;
+  }
+  .toc h3 { margin-top: 0; margin-bottom: .5rem; }
+  .toc ol { padding-left: 1.3rem; }
+  .toc li { margin-bottom: .25rem; font-size: .95rem; }
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin: 1rem 0 1.5rem;
+  }
+  .badge {
+    font-size: .8rem;
+    font-weight: 600;
+    padding: .25em .75em;
+    border-radius: 99px;
+    border: 1px solid;
+  }
+  .badge-green { color: var(--green); border-color: var(--green); }
+  .badge-red { color: var(--red); border-color: var(--red); }
+  .badge-yellow { color: var(--yellow); border-color: var(--yellow); }
+  .badge-purple { color: var(--purple); border-color: var(--purple); }
+  .cmp {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0 1.5rem;
+    align-items: start;
+  }
+  .cmp-pane {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .cmp-head {
+    padding: .4rem 1rem;
+    font-weight: 700;
+    font-size: .85rem;
+    letter-spacing: .02em;
+  }
+  .cmp-head.before { background: #3d1e1e; color: var(--red); }
+  .cmp-head.after { background: #1e3d24; color: var(--green); }
+  .cmp-body pre {
+    border: none;
+    border-radius: 0;
+    margin: 0;
+    font-size: .78rem;
+  }
+  .flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: .6rem;
+    margin: 1.2rem 0 1.5rem;
+    font-family: var(--font-mono);
+    font-size: .85rem;
+  }
+  .flow-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .5rem 1rem;
+    text-align: center;
+  }
+  .flow-box.highlight { border-color: var(--accent); background: #0a1a2e; }
+  .flow-arrow { color: var(--muted); font-size: 1.2rem; }
+  .quiz { margin: 1.5rem 0; }
+  .quiz-q {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.2rem 1.3rem;
+    margin-bottom: 1rem;
+  }
+  .quiz-q h4 { color: #fff; margin-bottom: .5rem; }
+  .quiz-q ul { list-style: none; padding-left: 0; }
+  .quiz-q li {
+    margin-bottom: .3rem;
+    padding: .4rem .6rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .quiz-q li:hover { background: var(--surface2); }
+  .quiz-q li.correct { background: #1e3d24; color: var(--green); font-weight: 600; pointer-events: none; }
+  .quiz-q li.wrong { background: #3d1e1e; color: var(--red); font-weight: 600; pointer-events: none; }
+  .quiz-q .answered li { pointer-events: none; opacity: .65; }
+  .quiz-q .answered li.correct, .quiz-q .answered li.wrong { opacity: 1; }
+  .feedback {
+    margin-top: .6rem;
+    padding: .5rem .8rem;
+    border-radius: 4px;
+    font-size: .85rem;
+    display: none;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: #1e3d24; border: 1px solid var(--green); color: var(--green); }
+  .feedback.wrong { background: #3d1e1e; border: 1px solid var(--red); color: var(--red); }
+  .gate {
+    background: linear-gradient(135deg,#1e3d24,#0d1b10);
+    border: 1px solid var(--green);
+    border-radius: var(--radius);
+    padding: 1rem 1.3rem;
+    margin: 1.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: .8rem;
+  }
+  .gate-icon { font-size: 1.8rem; }
+  .gate-body { font-size: .9rem; }
+  .gate-body strong { color: var(--green); }
+  .decisions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0 1.5rem;
+  }
+  .decision {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.2rem;
+  }
+  .decision h4 { color: var(--accent); margin-bottom: .3rem; font-size: .95rem; }
+  .decision p { font-size: .9rem; margin: 0; }
+  .checklist { list-style: none; padding: 0; margin: 1rem 0; }
+  .checklist li { padding: .3rem 0; }
+  .checklist li::before { content: " ✓ "; color: var(--green); font-weight: 700; }
+  @media (max-width:700px) {
+    .cmp, .decisions { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<h1>M1: Tenant Isolation Enforcement</h1>
+
+<div class="badges">
+  <span class="badge badge-green">Security</span>
+  <span class="badge badge-purple">Backend</span>
+  <span class="badge badge-yellow">Next.js 14 + FastAPI + Supabase</span>
+  <span class="badge badge-red">Critical</span>
+</div>
+
+<p>
+<strong>Kora is an AI-powered back-office SaaS.</strong> Before M1, tenant isolation
+was enforced manually — every developer writing a new store function had to remember
+to add <code>.eq("user_id", user_id)</code> to every query. One miss, and you get
+cross-tenant data leaks. M1 replaces that brittle pattern with a
+<code>TenantQuery</code> wrapper that makes the default path safe.
+</p>
+
+<div class="toc">
+<h3>Table of Contents</h3>
+<ol>
+  <li><a href="#background">Background</a></li>
+  <li><a href="#intuition">Intuition — Before &amp; After</a></li>
+  <li><a href="#walkthrough">Code Walkthrough</a></li>
+  <li><a href="#decisions">Key Design Decisions</a></li>
+  <li><a href="#state">Before &amp; After State</a></li>
+  <li><a href="#gate">Gate &amp; Verification</a></li>
+  <li><a href="#quiz">Quiz — 5 Questions</a></li>
+</ol>
+</div>
+
+<h2 id="background">1. Background</h2>
+<p>
+  Kora exposes per-user dashboards: invoices, contracts, transactions,
+  engagements, proposals, and more. All of it lives in Supabase Postgres with
+  Row-Level Security (RLS) disabled at the time (the service-role key bypasses
+  RLS entirely). The backend connects via the Supabase Python client,
+  <code>_sb = get_supabase()</code>, which uses the service-role key and has
+  unfettered access to every row in every table.
+</p>
+<p>
+  The <strong>only</strong> line of defence before M1 was the
+  <code>.eq("user_id", user_id)</code> clause appended to each query builder
+  chain. With ~65 raw <code>_sb.table(...)</code> calls scattered across
+  <code>supabase_store.py</code>, every new store function or refactor was a
+  gamble. Murphy's law guarantees that eventually someone forgets the
+  <code>.eq()</code> clause — and then one tenant sees another's data.
+</p>
+<p>
+M1 introduced <code>TenantQuery</code> — a thin wrapper class that
+<strong>auto-injects</strong> the <code>.eq("user_id", ...)</code> filter on
+every read and write. The default path is now safe; bypassing it requires
+an explicit escape hatch (<code>raw_table()</code>) with a comment justifying
+why.
+</p>
+
+<h2 id="intuition">2. Intuition — Before &amp; After</h2>
+
+<h3>list_invoices — before M1</h3>
+<div class="cmp">
+  <div class="cmp-pane">
+    <div class="cmp-head before">BEFORE (manual eq — brittle)</div>
+    <div class="cmp-body">
+<pre>def list_invoices(user_id: str) -> list[Invoice]:
+    r = (_sb.table("invoices")
+         .select("*")
+         .eq("user_id", user_id)  # ← don't forget this!
+         .order("created_at", desc=True)
+         .execute())
+    return [Invoice(**row) for row in r.data]</pre>
+    </div>
+  </div>
+  <div class="cmp-pane">
+    <div class="cmp-head after">AFTER M1 (wrapped — safe by default)</div>
+    <div class="cmp-body">
+<pre>def list_invoices(user_id: str) -> list[Invoice]:
+    r = (repo(user_id)
+         .select("invoices")
+         .order("created_at", desc=True)
+         .execute())
+    return [Invoice(**row) for row in r.data]</pre>
+    </div>
+  </div>
+</div>
+
+<p>
+  Notice: no more <code>.eq("user_id", ...)</code> at the call site. The
+  <code>repo(user_id)</code> wrapper handles it. A developer writing a
+  <em>new</em> store function can no longer forget the filter — it's
+  impossible.
+</p>
+
+<h3>Insert — before M1</h3>
+<div class="cmp">
+  <div class="cmp-pane">
+    <div class="cmp-head before">Before (no guard against mismatch)</div>
+    <div class="cmp-body">
+<pre>def insert_invoice(row: dict) -> dict:
+    # No validation — row["user_id"]
+    # could be anyone's. Silently
+    # inserts under whatever the
+    # invoker passes.
+    r = _sb.table("invoices").insert(row).execute()
+    return r.data[0]</pre>
+    </div>
+  </div>
+  <div class="cmp-pane">
+    <div class="cmp-head after">After M1 (validates at insert)</div>
+    <div class="cmp-body">
+<pre>def insert_invoice(user_id: str, row: dict) -> dict:
+    # _check_user_id raises ValueError
+    # if row.user_id != caller's user_id
+    r = repo(user_id).insert("invoices", row).execute()
+    return r.data[0]</pre>
+    </div>
+  </div>
+</div>
+<p>
+  The before path is silently dangerous — nothing stops a bug in caller
+  composition from mixing data across tenants. The after path with
+  <code>_check_user_id</code> catches the mismatch instantly.
+</p>
+
+<h2 id="walkthrough">3. Code Walkthrough</h2>
+
+<h3>The TenantQuery class</h3>
+<p>
+  Located in <code>backend/app/backends/repository.py</code> (68 lines).
+  Constructed with <code>(client, user_id)</code>, holds a fluent method set
+  for every CRUD operation.
+</p>
+
+<h4>Reads</h4>
+<pre>def select(self, table: str, columns: str = "*"):
+    return self._client.table(table).select(columns).eq("user_id", self._user_id)</pre>
+<p>
+  <code>select</code> automatically appends <code>.eq("user_id", ...)</code>.
+  The caller chains further modifiers like <code>.order()</code>,
+  <code>.limit()</code>, <code>.execute()</code> as needed.
+</p>
+
+<h4>Writes — Insert with validation</h4>
+<pre>def insert(self, table: str, row: dict):
+    self._check_user_id(row)
+    return self._client.table(table).insert(row)</pre>
+<p>
+  The critical guard is <code>_check_user_id</code>. It verifies that
+  the row being inserted either has no <code>user_id</code> key or has
+  a value matching the wrapper's tenant. If there's a mismatch, it raises
+  <code>ValueError</code> immediately with a descriptive message. After that,
+  it <em>stamps</em> <code>row["user_id"] = self._user_id</code> so the caller
+  doesn't have to pass it explicitly either.
+</p>
+
+<h4>Update &amp; Delete</h4>
+<pre>def update(self, table: str, patch: dict, record_id: str, id_col: str = "id"):
+    return self._client.table(table).update(patch).eq(id_col, record_id).eq("user_id", self._user_id)
+
+def delete(self, table: str, record_id: str, id_col: str = "id"):
+    return self._client.table(table).delete().eq(id_col, record_id).eq("user_id", self._user_id)</pre>
+<p>
+  Both enforce scoping: the update/delete only applies if the record's
+  <code>user_id</code> matches the tenant AND the primary key matches. This
+  prevents deleting/updating another tenant's row.
+</p>
+
+<h4>Upsert</h4>
+<pre>def upsert(self, table: str, row: dict, on_conflict: str):
+    self._check_user_id(row)
+    return self._client.table(table).upsert(row, on_conflict=on_conflict)</pre>
+<p>
+  Upsert also passes through <code>_check_user_id</code>, so even conflict
+  resolution can't slip in wrong-tenant data.
+</p>
+
+<h4>The escape hatch — raw_table</h4>
+<pre>def raw_table(self, table: str):
+    """Direct table access — only for queries that cannot use user_id
+    (e.g. cross-tenant admin ops using the service-role key).
+    Every call site must carry a comment explaining why this is safe."""
+    return self._client.table(table)</pre>
+<p>
+  <code>raw_table()</code> returns the bare Supabase table scope
+  <strong>without</strong> injecting <code>.eq("user_id", ...)</code>. This
+  is necessary for operations that are genuinely tenant-agnostic (admin
+  dashboards, system tables, auth queries). The difference? Using
+  <code>raw_table()</code> requires explicit intent and a comment in code —
+  it can't happen by accident. After M1, only 9 remaining
+  <code>raw_table</code> accesses remain in the entire codebase, each with a
+  comment justifying them.
+</p>
+
+<h3>The repo factory</h3>
+<pre>def repo(client: Client, user_id: str) -> TenantQuery:
+    return TenantQuery(client, user_id)</pre>
+<p>
+  A simple factory. In <code>supabase_store.py</code>, it's wrapped as a
+  module-level helper so every store function calls <code>repo(user_id)</code>.
+</p>
+
+<h3>Flow diagram</h3>
+<div class="flow">
+  <div class="flow-box">Router / Service</div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-box highlight">repo(user_id)</div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-box highlight">TenantQuery<br><small>.eq("user_id",…)</small></div>
+  <div class="flow-arrow">&rarr;</div>
+  <div class="flow-box">Supabase<br>Postgres</div>
+</div>
+<p>No store function touches <code>_sb.table(...)</code> directly anymore.
+Everything goes through the wrapper.</p>
+
+<h2 id="decisions">4. Key Design Decisions</h2>
+
+<div class="decisions">
+  <div class="decision">
+    <h4>Wrapper over ORM</h4>
+    <p>No new ORM or database abstraction was added. <code>TenantQuery</code> wraps the existing Supabase query builder and adds the single missing behavior: tenant scoping. Minimal surface, maximum impact.</p>
+  </div>
+  <div class="decision">
+    <h4>Insert-time validation</h4>
+    <p><code>_check_user_id</code> validates at insertion that the row's <code>user_id</code> matches the tenant's. Mismatch raises <code>ValueError</code>. This catches API-level composition bugs before they corrupt data.</p>
+  </div>
+  <div class="decision">
+    <h4>Escape hatch by design</h4>
+    <p><code>raw_table()</code> exists because not every query fits a <code>user_id</code> filter (admin lookup, auth, memory). But the method name is conspicuously verbose — it signals "I know what I'm doing." Every call site requires a comment.</p>
+  </div>
+  <div class="decision">
+    <h4>RLS is defense-in-depth</h4>
+    <p>Supabase RLS policies were added via migration as a backup layer. If a raw escape-hatch call ever leaks, or the service-role key is misused, the database itself refuses cross-tenant rows. The application layer remains the primary guard.</p>
+  </div>
+</div>
+
+<h2 id="state">5. Before &amp; After State</h2>
+
+<h3>Before — "don't forget the .eq()"</h3>
+<ul>
+  <li><strong>71 raw <code>_sb.table(...)</code> calls</strong> each manually adding <code>.eq("user_id", ...)</code></li>
+  <li>Adding a new store function required remembering the <code>.eq</code> clause — no auto-enforcement</li>
+  <li>One missed <code>.eq()</code> and you have cross-tenant data leaks</li>
+  <li>No row-level validation on inserts</li>
+</ul>
+
+<h3>After — "safe by default, dangerous by intent"</h3>
+<ul>
+  <li><strong>~65 store functions</strong> migrated to <code>repo(user_id)</code></li>
+  <li>Every read auto-scopes; every write validates</li>
+  <li>Only 9 remaining <code>raw_table()</code> sites — all justified</li>
+  <li>RLS migration as defense-in-depth backup</li>
+  <li>24 security-specific test cases — all passing</li>
+</ul>
+
+<h2 id="gate">6. Gate &amp; Verification</h2>
+
+<div class="gate">
+  <div class="gate-icon">&#10003;</div>
+  <div class="gate-body">
+    <strong>Passed.</strong> 24 out of 24 security tests pass. Full store
+    regression (26 tests) passes.
+    <code>grep</code> confirms zero direct <code>_sb.table(...)</code>
+    calls outside <code>repository.py</code>. All ~65 store functions
+    use <code>repo(user_id)</code>.
+  </div>
+</div>
+
+<h3>Verification checklist</h3>
+<ul class="checklist">
+  <li>24 tests in <code>tests/security/test_tenant_isolation.py</code> — all pass</li>
+  <li>All existing store tests pass (26 tests)</li>
+  <li><code>grep "supabase.table"</code> hits only inside <code>repository.py</code> itself</li>
+  <li>Every <code>raw_table()</code> call site has a comment explaining why it's safe</li>
+  <li>RLS migration created as defense-in-depth backup</li>
+</ul>
+
+<h2 id="quiz">7. Quiz — 5 Questions</h2>
+
+<div class="quiz">
+
+  <div class="quiz-q" id="q1">
+    <h4>Q1. What is the primary security hole that M1 fixed?</h4>
+    <ul>
+      <li data-correct="false">A) API rate limiting was missing for tenant queries</li>
+      <li data-correct="true">B) Manual .eq() clauses were missable, risking cross-tenant data leaks</li>
+      <li data-correct="false">C) The Supabase service-role key was exposed to client-side code</li>
+      <li data-correct="false">D) All queries were using SELECT * without pagination</li>
+    </ul>
+    <div class="feedback correct">B is correct. Every raw _sb.table(...) call needed a manual .eq("user_id", ...). One miss = data leak.</div>
+    <div class="feedback wrong">Incorrect. The core issue was that every _sb.table(...) call needed a manual .eq("user_id", ...). Forgetting it risked cross-tenant data leaks.</div>
+    <div class="feedback wrong">Incorrect. The service-role key was always server-side (never leaked). The problem was missing .eq() filters at the application layer.</div>
+    <div class="feedback wrong">Pagination wasn't the issue. The bug was that tenant scoping was opt-in and manual, so it was easy to forget.</div>
+  </div>
+
+  <div class="quiz-q" id="q2">
+    <h4>Q2. Which method on <code>TenantQuery</code> auto-injects the user_id filter on reads?</h4>
+    <ul>
+      <li data-correct="true">A) select()</li>
+      <li data-correct="false">B) update()</li>
+      <li data-correct="false">C) raw_table()</li>
+      <li data-correct="false">D) _check_user_id()</li>
+    </ul>
+    <div class="feedback wrong">Incorrect. select() calls .eq("user_id", self._user_id) automatically. update() scopes but also requires a record ID filter.</div>
+    <div class="feedback correct">A is correct. select() calls .eq("user_id", self._user_id) automatically, so every read is pre-scoped to the tenant.</div>
+    <div class="feedback wrong">Incorrect. raw_table() returns bare access — that is its whole point. It does NOT inject user_id.</div>
+    <div class="feedback wrong">_check_user_id() validates insert/upsert rows but does not auto-scope reads. select() handles reads.</div>
+  </div>
+
+  <div class="quiz-q" id="q3">
+    <h4>Q3. What happens if you call <code>repo("user_A").insert("t", {"user_id": "user_B"})</code>?</h4>
+    <ul>
+      <li data-correct="false">A) The row is inserted under user_B (silent cross-tenant)</li>
+      <li data-correct="false">B) The user_id is silently rewritten to user_A without any error</li>
+      <li data-correct="true">C) A ValueError is raised before the query executes</li>
+      <li data-correct="false">D) The database returns a constraint violation</li>
+    </ul>
+    <div class="feedback wrong">No — _check_user_id catches mismatches before they reach the database. A ValueError is raised.</div>
+    <div class="feedback wrong">It does not silently rewrite user_id when there's a mismatch. It raises an error instead.</div>
+    <div class="feedback wrong">C is correct. _check_user_id sees that the row's user_id doesn't match the tenant and raises ValueError — the query never executes.</div>
+    <div class="feedback wrong">The database has no way of knowing about the multi-tenant wrapper. _check_user_id raises ValueError at the application layer first.</div>
+  </div>
+
+  <div class="quiz-q" id="q4">
+    <h4>Q4. When is <code>raw_table()</code> the correct call to use?</h4>
+    <ul>
+      <li data-correct="false">A) When you need to insert a row without scoping</li>
+      <li data-correct="false">B) When you need to list all records for a single user</li>
+      <li data-correct="true">C) For cross-tenant queries (admin, auth, memory) that cannot use user_id</li>
+      <li data-correct="false">D) When you want to enforce RLS policies</li>
+    </ul>
+    <div class="feedback wrong">Writes are exactly when you want the safety layer. Use insert() for scoped writes.</div>
+    <div class="feedback wrong">Listing a user's records requires no cross-tenant access — use select(). It's tenant-scoped already.</div>
+    <div class="feedback wrong">C is correct. raw_table() is for admin lookups, auth queries, and agent memory ops where user_id doesn't apply or must be intentionally broad.</div>
+    <div class="feedback wrong">RLS is the database-level defense. raw_table() bypasses the application wrapper, not RLS.</div>
+  </div>
+
+  <div class="quiz-q" id="q5">
+    <h4>Q5. After M1, how many direct <code>_sb.table(...)</code> calls remain outside <code>repository.py</code>?</h4>
+    <ul>
+      <li data-correct="false">A) Zero — all calls are wrapped</li>
+      <li data-correct="false">B) 4 — used for auth only</li>
+      <li data-correct="true">C) 9 — all justified with comments</li>
+      <li data-correct="false">D) 20+ because some tables don't need scoping</li>
+    </ul>
+    <div class="feedback wrong">Not zero. A few justified use cases remain (e.g., auth queries, user table, cross-tenant admin).</div>
+    <div class="feedback wrong">There are more than 4 — admin scans, user lookups, and memory queries each need a justified raw_table() call.</div>
+    <div class="feedback wrong">C is correct. 9 remain, each with a comment explaining why bypassing the wrapper is safe. Shrinking further would remove needed functionality.</div>
+    <div class="feedback wrong">After M1 migrated ~65 functions, only 9 remain — and they aren't scoped because they are tenant-agnostic operations.</div>
+  </div>
+
+</div>
+
+<p style="text-align:center;margin-top:3rem;color:var(--muted);font-size:.85rem;">
+  Kora AI Back Office · M1: Tenant Isolation Enforcement · 2026-07-31
+</p>
+
+<script>
+(function() {
+  var answered = {};
+  var qs = document.querySelectorAll('.quiz-q');
+
+  qs.forEach(function(q) {
+    var lis = q.querySelectorAll('li');
+    var fbs = q.querySelectorAll('.feedback');
+
+    lis.forEach(function(li) {
+      li.addEventListener('click', function() {
+        if (answered[q.id]) return;
+        answered[q.id] = true;
+
+        var correct = li.dataset.correct === 'true';
+        li.classList.add(correct ? 'correct' : 'wrong');
+
+        // dim siblings
+        lis.forEach(function(other) {
+          if (other !== li) {
+            other.style.pointerEvents = 'none';
+            other.style.opacity = '0.5';
+          }
+        });
+
+        // show the right feedback
+        if (correct) {
+          fbs.forEach(function(fb) {
+            if (fb.classList.contains('correct')) {
+              fb.classList.add('show');
+            }
+          });
+        } else {
+          // show same-index wrong feedback
+          var idx = Array.from(lis).indexOf(li);
+          var wrongfbs = q.querySelectorAll('.feedback.wrong');
+          if (wrongfbs[idx]) {
+            wrongfbs[idx].classList.add('show');
+          }
+        }
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

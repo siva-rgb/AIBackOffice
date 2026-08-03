@@ -35,9 +35,15 @@ async def recall_memory(req: RecallRequest, user: User = Depends(get_current_use
     return {
         "query": req.query,
         "results": [
-            {"content": h["content"], "kind": h.get("kind"), "clientId": h.get("client_id"),
-             "source": h.get("source"), "score": h.get("_score"),
-             "similarity": h.get("_sim"), "lexical": h.get("_lex")}
+            {
+                "content": h["content"],
+                "kind": h.get("kind"),
+                "clientId": h.get("client_id"),
+                "source": h.get("source"),
+                "score": h.get("_score"),
+                "similarity": h.get("_sim"),
+                "lexical": h.get("_lex"),
+            }
             for h in hits
         ],
     }

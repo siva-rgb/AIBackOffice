@@ -1,6 +1,6 @@
 # Kora — Build Tracker
 
-_Last updated: 2026-07-10 (backlog logged in §5 — plan gating §5.10, follow-up/digest email wiring §5.11, GCP Cloud Run containerized deployment for frontend+backend §5.9; corrected Stripe/Playbook/Resend status to reflect actual code). Prior: 2026-06-27 security hardening + GDPR endpoints §2.15._
+_Last updated: 2026-07-28 (M5 docs reconciliation — GCS bucket naming canonical in gcp-cloud.md; prior: 2026-07-10 backlog logged in §5)._
 
 AI-native back-office SaaS for freelancers & small businesses (hacker.fund 90-day hackathon MVP).
 

@@ -1,0 +1,5 @@
+[flake8]
+max-line-length = 155
+extend-ignore = E203,W503,E127,E128
+per-file-ignores =
+    app/services/vertex_ai.py:E501

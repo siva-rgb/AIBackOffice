@@ -63,8 +63,12 @@ async def submit_capture(body: CaptureCreate, user: User = Depends(get_current_u
         raise HTTPException(status_code=400, detail="That note couldn't be accepted. Please rephrase.")
 
     capture = QuickCapture(
-        id=store.uid("cap"), user_id=user.id, raw_text=safe_text, source=body.source,
-        parse_status="pending", created_at=_now(),
+        id=store.uid("cap"),
+        user_id=user.id,
+        raw_text=safe_text,
+        source=body.source,
+        parse_status="pending",
+        created_at=_now(),
     )
     store.insert_capture(capture)
     updated = butler.parse_capture(user.id, capture.id, safe_text)

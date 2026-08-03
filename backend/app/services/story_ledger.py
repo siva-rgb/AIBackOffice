@@ -15,6 +15,7 @@ never overwrite or delete it — the agent may add alongside it, never silently
 replace it. Refreshes run nightly, so without this rule the agent would quietly
 undo the user's corrections every night.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -99,8 +100,7 @@ def delete_story(user_id: str, story_id: str) -> bool:
 
 
 # ── Observations (the qualitative layer) ────────────────────────────────────
-def add_observation(user_id: str, story_id: str, *, kind: str, text: str,
-                    source: str, source_ref: str, user_edited: bool = False) -> Story | None:
+def add_observation(user_id: str, story_id: str, *, kind: str, text: str, source: str, source_ref: str, user_edited: bool = False) -> Story | None:
     """Attach one evidence-backed observation to a story.
 
     Raises `ValueError` when `source_ref` is missing — enforcing ADR-0001's
@@ -112,10 +112,7 @@ def add_observation(user_id: str, story_id: str, *, kind: str, text: str,
     if not (text or "").strip():
         raise ValueError("Observation text is required")
     if not (source_ref or "").strip():
-        raise ValueError(
-            "source_ref is required — an observation must cite the email, meeting "
-            "or document it came from"
-        )
+        raise ValueError("source_ref is required — an observation must cite the email, meeting " "or document it came from")
 
     story = store.get_story(user_id, story_id)
     if not story:
@@ -130,10 +127,14 @@ def add_observation(user_id: str, story_id: str, *, kind: str, text: str,
         observed_at=_now(),
         user_edited=user_edited,
     )
-    return store.update_story(user_id, story_id, {
-        "observations": list(story.observations) + [entry],
-        "updated_at": _now(),
-    })
+    return store.update_story(
+        user_id,
+        story_id,
+        {
+            "observations": list(story.observations) + [entry],
+            "updated_at": _now(),
+        },
+    )
 
 
 def edit_observation(user_id: str, story_id: str, observation_id: str, text: str) -> Story | None:
@@ -144,12 +145,14 @@ def edit_observation(user_id: str, story_id: str, observation_id: str, text: str
     updated = []
     for o in story.observations:
         if o.id == observation_id:
-            o = o.model_copy(update={
-                "text": (text or "").strip()[:1000] or o.text,
-                "user_edited": True,
-                "source": "user",
-                "observed_at": _now(),
-            })
+            o = o.model_copy(
+                update={
+                    "text": (text or "").strip()[:1000] or o.text,
+                    "user_edited": True,
+                    "source": "user",
+                    "observed_at": _now(),
+                }
+            )
         updated.append(o)
     return store.update_story(user_id, story_id, {"observations": updated, "updated_at": _now()})
 
@@ -162,8 +165,7 @@ def remove_observation(user_id: str, story_id: str, observation_id: str) -> Stor
     return store.update_story(user_id, story_id, {"observations": kept, "updated_at": _now()})
 
 
-def apply_agent_observations(user_id: str, story_id: str, kind: str,
-                             entries: list[dict]) -> Story | None:
+def apply_agent_observations(user_id: str, story_id: str, kind: str, entries: list[dict]) -> Story | None:
     """Replace the *agent-authored* observations of one kind, preserving human ones.
 
     This is what the nightly fan-out (M3) calls. The merge rule is the whole
@@ -189,20 +191,26 @@ def apply_agent_observations(user_id: str, story_id: str, kind: str,
         source_ref = str(e.get("source_ref", "")).strip()
         if not text or not source_ref:
             continue  # unprovenanced → dropped, never invented
-        fresh.append(StoryObservation(
-            id=str(uuid.uuid4()),
-            kind=kind,
-            text=text[:1000],
-            source=e.get("source", "agent"),
-            source_ref=source_ref[:300],
-            observed_at=_now(),
-            user_edited=False,
-        ))
+        fresh.append(
+            StoryObservation(
+                id=str(uuid.uuid4()),
+                kind=kind,
+                text=text[:1000],
+                source=e.get("source", "agent"),
+                source_ref=source_ref[:300],
+                observed_at=_now(),
+                user_edited=False,
+            )
+        )
 
-    return store.update_story(user_id, story_id, {
-        "observations": kept + fresh,
-        "updated_at": _now(),
-    })
+    return store.update_story(
+        user_id,
+        story_id,
+        {
+            "observations": kept + fresh,
+            "updated_at": _now(),
+        },
+    )
 
 
 # ── Read helpers ────────────────────────────────────────────────────────────
@@ -226,8 +234,7 @@ def story_summary(story: Story) -> dict:
 def stats(user_id: str, *, task_id: str | None = None, client_id: str | None = None) -> dict:
     stories = store.list_stories(user_id, task_id=task_id, client_id=client_id)
     if not stories:
-        return {"total": 0, "open": 0, "done": 0, "blocked": 0,
-                "avgProgress": 0, "blockerCount": 0}
+        return {"total": 0, "open": 0, "done": 0, "blocked": 0, "avgProgress": 0, "blockerCount": 0}
     open_stories = [s for s in stories if s.status in OPEN_STATUSES]
     return {
         "total": len(stories),
@@ -237,8 +244,7 @@ def stats(user_id: str, *, task_id: str | None = None, client_id: str | None = N
         # Mean progress across every non-cancelled story — M2 refines this into
         # a weighted roll-up; here it is just a readable headline number.
         "avgProgress": round(
-            sum(s.progress_pct for s in stories if s.status != "cancelled")
-            / max(1, len([s for s in stories if s.status != "cancelled"]))
+            sum(s.progress_pct for s in stories if s.status != "cancelled") / max(1, len([s for s in stories if s.status != "cancelled"]))
         ),
         "blockerCount": sum(len(observations_of(s, "blocker")) for s in stories),
     }

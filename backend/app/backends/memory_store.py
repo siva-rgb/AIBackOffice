@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from ..models import (
     AgentLog,
     Alert,
@@ -46,8 +48,11 @@ _playbook: dict[str, list[dict]] = {
             "category": "correction",
             "client_id": None,
             "key": "category_override_adobe systems",
-            "value": {"description_pattern": "adobe systems", "old_category": "other_expense",
-                      "new_category": "software_subscriptions"},
+            "value": {
+                "description_pattern": "adobe systems",
+                "old_category": "other_expense",
+                "new_category": "software_subscriptions",
+            },
             "summary": '"adobe systems" → software_subscriptions (corrected from other_expense)',
             "confidence": 1.0,
             "source": "correction",
@@ -79,7 +84,11 @@ _playbook: dict[str, list[dict]] = {
             "category": "client_intelligence",
             "client_id": None,
             "key": "payment_reliability",
-            "value": {"reliability": "slow_but_pays", "paid_percentage": 85, "total_invoices": 7},
+            "value": {
+                "reliability": "slow_but_pays",
+                "paid_percentage": 85,
+                "total_invoices": 7,
+            },
             "summary": "Payment reliability: slow but pays (85% on time, 7 invoices)",
             "confidence": 0.82,
             "source": "pattern_detection",
@@ -95,7 +104,10 @@ _playbook: dict[str, list[dict]] = {
             "category": "business_rule",
             "client_id": None,
             "key": "skip_send_followup",
-            "value": {"kind": "send_followup", "reason": "repeatedly dismissed day-3 follow-ups"},
+            "value": {
+                "kind": "send_followup",
+                "reason": "repeatedly dismissed day-3 follow-ups",
+            },
             "summary": "User consistently dismisses day-3 invoice follow-ups — consider skipping",
             "confidence": 0.71,
             "source": "observation",
@@ -145,13 +157,7 @@ def list_transactions(user_id: str) -> list[Transaction]:
 def insert_transactions(rows: list[Transaction]) -> list[Transaction]:
     inserted: list[Transaction] = []
     for row in rows:
-        dupe = any(
-            t.user_id == row.user_id
-            and t.date == row.date
-            and t.description == row.description
-            and t.amount == row.amount
-            for t in _transactions
-        )
+        dupe = any(t.user_id == row.user_id and t.date == row.date and t.description == row.description and t.amount == row.amount for t in _transactions)
         if not dupe:
             _transactions.append(row)
             inserted.append(row)
@@ -165,7 +171,10 @@ def upsert_transactions(rows: list[Transaction]) -> list[Transaction]:
 
 
 def update_transaction(user_id: str, transaction_id: str, patch: dict) -> Transaction | None:
-    txn = next((t for t in _transactions if t.id == transaction_id and t.user_id == user_id), None)
+    txn = next(
+        (t for t in _transactions if t.id == transaction_id and t.user_id == user_id),
+        None,
+    )
     if not txn:
         return None
     for k, v in patch.items():
@@ -203,31 +212,34 @@ def update_invoice_pdf(user_id: str, invoice_id: str, pdf_path: str) -> Invoice 
 
 def update_invoice_email(user_id: str, invoice_id: str, message_id: str) -> Invoice | None:
     from datetime import datetime, timezone
-    return update_invoice(user_id, invoice_id, {
-        "email_message_id": message_id,
-        "sent_at": datetime.now(timezone.utc).isoformat(),
-        "status": "sent",
-    })
+
+    return update_invoice(
+        user_id,
+        invoice_id,
+        {
+            "email_message_id": message_id,
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+            "status": "sent",
+        },
+    )
 
 
 def next_invoice_number(user_id: str) -> str:
     from datetime import datetime, timezone
 
     year = datetime.now(timezone.utc).year
-    count = sum(
-        1 for i in _invoices if i.user_id == user_id and i.created_at[:4] == str(year)
-    )
+    count = sum(1 for i in _invoices if i.user_id == user_id and i.created_at[:4] == str(year))
     return f"INV-{year}-{count + 1:03d}"
 
 
 # --- Agent logs -------------------------------------------------------------
 def list_agent_logs(user_id: str) -> list[AgentLog]:
-    rows = [l for l in _agent_logs if l.user_id == user_id]
-    return sorted(rows, key=lambda l: l.created_at, reverse=True)
+    rows = [log for log in _agent_logs if log.user_id == user_id]
+    return sorted(rows, key=lambda log: log.created_at, reverse=True)
 
 
 def list_all_agent_logs() -> list[AgentLog]:
-    return sorted(_agent_logs, key=lambda l: l.created_at, reverse=True)
+    return sorted(_agent_logs, key=lambda log: log.created_at, reverse=True)
 
 
 def insert_agent_log(log: AgentLog) -> AgentLog:
@@ -303,9 +315,7 @@ def get_manager_task(user_id: str, task_id: str) -> ManagerTask | None:
 
 def find_open_manager_task(user_id: str, kind: str, source_record_id: str | None) -> ManagerTask | None:
     return next(
-        (t for t in _manager_tasks
-         if t.user_id == user_id and t.kind == kind
-         and t.source_record_id == source_record_id and t.status == "proposed"),
+        (t for t in _manager_tasks if t.user_id == user_id and t.kind == kind and t.source_record_id == source_record_id and t.status == "proposed"),
         None,
     )
 
@@ -375,7 +385,10 @@ def list_engagements(user_id: str, client_id: str | None = None) -> list[Engagem
 
 
 def get_engagement(user_id: str, engagement_id: str) -> Engagement | None:
-    return next((e for e in _engagements if e.id == engagement_id and e.user_id == user_id), None)
+    return next(
+        (e for e in _engagements if e.id == engagement_id and e.user_id == user_id),
+        None,
+    )
 
 
 def insert_engagement(engagement: Engagement) -> Engagement:
@@ -396,9 +409,14 @@ def update_engagement(user_id: str, engagement_id: str, patch: dict) -> Engageme
 _tasks: list = []
 
 
-def list_tasks(user_id: str, *, client_id: str | None = None,
-               engagement_id: str | None = None, status: str | None = None,
-               statuses: list[str] | None = None) -> list:
+def list_tasks(
+    user_id: str,
+    *,
+    client_id: str | None = None,
+    engagement_id: str | None = None,
+    status: str | None = None,
+    statuses: list[str] | None = None,
+) -> list:
     rows = [t for t in _tasks if t.user_id == user_id]
     if client_id is not None:
         rows = [t for t in rows if t.client_id == client_id]
@@ -420,7 +438,10 @@ def find_task_by_source_ref(user_id: str, source_ref: str):
 
 
 def find_task_by_external_ref(user_id: str, external_ref: str):
-    return next((t for t in _tasks if t.user_id == user_id and t.external_ref == external_ref), None)
+    return next(
+        (t for t in _tasks if t.user_id == user_id and t.external_ref == external_ref),
+        None,
+    )
 
 
 def insert_task(task):
@@ -452,8 +473,13 @@ def delete_task(user_id: str, task_id: str) -> bool:
 _stories: list = []
 
 
-def list_stories(user_id: str, *, task_id: str | None = None,
-                 client_id: str | None = None, statuses: list[str] | None = None) -> list:
+def list_stories(
+    user_id: str,
+    *,
+    task_id: str | None = None,
+    client_id: str | None = None,
+    statuses: list[str] | None = None,
+) -> list:
     rows = [s for s in _stories if s.user_id == user_id]
     if task_id is not None:
         rows = [s for s in rows if s.task_id == task_id]
@@ -511,8 +537,7 @@ def insert_client_note(note: ClientNote) -> ClientNote:
 
 # --- Butler: quick captures -------------------------------------------------
 def list_captures(user_id: str, requires_review: bool | None = None) -> list[QuickCapture]:
-    rows = [c for c in _captures if c.user_id == user_id
-            and (requires_review is None or c.requires_review == requires_review)]
+    rows = [c for c in _captures if c.user_id == user_id and (requires_review is None or c.requires_review == requires_review)]
     return sorted(rows, key=lambda c: c.created_at, reverse=True)
 
 
@@ -601,10 +626,14 @@ def get_client_view(user_id: str, client_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def upsert_client_view(user_id: str, client_id: str, view: dict,
-                       token_cost: dict, refreshed_at: str) -> dict:
-    row = {"user_id": user_id, "client_id": client_id, "view": view,
-           "token_cost": token_cost, "refreshed_at": refreshed_at}
+def upsert_client_view(user_id: str, client_id: str, view: dict, token_cost: dict, refreshed_at: str) -> dict:
+    row = {
+        "user_id": user_id,
+        "client_id": client_id,
+        "view": view,
+        "token_cost": token_cost,
+        "refreshed_at": refreshed_at,
+    }
     _client_views[(user_id, client_id)] = row
     return dict(row)
 
@@ -625,8 +654,7 @@ def upsert_playbook_entry(user_id: str, entry: dict) -> dict:
     now = datetime.now(timezone.utc).isoformat()
 
     existing = next(
-        (e for e in entries
-         if e["category"] == category and e["key"] == key and e["client_id"] == client_id),
+        (e for e in entries if e["category"] == category and e["key"] == key and e["client_id"] == client_id),
         None,
     )
     if existing:
@@ -671,7 +699,8 @@ def get_playbook_entries(
 ) -> list[dict]:
     entries = _playbook.get(user_id, [])
     filtered = [
-        e for e in entries
+        e
+        for e in entries
         if (category is None or e["category"] == category)
         and (client_id is None or e["client_id"] == client_id)
         and e.get("confidence", 0) >= min_confidence
@@ -732,13 +761,14 @@ _stripe_connections: dict[str, dict] = {}
 
 
 # ---- Graph memory (kg_nodes / kg_edges) ------------------------------------
-_kg_nodes: dict[str, list[dict]] = {}   # user_id -> nodes
-_kg_edges: dict[str, list[dict]] = {}   # user_id -> edges
+_kg_nodes: dict[str, list[dict]] = {}  # user_id -> nodes
+_kg_edges: dict[str, list[dict]] = {}  # user_id -> edges
 
 
 def upsert_kg_node(user_id: str, node: dict) -> dict:
     from datetime import datetime, timezone
     import uuid
+
     now = datetime.now(timezone.utc).isoformat()
     nodes = _kg_nodes.setdefault(user_id, [])
     node_type = node.get("node_type", "")
@@ -747,14 +777,26 @@ def upsert_kg_node(user_id: str, node: dict) -> dict:
     incoming_salience = float(node.get("salience", 0.5))
 
     if entity_id is not None:
-        existing = next((n for n in nodes if n["node_type"] == node_type and n.get("entity_id") == entity_id), None)
+        existing = next(
+            (n for n in nodes if n["node_type"] == node_type and n.get("entity_id") == entity_id),
+            None,
+        )
     else:
-        existing = next((n for n in nodes if n["node_type"] == node_type and n.get("entity_id") is None and n["label"] == label), None)
+        existing = next(
+            (n for n in nodes if n["node_type"] == node_type and n.get("entity_id") is None and n["label"] == label),
+            None,
+        )
 
     if existing:
         existing["label"] = label or existing["label"]
-        existing["props"] = {**(existing.get("props") or {}), **(node.get("props") or {})}
-        existing["salience"] = min(1.0, round(max(float(existing.get("salience", 0.5)), incoming_salience) + 0.02, 4))
+        existing["props"] = {
+            **(existing.get("props") or {}),
+            **(node.get("props") or {}),
+        }
+        existing["salience"] = min(
+            1.0,
+            round(max(float(existing.get("salience", 0.5)), incoming_salience) + 0.02, 4),
+        )
         existing["last_seen"] = now
         return existing
     new_node = {
@@ -776,15 +818,22 @@ def upsert_kg_node(user_id: str, node: dict) -> dict:
 def upsert_kg_edge(user_id: str, edge: dict) -> dict:
     from datetime import datetime, timezone
     import uuid
+
     now = datetime.now(timezone.utc).isoformat()
     edges = _kg_edges.setdefault(user_id, [])
     src_id, dst_id, rel = edge.get("src_id"), edge.get("dst_id"), edge.get("rel", "")
     incoming_weight = float(edge.get("weight", 1))
 
-    existing = next((e for e in edges if e["src_id"] == src_id and e["dst_id"] == dst_id and e["rel"] == rel), None)
+    existing = next(
+        (e for e in edges if e["src_id"] == src_id and e["dst_id"] == dst_id and e["rel"] == rel),
+        None,
+    )
     if existing:
         existing["weight"] = max(float(existing.get("weight", 1)), incoming_weight)  # max → idempotent
-        existing["props"] = {**(existing.get("props") or {}), **(edge.get("props") or {})}
+        existing["props"] = {
+            **(existing.get("props") or {}),
+            **(edge.get("props") or {}),
+        }
         existing["last_seen"] = now
         return existing
     new_edge = {
@@ -817,13 +866,14 @@ def delete_kg_for_user(user_id: str) -> None:
 
 
 # ---- Semantic memory (agent_memory) ----------------------------------------
-_agent_memory: dict[str, list[dict]] = {}   # user_id -> rows
+_agent_memory: dict[str, list[dict]] = {}  # user_id -> rows
 
 
 def upsert_agent_memory(user_id: str, row: dict) -> dict:
     """Idempotent on (kind, ref_id) when ref_id is present; else append."""
     from datetime import datetime, timezone
     import uuid
+
     now = datetime.now(timezone.utc).isoformat()
     rows = _agent_memory.setdefault(user_id, [])
     kind = row.get("kind", "")
@@ -831,7 +881,10 @@ def upsert_agent_memory(user_id: str, row: dict) -> dict:
 
     existing = None
     if ref_id is not None:
-        existing = next((r for r in rows if r.get("kind") == kind and r.get("ref_id") == ref_id), None)
+        existing = next(
+            (r for r in rows if r.get("kind") == kind and r.get("ref_id") == ref_id),
+            None,
+        )
     if existing:
         if row.get("content"):
             existing["content"] = row["content"]
@@ -843,7 +896,10 @@ def upsert_agent_memory(user_id: str, row: dict) -> dict:
             existing["salience"] = float(row["salience"])
         if row.get("source") is not None:
             existing["source"] = row["source"]
-        existing["metadata"] = {**(existing.get("metadata") or {}), **(row.get("metadata") or {})}
+        existing["metadata"] = {
+            **(existing.get("metadata") or {}),
+            **(row.get("metadata") or {}),
+        }
         existing["updated_at"] = now
         return existing
 
@@ -866,8 +922,13 @@ def upsert_agent_memory(user_id: str, row: dict) -> dict:
     return new_row
 
 
-def get_agent_memory(user_id: str, *, client_id: str | None = None,
-                     kinds: list[str] | None = None, limit: int | None = None) -> list[dict]:
+def get_agent_memory(
+    user_id: str,
+    *,
+    client_id: str | None = None,
+    kinds: list[str] | None = None,
+    limit: int | None = None,
+) -> list[dict]:
     rows = list(_agent_memory.get(user_id, []))
     if client_id is not None:
         rows = [r for r in rows if r.get("client_id") == client_id]
@@ -882,19 +943,42 @@ def delete_agent_memory_for_user(user_id: str) -> None:
     _agent_memory[user_id] = []
 
 
-def delete_agent_memory(user_id: str, *, kind: str | None = None,
-                        ref_id_prefix: str | None = None) -> int:
+def delete_agent_memory(user_id: str, *, kind: str | None = None, ref_id_prefix: str | None = None) -> int:
     """Delete a user's agent_memory rows, narrowed by kind and/or ref_id prefix."""
     rows = _agent_memory.get(user_id, [])
     keep, removed = [], 0
     for r in rows:
-        if kind is not None and r.get("kind") != kind:
-            keep.append(r); continue
-        if ref_id_prefix is not None and not str(r.get("ref_id") or "").startswith(ref_id_prefix):
-            keep.append(r); continue
-        removed += 1
+        kind_match = kind is None or r.get("kind") == kind
+        prefix_match = ref_id_prefix is None or str(r.get("ref_id") or "").startswith(ref_id_prefix)
+        if kind_match and prefix_match:
+            removed += 1
+        else:
+            keep.append(r)
     _agent_memory[user_id] = keep
     return removed
+
+
+def vector_search_agent_memory(
+    user_id: str,
+    query_embedding: list[float],
+    k: int,
+    *,
+    client_id: str | None = None,
+    kinds: list[str] | None = None,
+    min_similarity: float = 0.0,
+) -> list[dict]:
+    """Mock-backend stub for the pgvector ANN RPC.
+
+    The mock backend has no Postgres; vector search is a Supabase-only
+    optimization. Return [] so the service-layer dispatch (memory_recall.recall)
+    cleanly falls back to the load-all-and-cosine path in mock mode, and
+    callers can ignore the toggle.
+
+    The mock memory_store.load+cosine path is the source of truth for
+    mock-mode tests — see `recall()` in memory_recall.py and
+    `test_memory_recall.py`.
+    """
+    return []
 
 
 # ---- Notion connection (task ledger mirror) --------------------------------
@@ -939,3 +1023,212 @@ def update_stripe_connection(user_id: str, updates: dict) -> dict:
 
 def delete_stripe_connection(user_id: str) -> None:
     _stripe_connections.pop(user_id, None)
+
+
+# ── M9 GDPR/CCPA ─────────────────────────────────────────────────────────────
+# Backend-agnostic helpers used by routers/account.py. The single source of
+# truth for which tables contain user PII is `backends/user_data.py`; this
+# module implements the operations against the in-memory dicts.
+
+_USER_DATA_DICTS = {
+    "agent_logs": _agent_logs,
+    "alerts": _alerts,
+    "contracts": _contracts,
+    "manager_tasks": _manager_tasks,
+    "clients": _clients,
+    "engagements": _engagements,
+    "client_notes": _client_notes,
+    "captures": _captures,
+    "proposals": _proposals,
+    "retainers": _retainers,
+}
+
+_TRANSACTIONAL_USER_DATA_DICTS = {
+    "transactions": _transactions,
+    "invoices": _invoices,
+}
+
+
+def list_user_data(user_id: str) -> dict[str, list[dict]]:
+    """Return every row this user owns across USER_DATA_TABLES.
+
+    Lists are returned as raw dicts (not model instances) because the export
+    payload is JSON-serialised and we want zero information loss vs. Pydantic
+    coercion.
+    """
+    from .user_data import USER_DATA_TABLES
+
+    out: dict[str, list[dict]] = {}
+    for table in USER_DATA_TABLES:
+        if table in _USER_DATA_DICTS:
+            out[table] = [_to_dict(r) for r in _USER_DATA_DICTS[table] if getattr(r, "user_id", None) == user_id]
+        elif table in _TRANSACTIONAL_USER_DATA_DICTS:
+            out[table] = [_to_dict(r) for r in _TRANSACTIONAL_USER_DATA_DICTS[table] if getattr(r, "user_id", None) == user_id]
+        elif table == "tasks":
+            out[table] = []
+        elif table == "stories":
+            out[table] = []
+        elif table == "agent_memory":
+            out[table] = list(_manager_memory.get(user_id, {}).get("agent_memory", []))
+        elif table == "kg_nodes":
+            out[table] = list(_manager_memory.get(user_id, {}).get("kg_nodes", []))
+        elif table == "kg_edges":
+            out[table] = list(_manager_memory.get(user_id, {}).get("kg_edges", []))
+        elif table == "client_view_cache":
+            out[table] = list(_manager_memory.get(user_id, {}).get("client_view_cache", []))
+        elif table == "business_playbook":
+            out[table] = list(_playbook.get(user_id, []))
+        elif table == "google_connections":
+            out[table] = [_google_connection_row(user_id)] if user_id in _google_connections else []
+        elif table == "stripe_connections":
+            out[table] = [_stripe_connection_row(user_id)] if user_id in _stripe_connections else []
+        elif table == "notion_connections":
+            out[table] = [_notion_connection_row(user_id)] if user_id in _notion_connections else []
+        elif table in (
+            "reports",
+            "cashflow_forecasts",
+            "meetings",
+            "meeting_action_items",
+            "drive_doc_cache",
+            "email_intel_cache",
+        ):
+            # Mock backend has no live model objects for these — export returns
+            # an empty list. The Supabase backend handles them via raw table reads.
+            out[table] = []
+        else:
+            out[table] = []
+    return out
+
+
+def delete_user_data(user_id: str) -> dict[str, int]:
+    """Delete every row this user owns across USER_DATA_TABLES.
+
+    Returns per-table row counts so the caller can surface them in the audit log.
+    Backend-agnostic; in-memory implementation clears the module-level dicts.
+    """
+    from .user_data import USER_DATA_TABLES
+
+    counts: dict[str, int] = {}
+    for table in USER_DATA_TABLES:
+        if table in _USER_DATA_DICTS:
+            kept, removed = _filter_out(_USER_DATA_DICTS[table], user_id)
+            counts[table] = removed
+        elif table in _TRANSACTIONAL_USER_DATA_DICTS:
+            kept, removed = _filter_out(_TRANSACTIONAL_USER_DATA_DICTS[table], user_id)
+            counts[table] = removed
+        elif table == "business_playbook":
+            counts[table] = len(_playbook.pop(user_id, []))
+        elif table == "agent_memory":
+            mm = _manager_memory.get(user_id, {})
+            counts[table] = len(mm.pop("agent_memory", []))
+            counts["kg_nodes"] = len(mm.pop("kg_nodes", []))
+            counts["kg_edges"] = len(mm.pop("kg_edges", []))
+            counts["client_view_cache"] = len(mm.pop("client_view_cache", []))
+        elif table == "google_connections":
+            counts[table] = 1 if _google_connections.pop(user_id, None) is not None else 0
+        elif table == "stripe_connections":
+            counts[table] = 1 if _stripe_connections.pop(user_id, None) is not None else 0
+        elif table == "notion_connections":
+            counts[table] = 1 if _notion_connections.pop(user_id, None) is not None else 0
+        elif table in ("tasks", "stories"):
+            counts[table] = 0  # mock has no live state; covered by supabase backend
+        else:
+            counts[table] = 0
+    # Remove the user row itself
+    counts["users"] = sum(1 for u in _users if u.id == user_id)
+    _users[:] = [u for u in _users if u.id != user_id]
+    return counts
+
+
+# Module-level singleton for the mock google_connections (no existing mock
+# representation — added in M9). Stripe + Notion mock dicts live near their
+# respective upsert helpers earlier in this file.
+_google_connections: dict[str, dict] = {}
+
+
+def _to_dict(obj) -> dict:
+    if isinstance(obj, dict):
+        return dict(obj)
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump(by_alias=False, mode="json")
+    return dict(getattr(obj, "__dict__", {}))
+
+
+def _filter_out(rows: list, user_id: str) -> tuple[list, int]:
+    kept = [r for r in rows if getattr(r, "user_id", None) != user_id]
+    removed = len(rows) - len(kept)
+    rows[:] = kept
+    return kept, removed
+
+
+def _google_connection_row(user_id: str) -> dict:
+    return {"user_id": user_id, **_google_connections[user_id]}
+
+
+def _stripe_connection_row(user_id: str) -> dict:
+    return {"user_id": user_id, **_stripe_connections[user_id]}
+
+
+def _notion_connection_row(user_id: str) -> dict:
+    return {"user_id": user_id, **_notion_connections[user_id]}
+
+
+_import_jobs: dict[str, dict] = {}
+
+
+def create_import_job(user_id: str, job_id: str) -> None:
+    _import_jobs[job_id] = {
+        "id": job_id,
+        "user_id": user_id,
+        "status": "pending",
+        "result": {},
+        "error": None,
+    }
+
+
+def get_import_job(user_id: str, job_id: str) -> dict | None:
+    job = _import_jobs.get(job_id)
+    if not job or job.get("user_id") != user_id:
+        return None
+    return dict(job)
+
+
+def update_import_job(user_id: str, job_id: str, patch: dict) -> None:
+    job = _import_jobs.get(job_id)
+    if job and job.get("user_id") == user_id:
+        job.update(patch)
+
+
+def get_google_token(user_id: str) -> str | None:
+    """Mock backend holds no real OAuth tokens — nothing to revoke."""
+    return None
+
+
+def record_deletion(
+    *,
+    reason: str,
+    tables_cleared: dict[str, int],
+    files_deleted: int,
+    user_request_id: str,
+    side_effects: dict[str, str] | None = None,
+) -> None:
+    """Append a no-PII audit row. Mock backend: in-memory list, no real DB."""
+    _deletion_log.append(
+        {
+            "id": user_request_id,
+            "deleted_at": datetime.now(timezone.utc).isoformat(),
+            "reason": reason,
+            "tables_cleared": dict(tables_cleared),
+            "files_deleted_count": files_deleted,
+            "user_request_id": user_request_id,
+            "side_effects": dict(side_effects or {}),
+        }
+    )
+
+
+_deletion_log: list[dict] = []
+
+
+def list_deletion_log() -> list[dict]:
+    """Test-only accessor: returns the mock deletion log."""
+    return list(_deletion_log)

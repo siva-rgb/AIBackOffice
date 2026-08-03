@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import stripe
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 
 from app.config import settings
 from app.dependencies import get_current_user
+from app.clients.pool import get_async_http
+from app.services.oauth_state import issue_oauth_state, verify_oauth_state
 from app.services.token_encryption import encrypt_token
 from app.services.agent_logger import log_action
 from app import store
@@ -25,7 +26,7 @@ async def connect_stripe(user=Depends(get_current_user)):
         "?response_type=code"
         f"&client_id={settings.STRIPE_CONNECT_CLIENT_ID}"
         "&scope=read_write"
-        f"&state={user.id}"
+        f"&state={issue_oauth_state(user.id)}"
         f"&redirect_uri={settings.STRIPE_CONNECT_REDIRECT_URI}"
     )
     return {"auth_url": auth_url}
@@ -40,7 +41,7 @@ async def stripe_connect_callback(
 ):
     """
     Stripe redirects here after the user grants / denies permission.
-    state = user_id (set in /connect).
+    state = signed OAuth token (set in /connect).
     This endpoint is called by the Next.js proxy at /api/auth/stripe/callback.
     """
     frontend_url = settings.NEXT_PUBLIC_APP_URL
@@ -51,25 +52,25 @@ async def stripe_connect_callback(
     if not code or not state:
         return RedirectResponse(f"{frontend_url}/settings?stripe_connect_error=missing_params")
 
-    user_id = state
+    user_id = verify_oauth_state(state)
+    if not user_id:
+        return RedirectResponse(f"{frontend_url}/settings?stripe_connect_error=invalid_state")
 
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "https://connect.stripe.com/oauth/token",
-                data={
-                    "client_secret": settings.STRIPE_SECRET_KEY,
-                    "code": code,
-                    "grant_type": "authorization_code",
-                },
-                timeout=15.0,
-            )
-            data = resp.json()
+        client = get_async_http()
+        resp = await client.post(
+            "https://connect.stripe.com/oauth/token",
+            data={
+                "client_secret": settings.STRIPE_SECRET_KEY,
+                "code": code,
+                "grant_type": "authorization_code",
+            },
+            timeout=15.0,
+        )
+        data = resp.json()
 
         if "error" in data:
-            return RedirectResponse(
-                f"{frontend_url}/settings?stripe_connect_error={data['error']}"
-            )
+            return RedirectResponse(f"{frontend_url}/settings?stripe_connect_error={data['error']}")
 
         access_token: str = data.get("access_token", "")
         refresh_token: str = data.get("refresh_token", "")
@@ -89,16 +90,19 @@ async def stripe_connect_callback(
         except Exception:
             pass
 
-        store.upsert_stripe_connection(user_id, {
-            "stripe_account_id": stripe_account_id,
-            "stripe_email": stripe_email,
-            "access_token_enc": encrypt_token(access_token),
-            "refresh_token_enc": encrypt_token(refresh_token) if refresh_token else None,
-            "token_scope": scope,
-            "livemode": livemode,
-            "connected": True,
-            "last_error": None,
-        })
+        store.upsert_stripe_connection(
+            user_id,
+            {
+                "stripe_account_id": stripe_account_id,
+                "stripe_email": stripe_email,
+                "access_token_enc": encrypt_token(access_token),
+                "refresh_token_enc": encrypt_token(refresh_token) if refresh_token else None,
+                "token_scope": scope,
+                "livemode": livemode,
+                "connected": True,
+                "last_error": None,
+            },
+        )
 
         log_action(
             user_id=user_id,
@@ -112,9 +116,7 @@ async def stripe_connect_callback(
 
     except Exception as exc:
         print(f"[stripe-connect] callback error: {exc}")
-        return RedirectResponse(
-            f"{frontend_url}/settings?stripe_connect_error=token_exchange_failed"
-        )
+        return RedirectResponse(f"{frontend_url}/settings?stripe_connect_error=token_exchange_failed")
 
 
 @router.get("/status")
@@ -137,6 +139,7 @@ async def stripe_connect_status(user=Depends(get_current_user)):
 async def trigger_sync(user=Depends(get_current_user)):
     """Manually pull transactions from the connected Stripe account."""
     from app.services.stripe_sync import sync_stripe_transactions
+
     result = await sync_stripe_transactions(user.id)
     if "error" in result and not result.get("synced_count"):
         raise HTTPException(400, result["error"])

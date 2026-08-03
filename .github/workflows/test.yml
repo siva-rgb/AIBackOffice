@@ -1,8 +1,8 @@
 name: Tests
 
-# Runs the backend regression suite on every push / PR. The suite is hermetic:
-# conftest.py forces KORA_DATA_BACKEND=mock and blanks the gateway/Supabase env
-# BEFORE any app import, so it needs no secrets and touches no network.
+# Runs lint, typecheck, and tests on every push / PR.
+# The backend suite is hermetic: conftest.py forces KORA_DATA_BACKEND=mock
+# and blanks all credentials before any app import — no secrets needed.
 
 on:
   push:
@@ -13,6 +13,16 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
     defaults:
       run:
         working-directory: backend
@@ -31,7 +41,50 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run tests (mock backend, no secrets)
+      - name: Lint (flake8)
+        run: flake8 app
+
+      - name: Format check (black)
+        run: black app --check --line-length=155
+
+      - name: Typecheck (mypy)
+        # NOTE: 218 pre-existing mypy errors surface on this codebase (mostly
+        # `dict[str, Any]` annotation drift across the supabase_store / playbook
+        # / supervisors). M2 does not require zero mypy — that bar belongs to a
+        # dedicated cleanup milestone — but surfacing them matters so contributors
+        # see the drift. `|| true` keeps the step non-blocking until the cleanup
+        # lands; revisit once a milestone owns zero-mypy as its gate.
+        run: mypy app --ignore-missing-imports --no-strict-optional || true
+
+      - name: Run tests with coverage
         env:
           KORA_DATA_BACKEND: mock
-        run: pytest -q
+          REDIS_TEST_URL: redis://127.0.0.1:6379/15
+        run: pytest -q --cov=app --cov-report=term-missing --cov-fail-under=39
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests (jest)
+        run: npm test -- --passWithNoTests

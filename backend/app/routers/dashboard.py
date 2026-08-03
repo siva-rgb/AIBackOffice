@@ -53,12 +53,7 @@ async def overview(user: User = Depends(get_current_user)):
     stats = compute_agent_stats(logs)
 
     now = datetime.now(timezone.utc)
-    month_income = sum(
-        abs(t.amount)
-        for t in txns
-        if t.type == "income"
-        and t.date[:7] == now.date().isoformat()[:7]
-    )
+    month_income = sum(abs(t.amount) for t in txns if t.type == "income" and t.date[:7] == now.date().isoformat()[:7])
     outstanding = sum(i.total for i in invoices if i.status in ("sent", "overdue", "viewed"))
     overdue_count = sum(1 for i in invoices if i.status == "overdue")
     unread = [a for a in alerts if not a.read]
@@ -70,5 +65,5 @@ async def overview(user: User = Depends(get_current_user)):
         "overdueCount": overdue_count,
         "agentStats": stats,
         "unreadAlerts": [a.model_dump(by_alias=True) for a in unread],
-        "recentActivity": [l.model_dump(by_alias=True) for l in logs[:6]],
+        "recentActivity": [entry.model_dump(by_alias=True) for entry in logs[:6]],
     }

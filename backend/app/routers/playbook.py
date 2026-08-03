@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from .. import store
 from ..dependencies import get_current_user
-from ..models import CamelModel, PlaybookCreate, PlaybookEntry, PlaybookUpdate, User
+from ..models import PlaybookCreate, PlaybookUpdate, User
 
 router = APIRouter(prefix="/api/playbook", tags=["playbook"])
 
@@ -27,6 +27,7 @@ async def list_entries(
 @router.post("", status_code=201)
 async def create_entry(body: PlaybookCreate, user: User = Depends(get_current_user)):
     from datetime import datetime, timezone
+
     now = datetime.now(timezone.utc).isoformat()
     entry_dict = {
         "id": store.uid("pb"),
@@ -71,6 +72,7 @@ async def delete_entry(entry_id: str, user: User = Depends(get_current_user)):
 @router.post("/detect")
 async def detect_patterns(user: User = Depends(get_current_user)):
     from ..services.playbook import detect_patterns
+
     patterns = detect_patterns(user.id)
     return {"detected": len(patterns), "patterns": patterns}
 
@@ -78,6 +80,7 @@ async def detect_patterns(user: User = Depends(get_current_user)):
 @router.post("/compress")
 async def compress_memory(user: User = Depends(get_current_user)):
     from ..services.playbook import compress_playbook_to_memory
+
     result = compress_playbook_to_memory(user.id)
     return {"ok": True, "summary": result}
 

@@ -1,6 +1,6 @@
-# LOOPS.md — How KORA Gets Built
+﻿# LOOPS.md — How AIBackOffice Gets Built
 
-This file is **dev-only**. It is HOW we build KORA across many sessions with a cheap
+This file is **dev-only**. It is HOW we build AIBackOffice across many sessions with a cheap
 driver model. The loops are NOT product features. They are the harness that prompts the agent so
 you don't have to.
 
@@ -53,7 +53,7 @@ Skipping G0 = wasted tokens and a duplicate implementation that drifts.
 
 ## Operating Mode
 
-- **Driver model:** cheap by default (claude-haiku-4-5). Flagship (claude-opus-4-8) only for ARCH decisions or hard debugging hops. Loops assume the driver is NOT a flagship.
+- **Driver model:** cheap by default (claude-sonnet-4-5). Flagship (claude-opus-4-5) only for ARCH decisions or hard debugging hops. Loops assume the driver is NOT a flagship.
 - **Escalation:** driver may request the flagship for ONE hard sub-task, then return to cheap immediately.
 - **Skill canon — ALWAYS loaded every loop, every session:**
   - `agentic-swe-master` (orchestrator — non-negotiable, routes everything)
@@ -84,21 +84,10 @@ iteration. Failing the same gate three iterations in a row halts the loop and su
 | **G1 Skill** | Did we load `agentic-swe-master` + router + the loop's required skill? Did we log `skills considered: […]; chose: X`? | Log line in checkpoint | Halt iter, force load, retry |
 | **G2 Progress** | Did this iter measurably move the milestone forward? (file diff, test added, error count down, knowledge filed) | ≥1 quantified delta | Strike. 3 strikes → halt loop |
 | **G3 Cost** | Tokens + tool calls under per-loop budget? | Under cap | Halt loop, surface |
-| **G4 Quality** | `cd frontend && npx tsc --noEmit` clean AND `cd backend && KORA_DATA_BACKEND=mock venv/Scripts/python.exe -m pytest -q` green AND lint clean for files touched? | All checks pass (exit 0) | Spawn L2 DEBUG, retry |
+| **G4 Quality** | `{{TYPECHECK_CMD}}` clean AND `{{TEST_CMD}}` green AND lint clean for files touched? | All checks pass | Spawn L2 DEBUG, retry |
 | **G5 Verify** | Independent checker (different model OR fresh context) approves the artifact against the milestone spec? | APPROVE verdict + reasoning | Spawn L2 DEBUG with feedback, retry once |
 
 Gates are **computed, not narrated** — run the command, paste the exit code. No checkpoint block = the iteration didn't happen.
-
-> **G4 baseline measured at genesis (2026-07-23) — read before the first loop.**
-> - `cd frontend && npx tsc --noEmit` → **exit 0** (clean today; a regression here is genuinely yours).
-> - `cd backend && KORA_DATA_BACKEND=mock venv/Scripts/python.exe -m pytest -q` → **exit 5, "no tests ran"** —
->   there are zero test files in the repo. **Until M1 lands the first test, the pytest half of G4 cannot
->   pass.** Do not treat exit 5 as green, and do not "fix" it by deleting the gate. M1's own demo command
->   is the first thing that turns it to exit 0.
-> - `venv/Scripts/python.exe` is required — the system Python has none of the dependencies installed.
-> - `KORA_DATA_BACKEND=mock` is required — a real `.env` is present and otherwise resolves to `supabase`.
-> - pytest-asyncio warns that `asyncio_default_fixture_loop_scope` is unset; M1/M2 should pin it in
->   `pytest.ini` to stop the warning becoming a behaviour change on upgrade.
 
 ---
 
@@ -121,7 +110,7 @@ Gates are **computed, not narrated** — run the command, paste the exit code. N
 - last_gate: G4 (passed)
 - last_action: <command + result>
 - next_action: <the very next concrete step>
-- model: claude-haiku-4-5
+- model: claude-sonnet-4-5
 - tokens_used: 18420
 - tokens_budget: 50000
 - skills_loaded: [agentic-swe-master, coding-orchestrator, ...]
@@ -256,7 +245,7 @@ return wiki_pages_created to parent
 **Purpose:** keep maker away from checker. Single-shot. Always wraps a BUILD exit.
 
 **Setup:**
-- **Different model from maker.** (e.g. maker=claude-haiku-4-5, checker=claude-opus-4-8 for the hard/e2e milestones; a cheaper checker for trivial ones.)
+- **Different model from maker.** (e.g. maker=claude-sonnet-4-5, checker=claude-opus-4-5 for the hard/e2e milestones; a cheaper checker for trivial ones.)
 - **Fresh context.** Checker sees ONLY: goal + success criteria + artifact (diff or command output). NOT the build trail.
 - **Context-graph aware:** checker is also handed the affected `context-graph.json` invariants and asked "does this change violate any downstream invariant?"
 
@@ -326,7 +315,7 @@ pass: read every wiki page, flag stale entries, surface gaps. Write findings to 
 ## Live Visibility — what the user sees during a loop
 
 ```
-┌─ L1 BUILD · {{MILESTONE_ID}} · iter 3/10 ─ claude-haiku-4-5 ─ 18.4k/50000 ─┐
+┌─ L1 BUILD · {{MILESTONE_ID}} · iter 3/10 ─ claude-sonnet-4-5 ─ 18.4k/50000 ─┐
 │ skills: agentic-swe-master, coding-orchestrator, tdd                                                  │
 │ phase:  <current phase>                                                                            │
 │ G1 ✓  G2 ✓ (+84 LOC, +6 tests)  G3 ✓  G4 ✓ (tests 6/6)  G5 ⏸                                       │

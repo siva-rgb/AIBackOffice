@@ -27,6 +27,7 @@ Cost is measured, not hoped for: every analyst reports its token usage, the
 compose step sums them, and `TOKEN_CAP_PER_REFRESH` is the budget gate a test
 asserts against — fan-out multiplies calls, so this is a real limit.
 """
+
 from __future__ import annotations
 
 import re
@@ -38,8 +39,8 @@ from .. import store
 from . import butler, cost, llm, memory_recall, rollup
 
 # ── Budget + shape constants ────────────────────────────────────────────────
-ANALYST_MAX_TOKENS = 600          # output cap per analyst
-CONTEXT_CHAR_BUDGET = 3500        # each analyst's brief is truncated to this
+ANALYST_MAX_TOKENS = 600  # output cap per analyst
+CONTEXT_CHAR_BUDGET = 3500  # each analyst's brief is truncated to this
 # Hard ceiling for one client's fan-out. Four analysts, each roughly
 # (~900 input from a 3500-char brief + 600 output) ≈ 1500 tokens, so ~6k
 # typical; the cap leaves headroom but still catches a runaway prompt.
@@ -56,12 +57,12 @@ ANALYST_KEYS = ("delivery", "money", "relationship", "risk")
 # and small counts are left alone — "since 2024" and "5 tasks" survive, while
 # "$99,999", "USD 99,999", "99,999.00", "500000" and "87 percent" do not.
 _FIGURE_RE = re.compile(
-    r"\$\s?\d[\d,]*(?:\.\d+)?"                       # $99,999 / $ 99999.00
+    r"\$\s?\d[\d,]*(?:\.\d+)?"  # $99,999 / $ 99999.00
     r"|(?:USD|EUR|GBP|INR|CAD|AUD)\s?\d[\d,]*(?:\.\d+)?"  # USD 99,999
-    r"|\d{1,3}(?:,\d{3})+(?:\.\d+)?"                 # 1,200,000  99,999.00
-    r"|\d+(?:\.\d+)?\s?%"                            # 87%
-    r"|\d+(?:\.\d+)?\s?percent\b"                    # 87 percent
-    r"|\d{5,}(?:\.\d+)?",                            # 500000 (bare, 5+ digits)
+    r"|\d{1,3}(?:,\d{3})+(?:\.\d+)?"  # 1,200,000  99,999.00
+    r"|\d+(?:\.\d+)?\s?%"  # 87%
+    r"|\d+(?:\.\d+)?\s?percent\b"  # 87 percent
+    r"|\d{5,}(?:\.\d+)?",  # 500000 (bare, 5+ digits)
     re.IGNORECASE,
 )
 
@@ -102,9 +103,9 @@ def _gather(user_id: str, client) -> dict:
     facts: list[str] = []
     try:
         from .graph_memory import query_subgraph
+
         sub = query_subgraph(user_id, client.name)
-        facts = [f"{r['rel']}: {r['label']}" for r in sub.get("relations", [])
-                 if r.get("type") == "fact"][:12]
+        facts = [f"{r['rel']}: {r['label']}" for r in sub.get("relations", []) if r.get("type") == "fact"][:12]
     except Exception:
         facts = []
 
@@ -114,9 +115,11 @@ def _gather(user_id: str, client) -> dict:
     # only; it never contributes a number (the scrubber still guards output).
     try:
         recall_brief = memory_recall.build_recall_brief(
-            user_id, f"{client.name} project status delivery blockers priorities",
+            user_id,
+            f"{client.name} project status delivery blockers priorities",
             kinds=["notion", "graph_fact", "email_intel", "playbook"],
-            k=5, max_chars=700,
+            k=5,
+            max_chars=700,
         )
     except Exception:
         recall_brief = ""
@@ -151,8 +154,7 @@ def _ground_truth_figures(ctx: dict) -> set[str]:
             n = float(v)
         except (TypeError, ValueError):
             return
-        for s in (f"${n:,.0f}", f"${n:,.2f}", f"{n:,.0f}", f"{n:.0f}",
-                  f"${n:.0f}", str(int(n)) if n == int(n) else f"{n}"):
+        for s in (f"${n:,.0f}", f"${n:,.2f}", f"{n:,.0f}", f"{n:.0f}", f"${n:.0f}", str(int(n)) if n == int(n) else f"{n}"):
             allowed.add(s.strip())
 
     def add_pct(v):
@@ -169,9 +171,14 @@ def _ground_truth_figures(ctx: dict) -> set[str]:
     add_pct(ctx["rollup"].get("progressPct"))
     add_pct(ctx["health"].get("healthScore"))
     # Small integer counts are quoted bare; allow the ones we actually surface.
-    for n in (fin.get("overdueCount"), ctx["rollup"].get("blockerCount"),
-              ctx["rollup"].get("overdueCount"), ctx["rollup"].get("taskCount"),
-              ctx["rollup"].get("storyCount"), ctx["silentDays"]):
+    for n in (
+        fin.get("overdueCount"),
+        ctx["rollup"].get("blockerCount"),
+        ctx["rollup"].get("overdueCount"),
+        ctx["rollup"].get("taskCount"),
+        ctx["rollup"].get("storyCount"),
+        ctx["silentDays"],
+    ):
         if isinstance(n, int):
             allowed.add(str(n))
     return allowed
@@ -201,10 +208,8 @@ def _strip_unverified_figures(text: str, allowed: set[str]) -> str:
 def _brief_delivery(ctx: dict) -> str:
     r = ctx["rollup"]
     lines = [
-        f"Delivery progress: {r['progressPct']}% across {r['taskCount']} task(s), "
-        f"{r['storyCount']} story(ies).",
-        f"Open blockers: {r['blockerCount']}. Overdue tasks: {r['overdueCount']}. "
-        f"Stalled: {r['stalledCount']}.",
+        f"Delivery progress: {r['progressPct']}% across {r['taskCount']} task(s), " f"{r['storyCount']} story(ies).",
+        f"Open blockers: {r['blockerCount']}. Overdue tasks: {r['overdueCount']}. " f"Stalled: {r['stalledCount']}.",
     ]
     if ctx["blockers"]:
         lines.append("Blocking items:\n- " + "\n- ".join(ctx["blockers"][:8]))
@@ -246,8 +251,8 @@ def _brief_risk(ctx: dict) -> str:
 _SYSTEM = (
     "You are the {title} analyst on a freelancer's back-office team. You are given "
     "already-verified facts about ONE client. Write a tight, factual read of your "
-    "area in JSON: {{\"summary\": \"1-2 sentences\", \"highlights\": [\"...\"], "
-    "\"concerns\": [\"...\"]}}. Rules: do NOT invent numbers — refer only to figures "
+    'area in JSON: {{"summary": "1-2 sentences", "highlights": ["..."], '
+    '"concerns": ["..."]}}. Rules: do NOT invent numbers — refer only to figures '
     "present in the facts; if you cite a number, copy it exactly. No preamble, JSON only."
 )
 
@@ -265,8 +270,7 @@ def _fallback_summary(key: str, ctx: dict) -> str:
     if key == "delivery":
         return f"Delivery at {r['progressPct']}% with {r['blockerCount']} open blocker(s)."
     if key == "money":
-        return (f"{_fmt_money(f['outstanding'])} outstanding; "
-                f"{f['overdueCount']} overdue invoice(s).")
+        return f"{_fmt_money(f['outstanding'])} outstanding; " f"{f['overdueCount']} overdue invoice(s)."
     if key == "relationship":
         s = ctx["silentDays"]
         return f"No activity logged in {s} day(s)." if s is not None else "Activity recency unknown."
@@ -296,37 +300,43 @@ def _run_analyst(key: str, ctx: dict, allowed: set[str], chat) -> AnalystResult:
         )
         data = llm.extract_json(result.text) or {}
         summary = _strip_unverified_figures(str(data.get("summary", "")).strip(), allowed)
-        highlights = [_strip_unverified_figures(str(x).strip(), allowed)
-                      for x in (data.get("highlights") or [])][:5]
-        concerns = [_strip_unverified_figures(str(x).strip(), allowed)
-                    for x in (data.get("concerns") or [])][:5]
+        highlights = [_strip_unverified_figures(str(x).strip(), allowed) for x in (data.get("highlights") or [])][:5]
+        concerns = [_strip_unverified_figures(str(x).strip(), allowed) for x in (data.get("concerns") or [])][:5]
         return AnalystResult(
-            key=key, summary=summary or _fallback_summary(key, ctx),
-            highlights=highlights, concerns=concerns,
-            input_tokens=result.input_tokens, output_tokens=result.output_tokens,
+            key=key,
+            summary=summary or _fallback_summary(key, ctx),
+            highlights=highlights,
+            concerns=concerns,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
         )
     except Exception as exc:  # isolation: this section degrades, the others don't
-        return AnalystResult(key=key, summary=_fallback_summary(key, ctx),
-                             degraded=True, error=str(exc)[:200])
+        return AnalystResult(key=key, summary=_fallback_summary(key, ctx), degraded=True, error=str(exc)[:200])
 
 
 def _section_metrics(key: str, ctx: dict) -> dict:
     """The authoritative numbers for a section — always from the ledger."""
     r, f = ctx["rollup"], ctx["financials"]
     if key == "delivery":
-        return {"progressPct": r["progressPct"], "blockerCount": r["blockerCount"],
-                "overdueTasks": r["overdueCount"], "stalledStories": r["stalledCount"],
-                "taskCount": r["taskCount"], "storyCount": r["storyCount"]}
+        return {
+            "progressPct": r["progressPct"],
+            "blockerCount": r["blockerCount"],
+            "overdueTasks": r["overdueCount"],
+            "stalledStories": r["stalledCount"],
+            "taskCount": r["taskCount"],
+            "storyCount": r["storyCount"],
+        }
     if key == "money":
-        return {"invoiced": f["invoiced"], "paid": f["paid"],
-                "outstanding": f["outstanding"], "overdueCount": f["overdueCount"],
-                "overdueTotal": f["overdueTotal"]}
+        return {
+            "invoiced": f["invoiced"],
+            "paid": f["paid"],
+            "outstanding": f["outstanding"],
+            "overdueCount": f["overdueCount"],
+            "overdueTotal": f["overdueTotal"],
+        }
     if key == "relationship":
-        return {"silentDays": ctx["silentDays"],
-                "risks": ctx["health"]["risks"],
-                "positives": ctx["health"]["positiveSignals"]}
-    return {"deliveryScore": r["score"], "deliveryLabel": r["label"],
-            "notGoingWellCount": r["notGoingWellCount"], "blockerCount": r["blockerCount"]}
+        return {"silentDays": ctx["silentDays"], "risks": ctx["health"]["risks"], "positives": ctx["health"]["positiveSignals"]}
+    return {"deliveryScore": r["score"], "deliveryLabel": r["label"], "notGoingWellCount": r["notGoingWellCount"], "blockerCount": r["blockerCount"]}
 
 
 # ── The deterministic composer (this is the "project manager") ──────────────
@@ -358,8 +368,8 @@ def compose_client_view(user_id: str, client_id: str, *, chat=None, persist: boo
     for key in ANALYST_KEYS:
         res = results[key]
         sections[key] = {
-            "metrics": _section_metrics(key, ctx),   # numbers: always from the ledger
-            "summary": res.summary,                  # prose: from the analyst, figure-checked
+            "metrics": _section_metrics(key, ctx),  # numbers: always from the ledger
+            "summary": res.summary,  # prose: from the analyst, figure-checked
             "highlights": res.highlights,
             "concerns": res.concerns,
             "degraded": res.degraded,
@@ -369,9 +379,12 @@ def compose_client_view(user_id: str, client_id: str, *, chat=None, persist: boo
     out_tok = sum(r.output_tokens for r in results.values())
     total = in_tok + out_tok
     token_cost = {
-        "inputTokens": in_tok, "outputTokens": out_tok, "totalTokens": total,
+        "inputTokens": in_tok,
+        "outputTokens": out_tok,
+        "totalTokens": total,
         "estUsd": cost.estimate_cost_usd(in_tok, out_tok),
-        "cap": TOKEN_CAP_PER_REFRESH, "withinCap": total <= TOKEN_CAP_PER_REFRESH,
+        "cap": TOKEN_CAP_PER_REFRESH,
+        "withinCap": total <= TOKEN_CAP_PER_REFRESH,
     }
 
     view = {
@@ -412,7 +425,9 @@ def _deterministic_shell(user_id: str, client) -> dict:
         key: {
             "metrics": _section_metrics(key, ctx),
             "summary": _fallback_summary(key, ctx),
-            "highlights": [], "concerns": [], "degraded": True,
+            "highlights": [],
+            "concerns": [],
+            "degraded": True,
         }
         for key in ANALYST_KEYS
     }
@@ -451,8 +466,7 @@ def get_client_view(user_id: str, client_id: str) -> dict | None:
         print(f"[pm_agent] view cache read skipped: {exc}")
         cached = None
     if cached and cached.get("view"):
-        return {**cached["view"], "tokenCost": cached.get("token_cost") or {},
-                "refreshedAt": cached.get("refreshed_at")}
+        return {**cached["view"], "tokenCost": cached.get("token_cost") or {}, "refreshedAt": cached.get("refreshed_at")}
     return _deterministic_shell(user_id, client)
 
 

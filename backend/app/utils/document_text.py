@@ -15,10 +15,7 @@ def _from_pdf(raw: bytes) -> str:
     try:
         from pypdf import PdfReader
     except ImportError:  # pragma: no cover
-        raise UnsupportedDocument(
-            "PDF support isn't installed on the server. Paste the contract text instead, "
-            "or install pypdf."
-        )
+        raise UnsupportedDocument("PDF support isn't installed on the server. Paste the contract text instead, " "or install pypdf.")
     reader = PdfReader(io.BytesIO(raw))
     parts = [page.extract_text() or "" for page in reader.pages]
     return "\n".join(parts)
@@ -28,10 +25,7 @@ def _from_docx(raw: bytes) -> str:
     try:
         import docx  # python-docx
     except ImportError:  # pragma: no cover
-        raise UnsupportedDocument(
-            "Word (.docx) support isn't installed on the server. Paste the contract text "
-            "instead, or install python-docx."
-        )
+        raise UnsupportedDocument("Word (.docx) support isn't installed on the server. Paste the contract text " "instead, or install python-docx.")
     document = docx.Document(io.BytesIO(raw))
     return "\n".join(p.text for p in document.paragraphs)
 
@@ -52,14 +46,9 @@ def extract_text(filename: str, content_type: str | None, raw: bytes) -> str:
         try:
             text = raw.decode("utf-8")
         except UnicodeDecodeError:
-            raise UnsupportedDocument(
-                "Unsupported file type. Upload a PDF, Word (.docx), or text file — or paste the text."
-            )
+            raise UnsupportedDocument("Unsupported file type. Upload a PDF, Word (.docx), or text file — or paste the text.")
 
     text = text.replace("\x00", "").strip()
     if len(text) < 20:
-        raise UnsupportedDocument(
-            "Couldn't extract readable text from this file (it may be a scanned image). "
-            "Paste the contract text instead."
-        )
+        raise UnsupportedDocument("Couldn't extract readable text from this file (it may be a scanned image). " "Paste the contract text instead.")
     return text

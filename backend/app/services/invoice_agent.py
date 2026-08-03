@@ -36,9 +36,12 @@ def _writing_brief(user) -> str:
     if not user:
         return ""
     from .profile_context import build_profile_brief
+
     return build_profile_brief(
-        getattr(user, "profile", None), "email_draft",
-        business_name=getattr(user, "business_name", None), max_chars=400,
+        getattr(user, "profile", None),
+        "email_draft",
+        business_name=getattr(user, "business_name", None),
+        max_chars=400,
     )
 
 
@@ -51,7 +54,8 @@ def find_payment_clause(content_md: str | None) -> str | None:
     # Match a heading whose text mentions payment, capture until the next heading.
     m = re.search(
         r"^#{1,6}\s*[\d.\s]*[^\n]*\bpayment\b[^\n]*\n(?P<body>.*?)(?=\n#{1,6}\s|\Z)",
-        content_md, re.I | re.M | re.S,
+        content_md,
+        re.I | re.M | re.S,
     )
     if not m:
         return None
@@ -67,7 +71,12 @@ def find_payment_clause(content_md: str | None) -> str | None:
 
 def contract_context(user_id: str, contract_id: str | None) -> dict:
     """Build the contract fields the email/letter agents accept. Empty dict when
-    there's no linked contract or no extractable payment clause."""
+    there's no linked contract or no extractable payment clause.
+
+    M4: contract content may pre-date the sanitizer at write-time (uploaded
+    PDFs / DOCX). Belt-and-braces sanitize the extracted clause before it
+    crosses into the prompt.
+    """
     if not contract_id:
         return {}
     contract: Contract | None = store.get_contract(user_id, contract_id)
@@ -76,9 +85,10 @@ def contract_context(user_id: str, contract_id: str | None) -> dict:
     clause = find_payment_clause(contract.content_md)
     if not clause:
         return {}
-    label = (contract.title or (contract.type or "agreement").replace("_", " ")).strip()
+    label = safe_sanitize((contract.title or (contract.type or "agreement").replace("_", " ")).strip())
+    safe_clause = safe_sanitize(clause)
     ctx = {
-        "contract_payment_clause": clause,
+        "contract_payment_clause": safe_clause,
         "contract_reference": f"the {label}",
         "contract_type": (contract.type or "agreement").replace("_", " "),
     }
@@ -132,18 +142,21 @@ def run_follow_up_agent(user_id: str, triggered_by: str = "scheduler") -> Follow
             params.update(contract_context(user_id, inv.contract_id))
         call = generate_with_retry(lambda: ai.draft_follow_up_email(params))
 
-        store.update_invoice(user_id, inv.id, {
-            "status": "overdue",
-            "follow_up_count": inv.follow_up_count + 1,
-            "last_follow_up_at": datetime.now(timezone.utc).isoformat(),
-        })
+        store.update_invoice(
+            user_id,
+            inv.id,
+            {
+                "status": "overdue",
+                "follow_up_count": inv.follow_up_count + 1,
+                "last_follow_up_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
         agent_logger.log_action(
             user_id=user_id,
             agent_type="invoice_follow_up",
             action=f"Sent {_LABELS[attempt]} for {inv.invoice_number} to {inv.client_name}",
-            input={"invoiceNumber": inv.invoice_number, "clientEmail": inv.client_email,
-                   "daysOverdue": days, "attempt": attempt},
+            input={"invoiceNumber": inv.invoice_number, "clientEmail": inv.client_email, "daysOverdue": days, "attempt": attempt},
             output={"subject": call.data["subject"], "body": call.data["body"], "delivered": True},
             model_used=call.model_used,
             tokens_used=call.tokens_used,
@@ -155,11 +168,13 @@ def run_follow_up_agent(user_id: str, triggered_by: str = "scheduler") -> Follow
         )
 
         result.sent += 1
-        result.details.append({
-            "invoiceNumber": inv.invoice_number,
-            "attempt": attempt,
-            "subject": call.data["subject"],
-        })
+        result.details.append(
+            {
+                "invoiceNumber": inv.invoice_number,
+                "attempt": attempt,
+                "subject": call.data["subject"],
+            }
+        )
 
     return result
 
@@ -193,19 +208,16 @@ def _maybe_send(user_id: str, inv, subject: str, body: str, deliver: bool):
         return False, None, "No client email on file — drafted only (not sent)."
     try:
         from .gmail_agent import is_gmail_connected, send_via_gmail
+
         if not is_gmail_connected(user_id):
-            return False, None, (
-                "Google account not connected — drafted only. "
-                "Connect Gmail in Settings to send."
-            )
+            return False, None, ("Google account not connected — drafted only. " "Connect Gmail in Settings to send.")
         msg_id = send_via_gmail(user_id, to_email, inv.client_name, subject, body)
         return True, msg_id, f"Sent to {to_email} via Gmail."
     except Exception as exc:
         return False, None, f"Send failed — drafted only ({exc})."
 
 
-def send_follow_up_for(user_id: str, invoice_id: str, triggered_by: str = "user",
-                       deliver: bool = False) -> dict:
+def send_follow_up_for(user_id: str, invoice_id: str, triggered_by: str = "user", deliver: bool = False) -> dict:
     """Send a single follow-up for one invoice (used when the owner approves a
     supervisor task). Drafts the next-attempt email, grounds the final notice in
     the contract, advances the cadence, and logs it. When ``deliver`` is True the
@@ -236,29 +248,49 @@ def send_follow_up_for(user_id: str, invoice_id: str, triggered_by: str = "user"
     call = generate_with_retry(lambda: ai_draft_follow_up(params))
 
     delivered, gmail_msg_id, delivery_note = _maybe_send(
-        user_id, inv, call.data["subject"], call.data["body"], deliver,
+        user_id,
+        inv,
+        call.data["subject"],
+        call.data["body"],
+        deliver,
     )
     verb = "Sent" if delivered else "Drafted"
 
-    store.update_invoice(user_id, inv.id, {
-        "status": "overdue",
-        "follow_up_count": inv.follow_up_count + 1,
-        "last_follow_up_at": datetime.now(timezone.utc).isoformat(),
-    })
+    store.update_invoice(
+        user_id,
+        inv.id,
+        {
+            "status": "overdue",
+            "follow_up_count": inv.follow_up_count + 1,
+            "last_follow_up_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
     agent_logger.log_action(
-        user_id=user_id, agent_type="invoice_follow_up",
+        user_id=user_id,
+        agent_type="invoice_follow_up",
         action=f"{verb} {_LABELS[attempt]} for {inv.invoice_number} to {inv.client_name}",
-        input={"invoiceNumber": inv.invoice_number, "clientEmail": inv.client_email,
-               "daysOverdue": days, "attempt": attempt, "approvedBySupervisor": True},
-        output={"subject": call.data["subject"], "body": call.data["body"],
-                "delivered": delivered, "gmailMessageId": gmail_msg_id},
-        model_used=call.model_used, tokens_used=call.tokens_used, latency_ms=call.latency_ms,
-        cost_usd=call.cost_usd, triggered_by=triggered_by,
-        source_record_type="invoice", source_record_id=inv.id,
+        input={
+            "invoiceNumber": inv.invoice_number,
+            "clientEmail": inv.client_email,
+            "daysOverdue": days,
+            "attempt": attempt,
+            "approvedBySupervisor": True,
+        },
+        output={"subject": call.data["subject"], "body": call.data["body"], "delivered": delivered, "gmailMessageId": gmail_msg_id},
+        model_used=call.model_used,
+        tokens_used=call.tokens_used,
+        latency_ms=call.latency_ms,
+        cost_usd=call.cost_usd,
+        triggered_by=triggered_by,
+        source_record_type="invoice",
+        source_record_id=inv.id,
     )
     return {
-        "subject": call.data["subject"], "body": call.data["body"], "attempt": attempt,
-        "delivered": delivered, "gmailMessageId": gmail_msg_id,
+        "subject": call.data["subject"],
+        "body": call.data["body"],
+        "attempt": attempt,
+        "delivered": delivered,
+        "gmailMessageId": gmail_msg_id,
         "note": delivery_note or f"{_LABELS[attempt].capitalize()} for {inv.invoice_number} drafted (not sent).",
     }
 
@@ -267,8 +299,7 @@ def ai_draft_follow_up(params: dict):
     return get_ai().draft_follow_up_email(params)
 
 
-def generate_demand_letter(user_id: str, invoice_id: str, triggered_by: str = "user",
-                           deliver: bool = False) -> dict:
+def generate_demand_letter(user_id: str, invoice_id: str, triggered_by: str = "user", deliver: bool = False) -> dict:
     """Cross-module killer feature: draft a formal payment demand for an overdue
     invoice, grounded in the linked contract's payment clause when one exists.
 
@@ -308,7 +339,11 @@ def generate_demand_letter(user_id: str, invoice_id: str, triggered_by: str = "u
 
     # Delivery — only when the owner approved the action (deliver=True).
     delivered, gmail_msg_id, delivery_note = _maybe_send(
-        user_id, inv, call.data["subject"], call.data["body"], deliver,
+        user_id,
+        inv,
+        call.data["subject"],
+        call.data["body"],
+        deliver,
     )
     verb = "Sent" if delivered else "Drafted"
     kind = "contract-grounded payment demand" if grounded else "payment demand"
@@ -319,10 +354,8 @@ def generate_demand_letter(user_id: str, invoice_id: str, triggered_by: str = "u
         # reading a contract to act on an invoice (the killer feature).
         agent_type="cross_module" if grounded else "invoice_follow_up",
         action=f"{verb} {kind} for {inv.invoice_number} ({inv.client_name})",
-        input={"invoiceNumber": inv.invoice_number, "daysOverdue": max(0, days),
-               "contractGrounded": grounded, "contractId": inv.contract_id},
-        output={"subject": call.data["subject"], "body": call.data["body"],
-                "delivered": delivered, "gmailMessageId": gmail_msg_id},
+        input={"invoiceNumber": inv.invoice_number, "daysOverdue": max(0, days), "contractGrounded": grounded, "contractId": inv.contract_id},
+        output={"subject": call.data["subject"], "body": call.data["body"], "delivered": delivered, "gmailMessageId": gmail_msg_id},
         model_used=call.model_used,
         tokens_used=call.tokens_used,
         latency_ms=call.latency_ms,
@@ -346,7 +379,5 @@ def generate_demand_letter(user_id: str, invoice_id: str, triggered_by: str = "u
         "daysOverdue": max(0, days),
         "delivered": delivered,
         "gmailMessageId": gmail_msg_id,
-        "note": delivery_note or (
-            f"Payment demand for {inv.invoice_number} drafted (not sent)."
-        ),
+        "note": delivery_note or (f"Payment demand for {inv.invoice_number} drafted (not sent)."),
     }

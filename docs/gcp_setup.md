@@ -83,8 +83,11 @@ This service account is used by the FastAPI backend to call Cloud Storage and Ve
 
 ## 4. Create a Cloud Storage Bucket
 
+> **Canonical bucket naming:** see [`docs/specs/gcp-cloud.md`](specs/gcp-cloud.md) §1 Step 1.
+> Use `kora-storage-private-{your-project-id}` — not a bare `kora-user-data` name.
+
 1. Go to **Cloud Storage → Buckets → + Create**
-2. **Name:** `kora-user-data` (must be globally unique — add your project ID suffix if taken, e.g. `kora-user-data-kora-prod-123456`)
+2. **Name:** `kora-storage-private-{your-project-id}` (must be globally unique — see gcp-cloud.md)
 3. **Region:** `us-central1` (match `GOOGLE_CLOUD_LOCATION`)
 4. **Storage class:** Standard
 5. **Access control:** Uniform
@@ -100,7 +103,7 @@ This service account is used by the FastAPI backend to call Cloud Storage and Ve
 
 Update `.env`:
 ```
-CLOUD_STORAGE_BUCKET=kora-user-data
+CLOUD_STORAGE_BUCKET=kora-storage-private-{your-project-id}
 ```
 
 ---

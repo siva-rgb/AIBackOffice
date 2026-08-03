@@ -152,9 +152,9 @@ class BrandIdentity(CamelModel):
     mission: str | None = None
     vision: str | None = None
     values: list[str] = []
-    usp: str | None = None                 # unique selling proposition
-    voice: str | None = None               # brand voice / tone in prose
-    colors: list[str] = []                 # hex or named brand colors
+    usp: str | None = None  # unique selling proposition
+    voice: str | None = None  # brand voice / tone in prose
+    colors: list[str] = []  # hex or named brand colors
     logo_url: str | None = None
     style_guidelines: str | None = None
 
@@ -162,7 +162,7 @@ class BrandIdentity(CamelModel):
 class Offering(CamelModel):
     name: str | None = None
     description: str | None = None
-    pricing: str | None = None             # free-text ("$120/hr", "from $2k")
+    pricing: str | None = None  # free-text ("$120/hr", "from $2k")
     packages: list[str] = []
     delivery_process: str | None = None
     guarantees: str | None = None
@@ -193,7 +193,7 @@ class Operations(CamelModel):
     working_hours: str | None = None
     tools: list[str] = []
     workflows: str | None = None
-    sops: list[str] = []                    # standard operating procedures
+    sops: list[str] = []  # standard operating procedures
 
 
 class SocialAccount(CamelModel):
@@ -213,7 +213,7 @@ class Marketing(CamelModel):
 
 class LegalFinancial(CamelModel):
     registration_details: str | None = None  # entity type, registration #
-    tax_info: str | None = None              # tax jurisdiction / notes
+    tax_info: str | None = None  # tax jurisdiction / notes
     invoicing_preferences: str | None = None
     payment_methods: list[str] = []
     contract_notes: str | None = None
@@ -234,21 +234,21 @@ class BusinessProfile(CamelModel):
     others."""
 
     # Owner
-    display_name: str | None = None       # how they like to be addressed
-    role_title: str | None = None         # e.g. "Freelance Brand Designer"
+    display_name: str | None = None  # how they like to be addressed
+    role_title: str | None = None  # e.g. "Freelance Brand Designer"
     phone: str | None = None
     # Business
-    business_type: str | None = None      # BusinessType: freelancer | online_seller | small_business | agency | startup
-    industry: str | None = None           # design, development, writing, crafts, consulting…
-    description: str | None = None        # what the business does, in plain English
+    business_type: str | None = None  # BusinessType: freelancer | online_seller | small_business | agency | startup
+    industry: str | None = None  # design, development, writing, crafts, consulting…
+    description: str | None = None  # what the business does, in plain English
     website: str | None = None
     founded_year: int | None = None
     address: str | None = None
-    business_address: str | None = None    # full postal address for invoices
+    business_address: str | None = None  # full postal address for invoices
     timezone: str | None = None
     # Offerings & clients
-    services: list[str] = []              # services / products offered
-    target_clients: str | None = None     # who they serve
+    services: list[str] = []  # services / products offered
+    target_clients: str | None = None  # who they serve
     # Financial preferences (used by invoice / contract / finance agents)
     default_payment_terms_days: int | None = None  # Net X
     default_hourly_rate: float | None = None
@@ -256,19 +256,19 @@ class BusinessProfile(CamelModel):
     invoice_prefix: str | None = None
     tax_id: str | None = None
     default_tax_rate: float | None = None
-    payment_methods: list[str] = []       # bank transfer, Stripe, PayPal…
+    payment_methods: list[str] = []  # bank transfer, Stripe, PayPal…
     # Goals (for the supervisor agent)
     monthly_revenue_goal: float | None = None
     annual_revenue_goal: float | None = None
-    financial_goals: str | None = None    # free-text priorities / targets
+    financial_goals: str | None = None  # free-text priorities / targets
     business_priorities: list[str] = []
     # Invoice sender info (invoice_artifact)
-    invoice_footer: str | None = None     # bank details, payment instructions, thank-you note
+    invoice_footer: str | None = None  # bank details, payment instructions, thank-you note
     # Communication
-    brand_tone: str | None = None         # friendly | professional | concise | formal
+    brand_tone: str | None = None  # friendly | professional | concise | formal
     # Notification preferences (owner emails — opt-out, default on)
-    notify_daily_digest: bool = True      # email the Manager daily digest
-    notify_critical_alerts: bool = True   # email on cash-flow danger / payment failed
+    notify_daily_digest: bool = True  # email the Manager daily digest
+    notify_critical_alerts: bool = True  # email on cash-flow danger / payment failed
     # Six-domain nested profile (additive; each maps to one Settings tab)
     brand: BrandIdentity = Field(default_factory=BrandIdentity)
     offerings: list[Offering] = []
@@ -277,7 +277,14 @@ class BusinessProfile(CamelModel):
     marketing: Marketing = Field(default_factory=Marketing)
     legal_financial: LegalFinancial = Field(default_factory=LegalFinancial)
 
-    @field_validator("brand", "customers", "operations", "marketing", "legal_financial", mode="before")
+    @field_validator(
+        "brand",
+        "customers",
+        "operations",
+        "marketing",
+        "legal_financial",
+        mode="before",
+    )
     @classmethod
     def _coerce_domain(cls, v):
         # JSONB may store null for a never-touched domain — normalise to {}.
@@ -304,6 +311,10 @@ class User(CamelModel):
     profile: BusinessProfile = Field(default_factory=BusinessProfile)
     google_connected: bool = False
     google_email: str | None = None
+    # M9.3 — GDPR/CCPA consent capture. Set on first onboarding completion
+    # (see routers/users.py::update_me) and updatable via POST /api/account/consent.
+    consent_version: str | None = None
+    consent_given_at: str | None = None
     created_at: str
 
     @field_validator("profile", mode="before")
@@ -606,7 +617,7 @@ class Client(CamelModel):
     industry: str | None = None
     client_type: ClientType = "individual"
     status: ClientStatus = "active"
-    what_we_do: str | None = None          # one sentence: "we build their Shopify store"
+    what_we_do: str | None = None  # one sentence: "we build their Shopify store"
     notes_md: str | None = None
     timezone: str | None = None
     currency: str = "USD"
@@ -665,10 +676,10 @@ class Task(CamelModel):
     status: TaskStatus = "todo"
     priority: TaskPriority = "medium"
     due_date: str | None = None
-    owner: str | None = None          # "me" | "client" | a person's name
+    owner: str | None = None  # "me" | "client" | a person's name
     source: TaskSource = "manual"
-    source_ref: str | None = None     # idempotency key for auto-captured tasks
-    external_ref: str | None = None   # Notion page id
+    source_ref: str | None = None  # idempotency key for auto-captured tasks
+    external_ref: str | None = None  # Notion page id
     external_url: str | None = None
     synced_at: str | None = None
     completed_at: str | None = None

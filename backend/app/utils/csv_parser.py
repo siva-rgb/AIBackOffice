@@ -84,10 +84,7 @@ def parse_transactions_csv(text: str) -> ParseResult:
     type_col = _find_col(cols, _TYPE_CANDIDATES)
 
     if not date_col or not desc_col:
-        result.errors.append(
-            "Could not detect Date and Description columns. "
-            "Expected headers like: Date,Description,Amount,Type"
-        )
+        result.errors.append("Could not detect Date and Description columns. " "Expected headers like: Date,Description,Amount,Type")
         return result
     if not amount_col and not debit_col and not credit_col:
         result.errors.append("Could not detect an Amount (or Debit/Credit) column.")

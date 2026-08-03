@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 
 from .. import store
 from . import agent_logger
@@ -14,8 +14,7 @@ from .vertex_ai import generate_with_retry, get_ai
 # instead of plain strings. The frontend renders these as React children, so a
 # raw object crashes the page ("Objects are not valid as a React child"). Coerce
 # every item to a readable string here, the one place all callers funnel through.
-_TEXT_KEYS = ("risk", "action", "recommendation", "text", "description",
-              "detail", "title", "summary", "message")
+_TEXT_KEYS = ("risk", "action", "recommendation", "text", "description", "detail", "title", "summary", "message")
 
 
 def _coerce_str(item: object) -> str:
@@ -24,8 +23,7 @@ def _coerce_str(item: object) -> str:
     if isinstance(item, dict):
         # Prefer a known human-readable field, then append remaining context.
         main = next((str(item[k]) for k in _TEXT_KEYS if item.get(k)), None)
-        extras = [f"{k}: {v}" for k, v in item.items()
-                  if k not in _TEXT_KEYS and v not in (None, "")]
+        extras = [f"{k}: {v}" for k, v in item.items() if k not in _TEXT_KEYS and v not in (None, "")]
         if main:
             return f"{main} ({', '.join(extras)})" if extras else main
         return "; ".join(f"{k}: {v}" for k, v in item.items())
@@ -52,6 +50,8 @@ def _payment_probability(status: str, days_overdue: int) -> float:
 
 
 def compute_forecast(user_id: str, horizon_days: int = 90, with_insights: bool = True) -> dict:
+    """m4-lint: store-only — snapshot is deterministic from transactions/invoices;
+    no user text reaches the LLM prompt."""
     txns = store.list_transactions(user_id)
     invoices = store.list_invoices(user_id)
     today = date.today()
@@ -65,9 +65,7 @@ def compute_forecast(user_id: str, horizon_days: int = 90, with_insights: bool =
     daily_expense = expense_90 / 90
 
     # Starting balance proxy: net of all recorded transactions.
-    current_balance = round(
-        sum(t.amount for t in txns), 2  # income positive, expense negative
-    )
+    current_balance = round(sum(t.amount for t in txns), 2)  # income positive, expense negative
 
     # Load payment patterns from supervisor memory to adjust expected collection dates.
     payment_patterns: dict = {}
@@ -96,8 +94,7 @@ def compute_forecast(user_id: str, horizon_days: int = 90, with_insights: bool =
                 pay_base = pay_base + timedelta(days=min(avg_late, 90))
         pay_date = pay_base.isoformat()
         inflow_by_date[pay_date] = inflow_by_date.get(pay_date, 0) + inv.total * prob
-        open_invoices.append({"number": inv.invoice_number, "amount": inv.total,
-                              "dueDate": inv.due_date, "daysOverdue": max(0, d_over), "prob": prob})
+        open_invoices.append({"number": inv.invoice_number, "amount": inv.total, "dueDate": inv.due_date, "daysOverdue": max(0, d_over), "prob": prob})
 
     # Build cumulative scenarios across the horizon.
     forecast = []
@@ -109,12 +106,14 @@ def compute_forecast(user_id: str, horizon_days: int = 90, with_insights: bool =
         bal_exp += daily_income - daily_expense + invoice_inflow
         bal_opt += daily_income * 1.10 - daily_expense * 0.90 + invoice_inflow
         bal_con += daily_income * 0.75 - daily_expense * 1.15 + invoice_inflow * 0.8
-        forecast.append({
-            "date": d,
-            "expected": round(bal_exp, 2),
-            "optimistic": round(bal_opt, 2),
-            "conservative": round(bal_con, 2),
-        })
+        forecast.append(
+            {
+                "date": d,
+                "expected": round(bal_exp, 2),
+                "optimistic": round(bal_opt, 2),
+                "conservative": round(bal_con, 2),
+            }
+        )
 
     # Danger detection (modules.md#cashflow danger zone).
     def first_negative(key: str, within: int) -> int | None:
@@ -137,6 +136,7 @@ def compute_forecast(user_id: str, horizon_days: int = 90, with_insights: bool =
     if with_insights:
         try:
             from .playbook import assemble_context
+
             business_context = assemble_context(user_id, "forecast")
             if business_context:
                 snapshot["business_context"] = business_context
@@ -150,20 +150,29 @@ def compute_forecast(user_id: str, horizon_days: int = 90, with_insights: bool =
         except Exception as exc:  # graceful degradation
             insights["assumptions"] = ["AI insights unavailable; showing numeric projection only."]
             agent_logger.log_action(
-                user_id=user_id, agent_type="cashflow_forecaster",
+                user_id=user_id,
+                agent_type="cashflow_forecaster",
                 action="Cash flow insight generation failed — numeric forecast served",
-                input=snapshot, output={"error": str(exc)}, status="error",
-                error_message=str(exc), triggered_by="user", source_record_type="cashflow",
+                input=snapshot,
+                output={"error": str(exc)},
+                status="error",
+                error_message=str(exc),
+                triggered_by="user",
+                source_record_type="cashflow",
             )
 
     agent_logger.log_action(
-        user_id=user_id, agent_type="cashflow_forecaster",
+        user_id=user_id,
+        agent_type="cashflow_forecaster",
         action=f"Generated {horizon_days}-day cash flow forecast",
         input={"horizonDays": horizon_days, "snapshot": snapshot},
-        output={"confidenceScore": insights.get("confidence_score"),
-                "expectedBalance30d": snapshot["expected_balance_30d"]},
-        model_used=model_used or "deterministic", tokens_used=tokens, latency_ms=latency,
-        cost_usd=cost, triggered_by="user", source_record_type="cashflow",
+        output={"confidenceScore": insights.get("confidence_score"), "expectedBalance30d": snapshot["expected_balance_30d"]},
+        model_used=model_used or "deterministic",
+        tokens_used=tokens,
+        latency_ms=latency,
+        cost_usd=cost,
+        triggered_by="user",
+        source_record_type="cashflow",
     )
 
     return {

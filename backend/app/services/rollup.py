@@ -26,6 +26,7 @@ The penalty weights are module constants rather than inline magic numbers
 specifically so the tests can assert the arithmetic, and so tuning the model is
 a one-line, reviewable change.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -69,8 +70,7 @@ CLOSED_STATUSES = ("done", "cancelled")
 
 def health_label(score: int) -> str:
     """The 0-100 → label mapping used at every level of the hierarchy."""
-    return ("on_track" if score >= 75 else "at_risk" if score >= 55
-            else "needs_attention" if score >= 35 else "critical")
+    return "on_track" if score >= 75 else "at_risk" if score >= 55 else "needs_attention" if score >= 35 else "critical"
 
 
 def _days_since(iso: str | None) -> int | None:
@@ -155,11 +155,23 @@ def _score_from(rollups: list[dict]) -> dict:
     """
     if not rollups:
         # Nothing tracked yet is not a problem — it is an absence of evidence.
-        return {"score": 100, "label": "on_track", "progressPct": 0,
-                "taskCount": 0, "storyCount": 0, "blockerCount": 0,
-                "notGoingWellCount": 0, "goingWellCount": 0, "overdueCount": 0,
-                "stalledCount": 0, "penalty": 0, "bonus": 0,
-                "risks": [], "positives": [], "hasData": False}
+        return {
+            "score": 100,
+            "label": "on_track",
+            "progressPct": 0,
+            "taskCount": 0,
+            "storyCount": 0,
+            "blockerCount": 0,
+            "notGoingWellCount": 0,
+            "goingWellCount": 0,
+            "overdueCount": 0,
+            "stalledCount": 0,
+            "penalty": 0,
+            "bonus": 0,
+            "risks": [],
+            "positives": [],
+            "hasData": False,
+        }
 
     blockers = sum(r["blockerCount"] for r in rollups)
     not_well = sum(r["notGoingWellCount"] for r in rollups)
@@ -201,15 +213,23 @@ def _score_from(rollups: list[dict]) -> dict:
         positives.append("No blockers or overdue work")
 
     return {
-        "score": score, "label": health_label(score), "progressPct": progress,
-        "taskCount": len(rollups), "storyCount": stories,
-        "blockerCount": blockers, "notGoingWellCount": not_well,
-        "goingWellCount": going_well, "overdueCount": overdue,
+        "score": score,
+        "label": health_label(score),
+        "progressPct": progress,
+        "taskCount": len(rollups),
+        "storyCount": stories,
+        "blockerCount": blockers,
+        "notGoingWellCount": not_well,
+        "goingWellCount": going_well,
+        "overdueCount": overdue,
         "stalledCount": stalled,
         # Exposed so the client-level delta can be built from the components
         # rather than from `score`, which is clamped at both ends.
-        "penalty": penalty, "bonus": bonus,
-        "risks": risks, "positives": positives, "hasData": True,
+        "penalty": penalty,
+        "bonus": bonus,
+        "risks": risks,
+        "positives": positives,
+        "hasData": True,
     }
 
 
@@ -258,14 +278,12 @@ def client_tree(user_id: str, client_id: str) -> dict:
     for e in store.list_engagements(user_id, client_id):
         members = [by_id[t.id] for t in tasks if t.engagement_id == e.id]
         node = _score_from(members)
-        node.update({"engagementId": e.id, "title": e.title,
-                     "status": e.status, "tasks": members})
+        node.update({"engagementId": e.id, "title": e.title, "status": e.status, "tasks": members})
         projects.append(node)
 
     unassigned = [by_id[t.id] for t in tasks if not t.engagement_id]
     overall = _score_from(rollups)
-    overall.update({"clientId": client_id, "projects": projects,
-                    "unassignedTasks": unassigned})
+    overall.update({"clientId": client_id, "projects": projects, "unassignedTasks": unassigned})
     return overall
 
 
@@ -286,13 +304,19 @@ def delivery_signal(user_id: str, client_id: str) -> dict:
     """
     roll = client_rollup(user_id, client_id)
     if not roll["hasData"]:
-        return {"healthDelta": 0, "hasDeliveryData": False,
-                "risks": [], "positives": [], "deliveryScore": 100,
-                "deliveryLabel": "on_track", "progressPct": 0,
-                "blockerCount": 0, "overdueCount": 0}
+        return {
+            "healthDelta": 0,
+            "hasDeliveryData": False,
+            "risks": [],
+            "positives": [],
+            "deliveryScore": 100,
+            "deliveryLabel": "on_track",
+            "progressPct": 0,
+            "blockerCount": 0,
+            "overdueCount": 0,
+        }
 
-    delta = max(-CLIENT_MAX_PENALTY,
-                min(CLIENT_MAX_BONUS, roll["bonus"] - roll["penalty"]))
+    delta = max(-CLIENT_MAX_PENALTY, min(CLIENT_MAX_BONUS, roll["bonus"] - roll["penalty"]))
     return {
         "healthDelta": delta,
         "hasDeliveryData": True,

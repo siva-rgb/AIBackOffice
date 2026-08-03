@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M3 — Token Encryption Fail-Closed</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --fg: #c9d1d9;
+    --fg2: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d29922;
+    --purple: #a371f7;
+  }
+  * { box-sizing:border-box; margin:0; padding:0 }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+    line-height: 1.6; padding: 2rem; max-width: 960px; margin: 0 auto;
+  }
+  h1 { font-size: 1.6rem; color: var(--accent); margin-bottom: 0.25rem; }
+  h2 { font-size: 1.2rem; color: var(--fg); margin: 2rem 0 0.75rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1rem; color: var(--fg2); margin: 1.25rem 0 0.5rem; }
+  .subtitle { color: var(--fg2); font-size: 0.85rem; margin-bottom: 1.5rem; }
+  .badge { display:inline-block; padding:0.1em 0.6em; border-radius:12px; font-size:0.75rem; font-weight:600; margin-right:0.4em; }
+  .badge-red { background:#f8514922; color:var(--red); border:1px solid #f8514944; }
+  .badge-green { background:#3fb95022; color:var(--green); border:1px solid #3fb95044; }
+  .badge-yellow { background:#d2992222; color:var(--yellow); border:1px solid #d2992244; }
+  .badge-blue { background:#58a6ff22; color:var(--accent); border:1px solid #58a6ff44; }
+
+  .box { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1rem 1.25rem; margin:1rem 0; }
+  .box-red { border-left:3px solid var(--red); }
+  .box-green { border-left:3px solid var(--green); }
+  .box-blue { border-left:3px solid var(--accent); }
+
+  code, .code { font-family:'Cascadia Code','Fira Code','Consolas',monospace; font-size:0.85rem; }
+  .code-block { background:var(--surface2); border-radius:6px; padding:0.75rem 1rem; overflow-x:auto; white-space:pre; font-size:0.82rem; margin:0.6rem 0; }
+  .inline { background:var(--surface2); padding:0.1em 0.4em; border-radius:4px; font-size:0.85em; }
+  .flow { display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin:1rem 0; }
+  .flow-node { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:0.5rem 0.75rem; text-align:center; font-size:0.8rem; white-space:nowrap; }
+  .flow-arrow { color:var(--fg2); font-size:1.2rem; }
+  .flow-red { border-color:var(--red); color:var(--red); }
+  .flow-green { border-color:var(--green); color:var(--green); }
+
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:0.75rem; margin:1rem 0; }
+  .stat { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; text-align:center; }
+  .stat-num { font-size:1.6rem; font-weight:700; color:var(--accent); }
+  .stat-label { font-size:0.75rem; color:var(--fg2); }
+
+  .tabs { display:flex; gap:1px; margin-bottom:-1px; }
+  .tab { background:var(--surface2); border:1px solid var(--border); border-bottom:none; border-radius:6px 6px 0 0; padding:0.4rem 1rem; cursor:pointer; font-size:0.82rem; color:var(--fg2); }
+  .tab.active { background:var(--surface); color:var(--fg); font-weight:600; }
+  .tab-content { display:none; background:var(--surface); border:1px solid var(--border); border-radius:0 8px 8px 8px; padding:1.25rem; }
+  .tab-content.active { display:block; }
+
+  .quiz-block { margin:1.25rem 0; }
+  .quiz-q { font-weight:600; margin-bottom:0.5rem; color:var(--fg); }
+  .quiz-opt { display:block; padding:0.45rem 0.75rem; margin:0.2rem 0; background:var(--surface2); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.85rem; transition:background 0.15s; }
+  .quiz-opt:hover { background:#2a3038; }
+  .quiz-opt.correct { background:#3fb95022; border-color:var(--green); color:var(--green); }
+  .quiz-opt.wrong { background:#f8514922; border-color:var(--red); color:var(--red); }
+  .quiz-opt.disabled { pointer-events:none; opacity:0.85; }
+  .quiz-feedback { margin-top:0.4rem; font-size:0.82rem; color:var(--fg2); min-height:1.3em; }
+  .quiz-score { font-size:1.1rem; margin:1rem 0; color:var(--accent); }
+
+  .toggle-btn { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:0.35rem 0.85rem; cursor:pointer; color:var(--fg); font-size:0.82rem; margin-right:0.4rem; }
+  .toggle-btn:hover { background:var(--border); }
+
+  hr { border:0; border-top:1px solid var(--border); margin:2rem 0; }
+
+  .footer { color:var(--fg2); font-size:0.75rem; margin-top:3rem; border-top:1px solid var(--border); padding-top:1rem; }
+</style>
+</head>
+<body>
+
+<h1>M3 &mdash; Token Encryption Fail-Closed</h1>
+<div class="subtitle">
+  <span class="badge badge-red">Security Fix</span>
+  <span class="badge badge-green">10/10 Tests Pass</span>
+  <span class="badge badge-yellow">Fail-Closed</span>
+  2026-07-31
+</div>
+
+<div class="box box-red">
+<strong>Before:</strong> <span class="inline">_fernet = None</span> escape hatch let the app boot without <span class="inline">TOKEN_ENCRYPTION_KEY</span>.  
+Every restart with a missing key = new random Fernet key = <strong>silently destroy all encrypted OAuth / Notion / Stripe tokens.</strong> No error, no warning.
+</div>
+
+<div class="box box-green">
+<strong>After:</strong> Module-level <span class="inline">_fernet: Fernet = load_key()</span> at import time. Missing or malformed key → <span class="inline">StartupError(RuntimeError)</span> → process exits code 1 with a descriptive diagnostic. The app <em>refuses to start</em> rather than silently corrupting tokens.
+</div>
+
+<h2>Core Code Structure</h2>
+
+<div class="code-block">class StartupError(RuntimeError): ...
+
+def _read_key() -&gt; str:
+    """Raises StartupError if TOKEN_ENCRYPTION_KEY env var is unset or whitespace-only."""
+
+def load_key() -&gt; Fernet:
+    """Validates Fernet key from _read_key(). Raises StartupError on malformed key."""
+
+_fernet: Fernet = load_key()           # module singleton at import time
+
+def encrypt_token(token: str) -&gt; str:  # empty strings round-trip as empty
+def decrypt_token(catalog: str) -&gt; str: # InvalidToken → "reconnect needed"
+
+def get_fernet() -&gt; Fernet:             # singleton accessor</div>
+
+<h2>What M3 Built</h2>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab(event,'m31')">M3.1</button>
+  <button class="tab" onclick="switchTab(event,'m32')">M3.2</button>
+  <button class="tab" onclick="switchTab(event,'m33')">M3.3</button>
+  <button class="tab" onclick="switchTab(event,'m34')">M3.4</button>
+</div>
+
+<div id="m31" class="tab-content active">
+<h3>M3.1 — Remove Fallback Key</h3>
+<p>Removed <span class="inline">_fernet = None</span> module-level escape hatch. The lone <span class="inline">Fernet.generate_key()</span> call now exists <em>only</em> in a test helper docstring and is never invoked at runtime. No path to generate a random key silently.</p>
+</div>
+<div id="m32" class="tab-content">
+<h3>M3.2 — StartupError + load_key()</h3>
+<p>Custom <span class="inline">class StartupError(RuntimeError)</span> exception. <span class="inline">load_key()</span> validates the Fernet key format; <span class="inline">_read_key()</span> strips whitespace before checking emptiness. On failure, process exits code 1 with message:</p>
+<div class="code-block">TOKEN_ENCRYPTION_KEY is not set.
+Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+Refusing to start: every restart would silently destroy all encrypted
+OAuth/Notion/Stripe tokens.</div>
+</div>
+<div id="m33" class="tab-content">
+<h3>M3.3 — 10 CI Tests</h3>
+<div class="stats">
+  <div class="stat"><div class="stat-num">4</div><div class="stat-label">Module Failure Paths</div></div>
+  <div class="stat"><div class="stat-num">2</div><div class="stat-label">Round-Trip (Distinct IVs)</div></div>
+  <div class="stat"><div class="stat-num">2</div><div class="stat-label">Empty-String Contract</div></div>
+  <div class="stat"><div class="stat-num">2</div><div class="stat-label">Subprocess Smoke Tests</div></div>
+</div>
+<p style="margin-top:0.75rem;"><strong>Failure paths:</strong> unset, whitespace-only, malformed, valid.<br>
+<strong>Round-trip:</strong> encrypt→decrypt with verification that two encryptions of the same plaintext yield distinct IVs.<br>
+<strong>Empty-string:</strong> empty encrypt returns empty bytes, empty decrypt returns empty string.<br>
+<strong>Subprocess:</strong> app launched via <span class="inline">subprocess</span> with missing key → non-zero exit. With malformed key → non-zero exit.</p>
+</div>
+<div id="m34" class="tab-content">
+<h3>M3.4 — Rotation Doc</h3>
+<p><span class="inline">docs/sops/token-key-rotation.md</span> — documented rotation procedure, recovery from lost keys, and local key testing via <span class="inline">.env</span>.</p>
+</div>
+
+<h2>Design Decisions</h2>
+
+<div class="flow">
+  <div class="flow-node flow-green">TOKEN_ENCRYPTION_KEY</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-node">_read_key()</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-node">load_key()</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-node flow-green">_fernet (singleton)</div>
+</div>
+
+<div class="box box-blue" style="margin-top:1rem;">
+<ul style="list-style:none;padding:0;">
+  <li style="padding:0.25rem 0;"><span class="badge badge-yellow">Stricter than required</span> Mock-mode escape hatch removed entirely. Even for mock mode, missing key fails the process. Tests get a fixed Fernet key via <span class="inline">conftest.py</span>.</li>
+  <li style="padding:0.25rem 0;"><span class="badge badge-blue">Whitespace-safe</span> <span class="inline">_read_key()</span> strips whitespace before checking emptiness — handles accidental trailing newlines from env files.</li>
+  <li style="padding:0.25rem 0;"><span class="badge badge-blue">ValueError</span> <span class="inline">load_key()</span> raises ValueError for malformed keys (wrong length, non-base64 characters).</li>
+  <li style="padding:0.25rem 0;"><span class="badge badge-blue">InvalidToken</span> On decrypt failure, callers see: "Google/Notion/Stripe Connect reconnect needed".</li>
+</ul>
+</div>
+
+<h2>Callers</h2>
+<p>5 encrypt_token call sites — <strong>all unchanged</strong>:</p>
+<div class="code-block">auth_google       → encrypt_token(oauth_token)
+account           → encrypt_token(token)
+google_auth       → encrypt_token(token)
+notion_connector  → encrypt_token(notion_token)
+stripe_connect    → encrypt_token(stripe_token)</div>
+
+<h2>Startup Hook</h2>
+<div class="code-block">_fernet: Fernet = load_key()   # line 93 of token_encryption.py</div>
+<p>The FastAPI app catches this by extension — not by function call. Fails at <span class="inline">main.py</span> import time (module-level evaluation), exits code 1 before any route is registered.</p>
+
+<h2>How the Flow Changed</h2>
+<div style="display:flex;gap:2rem;flex-wrap:wrap;">
+<div style="flex:1;min-width:280px;">
+<h3 style="color:var(--red);">Before</h3>
+<div class="flow" style="flex-direction:column;align-items:flex-start;">
+  <div class="flow-node">Process starts</div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-node">TOKEN_ENCRYPTION_KEY missing</div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-node flow-red">_fernet = None (silent)</div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-node flow-red">App boots normally</div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-node flow-red">New random key generated</div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-node flow-red">All existing encrypted tokens DESTROYED</div>
+</div>
+</div>
+<div style="flex:1;min-width:280px;">
+<h3 style="color:var(--green);">After</h3>
+<div class="flow" style="flex-direction:column;align-items:flex-start;">
+  <div class="flow-node">Process starts</div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-node">TOKEN_ENCRYPTION_KEY missing</div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-node flow-green">StartupError raised</div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-node flow-green">Process exits code 1</div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-node flow-green">Descriptive error + fix instructions</div>
+</div>
+</div>
+</div>
+
+<h2 style="margin-top:2rem;">Gate</h2>
+<div class="box box-green">
+Starting the app without <span class="inline">TOKEN_ENCRYPTION_KEY</span> exits non-zero with an error instead of booting.
+</div>
+
+<h2>Context-Graph Invariant</h2>
+<p><strong>inv_token_encryption_startup</strong> demands <span class="inline">StartupError</span> (not fallback to random key) if the key is unset. This M3 change satisfies the invariant with zero deviation.</p>
+
+<h2>Test Facts</h2>
+<div class="stats">
+  <div class="stat"><div class="stat-num">10/10</div><div class="stat-label">M3 Tests Passed</div></div>
+  <div class="stat"><div class="stat-num">306</div><div class="stat-label">Full Suite Passed</div></div>
+  <div class="stat"><div class="stat-num">1</div><div class="stat-label">Skipped</div></div>
+  <div class="stat"><div class="stat-num">39.57%</div><div class="stat-label">Coverage</div></div>
+  <div class="stat"><div class="stat-num">✅</div><div class="stat-label">flake8 Clean</div></div>
+</div>
+
+<hr>
+
+<h2>Knowledge Check</h2>
+<p style="color:var(--fg2);font-size:0.85rem;margin-bottom:1rem;">Select an answer for each question. Hover to see options. Click to lock in.</p>
+
+<div id="quiz-score" style="display:none;font-size:1.1rem;margin:1rem 0;color:var(--accent);"></div>
+
+<div class="quiz-block" id="q1">
+  <div class="quiz-q">1. What happens if TOKEN_ENCRYPTION_KEY is unset when the app starts after M3?</div>
+  <div class="quiz-opt" onclick="select(this,'q1',false)">A random Fernet key is generated and a warning is logged</div>
+  <div class="quiz-opt" onclick="select(this,'q1',false)">The app starts without encryption, tokens stored in plaintext</div>
+  <div class="quiz-opt" onclick="select(this,'q1',true)">The process exits with code 1 and a descriptive error message</div>
+  <div class="quiz-opt" onclick="select(this,'q1',false)">Tokens are encrypted with the previous key from the database</div>
+  <div class="quiz-feedback" id="fb-q1"></div>
+</div>
+
+<div class="quiz-block" id="quiz2">
+  <div class="quiz-q">2. Why was the mock-mode <code>_fernet = None</code> escape hatch removed entirely?</div>
+  <div class="quiz-opt" onclick="select(this,'q2',false)">It conflicted with the new Fernet version</div>
+  <div class="quiz-opt" onclick="select(this,'q2',false)">Mock tests could not inject a valid key</div>
+  <div class="quiz-opt" onclick="select(this,'q2',true)">Stricter than required — missing key fails even in mock mode; tests get a fixed key via conftest.py</div>
+  <div class="quiz-opt" onclick="select(this,'q2',false)">It was accidentally deleted during a merge</div>
+  <div class="quiz-feedback" id="fb-q2"></div>
+</div>
+
+<div class="quiz-block" id="quiz3">
+  <div class="quiz-q">3. When does the startup check for TOKEN_ENCRYPTION_KEY actually execute?</div>
+  <div class="quiz-opt" onclick="select(this,'q3',false)">When the first route is called in FastAPI</div>
+  <div class="quiz-opt" onclick="select(this,'q3',false)">On first encrypt_token() or decrypt_token() call</div>
+  <div class="quiz-opt" onclick="select(this,'q3',true)">At import time — <code>_fernet = load_key()</code> is a module-level statement</div>
+  <div class="quiz-opt" onclick="select(this,'q3',false)">During uvicorn lifecycle startup event</div>
+  <div class="quiz-feedback" id="fb-q3"></div>
+</div>
+
+<div class="quiz-block" id="quiz4">
+  <div class="quiz-q">4. What exception is raised when a user has an InvalidToken decrypt failure?</div>
+  <div class="quiz-opt" onclick="select(this,'q4',false)">StartupError — it terminates the process</div>
+  <div class="quiz-opt" onclick="select(this,'q4',false)">ValueError — it logs and returns a blank string</div>
+  <div class="quiz-opt" onclick="select(this,'q4',false)">A silent None is returned and the token is skipped</div>
+  <div class="quiz-opt" onclick="select(this,'q4',true)">InvalidToken — callers return "Google/Notion/Stripe Connect reconnect needed"</div>
+  <div class="quiz-feedback" id="fb-q4"></div>
+</div>
+
+<div class="quiz-block" id="quiz5">
+  <div class="quiz-q">5. Which of following is NOT one of the 10 CI test categories for M3.3?</div>
+  <div class="quiz-opt" onclick="select(this,'q5',false)">Module-level failure paths (unset, whitespace-only, malformed, valid)</div>
+  <div class="quiz-opt" onclick="select(this,'q5',false)">Round-trip with distinct IV verification</div>
+  <div class="quiz-opt" onclick="select(this,'q5',false)">Empty-string contract (empty encrypt, empty decrypt)</div>
+  <div class="quiz-opt" onclick="select(this,'q5',true)">Performance benchmark (100k encrypts/sec threshold)</div>
+  <div class="quiz-feedback" id="fb-q5"></div>
+</div>
+
+<div style="margin:1.5rem 0;">
+  <button class="toggle-btn" onclick="resetQuiz()">Retry Quiz</button>
+</div>
+
+<div class="footer">
+  M3 — Token Encryption Fail-Closed &middot; 2026-07-31 &middot; CYP Team
+</div>
+
+<script>
+const answered = {};
+const CORRECT_MESSAGES = {
+  q1: "Correct. M3.2 makes the entire process exit code 1 immediately when the key is unset; no fallback, no random key.",
+  q2: "Correct. The decision was deliberate — even mock mode must have a valid key. Tests supply one via conftest.py.",
+  q3: "Correct. _fernet = load_key() runs as a module-level singleton at import time, before any FastAPI route registers.",
+  q4: "Correct. Fernet's InvalidToken exception on decrypt is caught and callers return a 'reconnect needed' user-friendly message.",
+  q5: "Correct. Performance benchmarking was not part of the M3.3 10-test set. The 10 tests cover failures, round-trips, empty-strings, and subprocess smoke.",
+};
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  document.querySelector(`[onclick*="${tabId}"]`).classList.add('active');
+}
+
+function selectAnswer(el, qId, isCorrect) {
+  if (document.getElementById('q' + qId).querySelector('.quiz-opt.correct, .quiz-opt.wrong')) return;
+  const all = document.getElementById('q' + qId).querySelectorAll('.quiz-opt');
+  all.forEach(o => o.classList.add('disabled'));
+  el.classList.add(isCorrect ? 'correct' : 'wrong');
+  document.getElementById('fb-q' + qId).textContent = isCorrect
+    ? ('✓ ' + CORRECT_MESSAGES[qId])
+    : ('✗ ' + CORRECT_MESSAGES[qId]);
+  const total = Object.keys(CORRECT_MESSAGES).length;
+  Object.keys(evaluated).forEach(k => {
+    evaluated[k] = document.getElementById(k).querySelector('.quiz-opt.correct') ? true : false;
+  });
+  const correct = Object.values(evaluted).filter(v => v).length;
+  const scoreEl = document.getElementById('quiz-score');
+  scoreEl.style.display = 'block';
+  scoreEl.textContent = 'Score: ' + correct + '/' + Object.keys(evaluted).length;
+}
+
+function resetQuiz() {
+  Object.keys(CORRECT_MESSAGES).forEach(k => {
+    const block = document.getElementById(k.replace(/\d+/, 'q$&'));
+    block.querySelectorAll('.quiz-opt').forEach(o => {
+      o.classList.remove('correct', 'wrong', 'disabled');
+    });
+    document.getElementById('fb-' + k.replace(/\d+/, 'q$&')).textContent = '';
+  });
+  document.getElementById('quiz-score').style.display = 'none';
+}
+</script>
+
+</body>
+</html>

@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .config import settings
+from .middleware.access_log import AccessLogMiddleware
 from .middleware.security_headers import SecurityHeadersMiddleware
+from .utils.request_cache import begin_request_cache, end_request_cache
 from .routers import (
     account,
     agents,
@@ -49,15 +51,40 @@ if settings.SENTRY_DSN:
     def _scrub_sensitive_data(event, hint):
         if event.get("extra"):
             for key in list(event["extra"].keys()):
-                if any(s in key.lower() for s in [
-                    "amount", "total", "income", "expense", "balance",
-                    "transaction", "bank", "token", "secret", "password",
-                    "email_body", "transcript", "raw_text",
-                ]):
+                if any(
+                    s in key.lower()
+                    for s in [
+                        "amount",
+                        "total",
+                        "income",
+                        "expense",
+                        "balance",
+                        "transaction",
+                        "bank",
+                        "token",
+                        "secret",
+                        "password",
+                        "email_body",
+                        "transcript",
+                        "raw_text",
+                    ]
+                ):
                     event["extra"][key] = "[REDACTED]"
         request = event.get("request", {})
         if request.get("data"):
             request["data"] = "[REDACTED]"
+        # M11.2 — stamp the current request_id (if any) onto every event so an
+        # unhandled error in the access-log middlewares can be correlated to
+        # the request line and any agent_logs rows the handler wrote.
+        try:
+            from .utils.request_context import current_request_id
+
+            rid = current_request_id()
+            if rid:
+                tags = event.setdefault("tags", {})
+                tags.setdefault("request_id", rid)
+        except Exception:
+            pass
         return event
 
     sentry_sdk.init(
@@ -73,6 +100,10 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# M11.1 — structured access log + request_id propagation. Outer-most middleware
+# so it captures the final status code and total latency for every request.
+app.add_middleware(AccessLogMiddleware)
+
 app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS so the Next.js frontend can call the API with the Supabase JWT.
@@ -82,8 +113,10 @@ app.add_middleware(SecurityHeadersMiddleware)
 _cors_origins = [settings.FRONTEND_ORIGIN]
 if settings.ENVIRONMENT != "production":
     _cors_origins += [
-        "http://localhost:3000", "http://127.0.0.1:3000",
-        "http://localhost:3001", "http://127.0.0.1:3001",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
     ]
 app.add_middleware(
     CORSMiddleware,
@@ -92,6 +125,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_cache_middleware(request: Request, call_next):
+    begin_request_cache()
+    try:
+        return await call_next(request)
+    finally:
+        end_request_cache()
 
 
 @app.exception_handler(Exception)

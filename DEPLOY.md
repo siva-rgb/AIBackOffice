@@ -72,3 +72,54 @@ docker run --rm -p 8000:8080 --env-file backend/.env kora-backend
 ```
 
 Cloud Run supplies `$PORT` (defaults to 8080); both images honor it.
+
+## Automated CI/CD (GitHub Actions) — M16
+
+`cloudbuild.yaml` above is the manual one-shot. `.github/workflows/deploy.yml` is the
+**automated pipeline**; all deploy logic lives in one script, `ops/deploy.sh`.
+
+```
+merge to main ─▶ verify (hermetic tests) ─▶ STAGING (100%, automatic)
+                                                  │
+                                                  ▼
+                                      PRODUCTION CANARY  ⏸ held for review
+                                      (new revision, 10% traffic)
+                                                  │  approve
+                                                  ▼
+        workflow_dispatch: promote ─▶ 100% traffic  (blue/green cutover)
+        workflow_dispatch: rollback ─▶ canary → 0%  (instant, prior stable never left)
+```
+
+- **Staging is automatic** on every merge to `main` (after the test gate). It deploys to
+  isolated `kora-backend-staging` / `kora-frontend-staging` services — a bad staging deploy
+  can never touch production.
+- **Production only ever moves behind a reviewed gate.** The `production-canary` job uses the
+  `production` GitHub Environment; add required reviewers in **Settings ▸ Environments ▸
+  production** and the job pauses until someone approves — that is the "promotion to production
+  is a reviewed action" gate.
+- **Canary / blue-green (M16.4)** uses Cloud Run revision tags: the new revision deploys with
+  `--no-traffic --tag=canary`, then `CANARY_PERCENT` (10%) of traffic is shifted to it while the
+  prior stable revision keeps serving the rest. `promote` sends 100% to the new revision;
+  `rollback` drains the canary tag to 0% — an instant, complete rollback because stable never
+  went offline.
+
+### One-time setup
+
+Auth uses keyless **Workload Identity Federation** (no long-lived SA key in the repo). Bind a
+deploy service account with `run.admin` + `iam.serviceAccountUser` + `artifactregistry.writer`.
+
+**Repo secrets** (Settings ▸ Secrets and variables ▸ Actions ▸ Secrets):
+
+| Secret | Purpose |
+|---|---|
+| `GCP_PROJECT_ID` | target project |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF provider resource name |
+| `GCP_SERVICE_ACCOUNT` | deploy SA email |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | baked into the frontend build |
+| `NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID`, `NEXT_PUBLIC_STRIPE_PRO_PRICE_ID` | baked into the frontend build |
+
+**Environment variables** (Settings ▸ Environments ▸ `staging` / `production` ▸ Variables): set
+`FRONTEND_ORIGIN` per environment (each env's own public frontend URL). Region defaults to
+`us-central1` and canary to 10% via `env:` in `deploy.yml`.
+
+Prerequisite (as with the manual path): an Artifact Registry repo named `kora` in the region.

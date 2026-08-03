@@ -66,6 +66,7 @@ def ingest_transactions(user_id: str, currency: str, rows: list[ParsedRow]) -> I
         ]
         try:
             from .playbook import apply_corrections_before_llm
+
             already_corrected, items = apply_corrections_before_llm(user_id, items)
             # Write corrected categories back to Transaction objects in batch.
             corrected_by_id = {d["id"]: d for d in already_corrected if isinstance(d, dict)}
@@ -158,8 +159,7 @@ def recategorize_uncategorized(user_id: str, max_txns: int = 50) -> int:
     if not pending:
         return 0
     ai = get_ai()
-    items = [{"id": t.id, "date": t.date, "description": safe_sanitize(t.description), "amount": t.amount}
-             for t in pending]
+    items = [{"id": t.id, "date": t.date, "description": safe_sanitize(t.description), "amount": t.amount} for t in pending]
     try:
         call = generate_with_retry(lambda: ai.categorize_transactions(items))
     except Exception:
@@ -179,10 +179,16 @@ def recategorize_uncategorized(user_id: str, max_txns: int = 50) -> int:
     if updated:
         store.upsert_transactions(updated)
         agent_logger.log_action(
-            user_id=user_id, agent_type="bookkeeper",
+            user_id=user_id,
+            agent_type="bookkeeper",
             action=f"Auto-categorized {len(updated)} transaction(s) during manager review",
-            input={"count": len(updated)}, output={"categorized": len(updated)},
-            model_used=call.model_used, tokens_used=call.tokens_used, latency_ms=call.latency_ms,
-            cost_usd=call.cost_usd, triggered_by="cross_module", source_record_type="transaction",
+            input={"count": len(updated)},
+            output={"categorized": len(updated)},
+            model_used=call.model_used,
+            tokens_used=call.tokens_used,
+            latency_ms=call.latency_ms,
+            cost_usd=call.cost_usd,
+            triggered_by="cross_module",
+            source_record_type="transaction",
         )
     return len(updated)

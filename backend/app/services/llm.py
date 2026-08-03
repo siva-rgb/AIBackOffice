@@ -5,7 +5,7 @@ import re
 import time
 from dataclasses import dataclass
 
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_random_exponential
 
 from ..config import settings
@@ -17,10 +17,23 @@ from ..config import settings
 # and is provider-agnostic.
 
 _client: OpenAI | None = None
+_async_client: AsyncOpenAI | None = None
 
 
 def is_configured() -> bool:
     return bool(settings.MODEL_API_KEY and settings.BASE_URL)
+
+
+def _get_async_client() -> AsyncOpenAI:
+    global _async_client
+    if _async_client is None:
+        _async_client = AsyncOpenAI(
+            api_key=settings.MODEL_API_KEY,
+            base_url=settings.BASE_URL.rstrip("/"),
+            timeout=60.0,
+            max_retries=0,
+        )
+    return _async_client
 
 
 def _get_client() -> OpenAI:
@@ -33,6 +46,40 @@ def _get_client() -> OpenAI:
             max_retries=0,  # we handle retries via tenacity below
         )
     return _client
+
+
+async def achat(
+    system: str,
+    user: str,
+    *,
+    temperature: float = 0.2,
+    max_tokens: int = 1500,
+    json_mode: bool = False,
+) -> LLMResult:
+    """Async chat completion — use from async request handlers (M8.4)."""
+    client = _get_async_client()
+    start = time.time()
+    kwargs: dict = {
+        "model": settings.MODEL_NAME,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+    resp = await client.chat.completions.create(**kwargs)
+    text = resp.choices[0].message.content or ""
+    usage = resp.usage
+    return LLMResult(
+        text=text,
+        input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+        output_tokens=getattr(usage, "completion_tokens", 0) or 0,
+        latency_ms=int((time.time() - start) * 1000),
+        model=settings.MODEL_NAME,
+    )
 
 
 @dataclass
@@ -126,6 +173,36 @@ def chat_messages(
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
     resp = client.chat.completions.create(**kwargs)
+    msg = resp.choices[0].message
+    usage = resp.usage
+    return ToolTurn(
+        content=msg.content,
+        tool_calls=list(getattr(msg, "tool_calls", None) or []),
+        input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+        output_tokens=getattr(usage, "completion_tokens", 0) or 0,
+        model=settings.MODEL_NAME,
+    )
+
+
+async def achat_messages(
+    messages: list[dict],
+    *,
+    tools: list[dict] | None = None,
+    temperature: float = 0.3,
+    max_tokens: int = 900,
+) -> ToolTurn:
+    """Async tool-calling round (M8.4)."""
+    client = _get_async_client()
+    kwargs: dict = {
+        "model": settings.MODEL_NAME,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if tools:
+        kwargs["tools"] = tools
+        kwargs["tool_choice"] = "auto"
+    resp = await client.chat.completions.create(**kwargs)
     msg = resp.choices[0].message
     usage = resp.usage
     return ToolTurn(

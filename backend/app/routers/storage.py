@@ -39,15 +39,20 @@ async def storage_status(user: User = Depends(get_current_user)):
 async def export_agent_log(user: User = Depends(get_current_user)):
     logs = store.list_agent_logs(user.id)
     buf = io.StringIO()
-    w = csv.DictWriter(buf, fieldnames=[
-        "created_at", "agent_type", "action", "status", "latency_ms", "triggered_by", "tokens_used"])
+    w = csv.DictWriter(buf, fieldnames=["created_at", "agent_type", "action", "status", "latency_ms", "triggered_by", "tokens_used"])
     w.writeheader()
     for log in logs:
-        w.writerow({
-            "created_at": log.created_at, "agent_type": log.agent_type, "action": log.action,
-            "status": log.status, "latency_ms": log.latency_ms, "triggered_by": log.triggered_by,
-            "tokens_used": log.tokens_used,
-        })
+        w.writerow(
+            {
+                "created_at": log.created_at,
+                "agent_type": log.agent_type,
+                "action": log.action,
+                "status": log.status,
+                "latency_ms": log.latency_ms,
+                "triggered_by": log.triggered_by,
+                "tokens_used": log.tokens_used,
+            }
+        )
     csv_bytes = buf.getvalue().encode("utf-8")
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     filename = f"kora-agent-log-{date_str}.csv"
@@ -61,9 +66,7 @@ async def export_agent_log(user: User = Depends(get_current_user)):
         except Exception as exc:  # fall back to inline stream if GCS misbehaves
             print(f"[storage] export to GCS failed, streaming inline: {exc}")
     # No bucket (or GCS error): stream the CSV directly.
-    return Response(
-        content=csv_bytes, media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+    return Response(content=csv_bytes, media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 # ── Receipt upload / download (requires GCS) ──────────────────────────────────

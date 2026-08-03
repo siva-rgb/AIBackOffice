@@ -1,4 +1,4 @@
-# ADR 0000 — <short decision title>
+﻿# ADR 0000 — <short decision title>
 
 - **Date:** {{TIMESTAMP}}
 - **Status:** proposed | accepted | superseded by ADR-XXXX
