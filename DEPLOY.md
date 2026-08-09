@@ -34,6 +34,65 @@ usual flow is:
 3. Update the backend's `FRONTEND_ORIGIN` to the real frontend URL and redeploy
    (or set it up front if you're using a custom domain).
 
+## Runtime secrets — bind them or the revision never starts
+
+`backend/app/services/token_encryption.py` builds its Fernet key **at import
+time** and raises if `TOKEN_ENCRYPTION_KEY` is missing (M3, deliberate). A deploy
+that doesn't bind it produces a container that exits before serving a request, so
+the Cloud Run revision never becomes ready — with no obvious error at the CLI.
+
+`ops/gcp_bootstrap.sh` is the one-time fix. It is idempotent, so re-running it is
+safe:
+
+```bash
+GCP_PROJECT_ID=my-project REGION=us-central1 bash ops/gcp_bootstrap.sh
+bash ops/gcp_bootstrap.sh --dry-run     # show what it would do first
+```
+
+It enables the required APIs, creates the `kora` Artifact Registry repo, loads
+every secret in `ops/secrets.sh` from `backend/.env` into Secret Manager (one
+secret per variable, same name), and grants the runtime + build service accounts
+the roles they need. `ops/deploy.sh` and `cloudbuild.yaml` then bind whatever
+exists — a project without Notion or Stripe still deploys.
+
+**`ALLOW_DEMO_USER` must be `false` in any deployed environment.** It defaults to
+`True`, and with it on, every `/api/*` route serves the seeded demo user's real
+data to anonymous callers. Both deploy paths now set it explicitly, and
+`get_current_user` additionally ignores the flag when `ENVIRONMENT` is
+`production`/`staging`. This was a live S1 caught by the staging smoke gate —
+see `docs/uat/UAT_PLAN.md` §7 D-001.
+
+## Verify before and after — the UAT gates
+
+Never promote on an unverified deploy. `ops/uat.sh` runs the automated half of
+`docs/uat/UAT_PLAN.md`:
+
+```bash
+bash ops/uat.sh all           # G0–G3: preflight, backend, frontend, e2e
+# ...deploy...
+bash ops/uat.sh smoke --target <backend-url> --frontend <frontend-url>
+```
+
+The smoke gate is what catches deployment-configuration bugs that unit tests
+cannot: anonymous access, missing security headers, CORS mismatch, leaked stack
+traces. Warm the service with one request first — a cold start can exceed the
+gate's 20 s timeout.
+
+## Deploying without a local Docker daemon
+
+`ops/deploy.sh` builds images locally and needs Docker Desktop running. When it
+isn't, hand the build to Cloud Build instead — same `cloudbuild.yaml`, same
+secret bindings, same service names:
+
+```bash
+bash ops/cloudbuild_deploy.sh staging
+bash ops/cloudbuild_deploy.sh production
+```
+
+It reads the `NEXT_PUBLIC_*` values from `frontend/.env.local`, tags images with
+the short git SHA, and prints the follow-up command when `FRONTEND_ORIGIN` needs
+a second pass (see the CORS chicken-and-egg above).
+
 ## One-shot deploy (Cloud Build)
 
 ```bash

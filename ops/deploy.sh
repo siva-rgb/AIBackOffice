@@ -57,6 +57,12 @@ FRONTEND_IMG="${REGISTRY}/${FRONTEND_SVC}:${SHA}"
 
 log() { echo "▸ $*"; }
 
+# Runtime secrets, created in Secret Manager by `ops/gcp_bootstrap.sh` and bound
+# here as env vars of the same name. The list lives in ops/secrets.sh so this
+# script, the bootstrap, and cloudbuild.yaml can never drift apart.
+# shellcheck source=ops/secrets.sh
+. "$(dirname "${BASH_SOURCE[0]}")/secrets.sh"
+
 build_push_backend() {
   log "build backend → ${BACKEND_IMG}"
   docker build -t "${BACKEND_IMG}" ./backend
@@ -71,7 +77,8 @@ deploy_backend() {
     --region="${REGION}" \
     --platform=managed \
     --allow-unauthenticated \
-    --set-env-vars="ENVIRONMENT=${ENVIRONMENT},KORA_DATA_BACKEND=supabase,FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-}" \
+    --set-env-vars="ENVIRONMENT=${ENVIRONMENT},ALLOW_DEMO_USER=false,KORA_DATA_BACKEND=supabase,FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-},KORA_AI_BACKEND=${KORA_AI_BACKEND:-auto},MODEL_NAME=${MODEL_NAME:-azure.gpt-4o-mini},GOOGLE_CLOUD_PROJECT_ID=${GCP_PROJECT_ID},GOOGLE_CLOUD_LOCATION=${REGION}" \
+    "$(kora_secret_flag "${GCP_PROJECT_ID}")" \
     "$@"
 }
 

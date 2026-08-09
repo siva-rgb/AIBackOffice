@@ -1,0 +1,38 @@
+# What NOT to upload as Cloud Build source context.
+#
+# Without this, gcloud derives an ignore list from .gitignore, which leaves .git/
+# in the upload and makes the behaviour depend on a file written for a different
+# purpose. Being explicit keeps the upload small and keeps credentials out of the
+# build context entirely.
+
+.git/
+.github/
+.genesis/
+
+# Dependencies — reinstalled inside the Dockerfiles.
+**/node_modules/
+**/venv/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/*.pyc
+
+# Build output.
+frontend/.next/
+frontend/out/
+frontend/e2e/report/
+frontend/test-results/
+**/tsconfig.tsbuildinfo
+
+# Credentials must never enter a build context — they are bound at runtime from
+# Secret Manager (ops/secrets.sh), never baked into an image.
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+*.json.key
+backend/*-*.json
+
+# Docs and local scratch.
+docs/
+*.docx

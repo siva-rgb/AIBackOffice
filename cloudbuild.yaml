@@ -20,14 +20,20 @@ substitutions:
   _BACKEND_SERVICE: kora-backend
   _FRONTEND_SERVICE: kora-frontend
   _FRONTEND_ORIGIN: ""          # e.g. https://kora-frontend-xxxx-uc.a.run.app
+  _MODEL_NAME: "azure.gpt-4o-mini"
+  # $SHORT_SHA is only populated for trigger-driven builds; manual
+  # `gcloud builds submit` would resolve it to an empty tag. Pass _TAG explicitly.
+  _TAG: "manual"
+  # 'staging' or 'production' — drives CORS behaviour in app/main.py.
+  _ENVIRONMENT: "production"
   _NEXT_PUBLIC_SUPABASE_URL: ""
   _NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
   _NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID: ""
   _NEXT_PUBLIC_STRIPE_PRO_PRICE_ID: ""
 
 images:
-  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_BACKEND_SERVICE}:$SHORT_SHA"
-  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_FRONTEND_SERVICE}:$SHORT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_BACKEND_SERVICE}:${_TAG}"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_FRONTEND_SERVICE}:${_TAG}"
 
 steps:
   # 1. Build + push the backend image.
@@ -36,26 +42,35 @@ steps:
     args:
       - build
       - "-t"
-      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_BACKEND_SERVICE}:$SHORT_SHA"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_BACKEND_SERVICE}:${_TAG}"
       - ./backend
 
   - id: push-backend
     name: gcr.io/cloud-builders/docker
-    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_BACKEND_SERVICE}:$SHORT_SHA"]
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_BACKEND_SERVICE}:${_TAG}"]
 
   # 2. Deploy the backend FIRST so we can read its URL for the frontend build.
+  #
+  # Runtime secrets are bound from Secret Manager via ops/secrets.sh — the same
+  # list ops/gcp_bootstrap.sh populates and ops/deploy.sh uses. Without them the
+  # backend fails closed at import (no TOKEN_ENCRYPTION_KEY) and the revision
+  # never becomes ready.
   - id: deploy-backend
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
+    entrypoint: bash
     args:
-      - run
-      - deploy
-      - ${_BACKEND_SERVICE}
-      - "--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_BACKEND_SERVICE}:$SHORT_SHA"
-      - "--region=${_REGION}"
-      - "--platform=managed"
-      - "--allow-unauthenticated"
-      - "--set-env-vars=ENVIRONMENT=production,KORA_DATA_BACKEND=supabase,FRONTEND_ORIGIN=${_FRONTEND_ORIGIN}"
+      - "-c"
+      - |
+        set -euo pipefail
+        . ops/secrets.sh
+        SECRET_FLAG="$$(kora_secret_flag "$PROJECT_ID")"
+        gcloud run deploy ${_BACKEND_SERVICE} \
+          --image="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_BACKEND_SERVICE}:${_TAG}" \
+          --region="${_REGION}" \
+          --platform=managed \
+          --allow-unauthenticated \
+          --set-env-vars="ENVIRONMENT=${_ENVIRONMENT},ALLOW_DEMO_USER=false,KORA_DATA_BACKEND=supabase,FRONTEND_ORIGIN=${_FRONTEND_ORIGIN},KORA_AI_BACKEND=auto,MODEL_NAME=${_MODEL_NAME},GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=${_REGION}" \
+          "$$SECRET_FLAG"
 
   # 3. Capture the backend URL into a workspace file for the next step.
   - id: read-backend-url
@@ -66,7 +81,7 @@ steps:
       - |
         gcloud run services describe ${_BACKEND_SERVICE} --region=${_REGION} \
           --format='value(status.url)' > /workspace/backend_url.txt
-        echo "backend URL: $(cat /workspace/backend_url.txt)"
+        echo "backend URL: $$(cat /workspace/backend_url.txt)"
 
   # 4. Build + push the frontend, baking the backend URL as NEXT_PUBLIC_API_URL.
   - id: build-frontend
@@ -75,20 +90,20 @@ steps:
     args:
       - "-c"
       - |
-        BACKEND_URL="$(cat /workspace/backend_url.txt)"
+        BACKEND_URL="$$(cat /workspace/backend_url.txt)"
         docker build \
-          --build-arg NEXT_PUBLIC_API_URL="$BACKEND_URL" \
+          --build-arg NEXT_PUBLIC_API_URL="$$BACKEND_URL" \
           --build-arg NEXT_PUBLIC_APP_URL="${_FRONTEND_ORIGIN}" \
           --build-arg NEXT_PUBLIC_SUPABASE_URL="${_NEXT_PUBLIC_SUPABASE_URL}" \
           --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${_NEXT_PUBLIC_SUPABASE_ANON_KEY}" \
           --build-arg NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID="${_NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID}" \
           --build-arg NEXT_PUBLIC_STRIPE_PRO_PRICE_ID="${_NEXT_PUBLIC_STRIPE_PRO_PRICE_ID}" \
-          -t "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_FRONTEND_SERVICE}:$SHORT_SHA" \
+          -t "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_FRONTEND_SERVICE}:${_TAG}" \
           ./frontend
 
   - id: push-frontend
     name: gcr.io/cloud-builders/docker
-    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_FRONTEND_SERVICE}:$SHORT_SHA"]
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_FRONTEND_SERVICE}:${_TAG}"]
 
   # 5. Deploy the frontend.
   - id: deploy-frontend
@@ -98,7 +113,7 @@ steps:
       - run
       - deploy
       - ${_FRONTEND_SERVICE}
-      - "--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_FRONTEND_SERVICE}:$SHORT_SHA"
+      - "--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_FRONTEND_SERVICE}:${_TAG}"
       - "--region=${_REGION}"
       - "--platform=managed"
       - "--allow-unauthenticated"
