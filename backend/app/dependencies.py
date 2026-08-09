@@ -39,7 +39,13 @@ async def get_current_user(
             raise HTTPException(status_code=401, detail="Invalid or expired session")
         # Demo bridge (until the frontend login is wired) — resolves the seeded
         # demo user. Disable with ALLOW_DEMO_USER=false to require real auth.
-        if settings.ALLOW_DEMO_USER:
+        #
+        # Deployed environments ignore the flag entirely. It defaults to True, so
+        # honouring it outside development means every /api/* route serves the
+        # seeded user's real data to any anonymous caller on the internet — which
+        # is exactly what the staging smoke gate caught. A deploy that forgets to
+        # set ALLOW_DEMO_USER=false must fail closed, not leak.
+        if settings.ALLOW_DEMO_USER and settings.ENVIRONMENT not in ("production", "staging"):
             user = store.get_user_by_email(settings.DEMO_EMAIL)
             if user:
                 _stamp(request, user)

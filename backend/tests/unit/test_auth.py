@@ -113,6 +113,9 @@ async def test_supabase_demo_bridge_allowed(monkeypatch):
 
     monkeypatch.setattr("app.dependencies.settings.KORA_DATA_BACKEND", "supabase")
     monkeypatch.setattr("app.dependencies.settings.ALLOW_DEMO_USER", True)
+    # Pinned: the bridge is development-only, so this must not depend on whatever
+    # ENVIRONMENT the local .env happens to carry.
+    monkeypatch.setattr("app.dependencies.settings.ENVIRONMENT", "development")
     u = _user()
     monkeypatch.setattr(store, "get_user_by_email", lambda email: u)
     result = await get_current_user(_fake_request(), authorization=None)
@@ -134,7 +137,33 @@ async def test_supabase_demo_bridge_user_not_found_raises_401(monkeypatch):
 
     monkeypatch.setattr("app.dependencies.settings.KORA_DATA_BACKEND", "supabase")
     monkeypatch.setattr("app.dependencies.settings.ALLOW_DEMO_USER", True)
+    monkeypatch.setattr("app.dependencies.settings.ENVIRONMENT", "development")
     monkeypatch.setattr(store, "get_user_by_email", lambda email: None)
+    with pytest.raises(HTTPException) as exc:
+        await get_current_user(_fake_request(), authorization=None)
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("environment", ["production", "staging"])
+async def test_demo_bridge_never_applies_in_deployed_environments(monkeypatch, environment):
+    """ALLOW_DEMO_USER must not be honourable in a deployed environment.
+
+    Regression guard for the staging UAT finding: the flag defaults to True, so a
+    deploy that forgot to set ALLOW_DEMO_USER=false served the seeded demo user's
+    real invoices, clients and transactions to any anonymous caller on the public
+    internet. Config alone is not enough — the code has to fail closed even when
+    the flag is left on.
+    """
+    from app import store
+
+    monkeypatch.setattr("app.dependencies.settings.KORA_DATA_BACKEND", "supabase")
+    monkeypatch.setattr("app.dependencies.settings.ALLOW_DEMO_USER", True)
+    monkeypatch.setattr("app.dependencies.settings.ENVIRONMENT", environment)
+    # The seeded demo user exists and is resolvable — the only thing standing
+    # between an anonymous request and their data is the environment check.
+    monkeypatch.setattr(store, "get_user_by_email", lambda email: _user())
+
     with pytest.raises(HTTPException) as exc:
         await get_current_user(_fake_request(), authorization=None)
     assert exc.value.status_code == 401
