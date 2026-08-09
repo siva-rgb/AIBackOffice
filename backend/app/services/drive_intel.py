@@ -173,12 +173,26 @@ def _route_file(user_id: str, file_meta: dict, service, db) -> None:
     mime = file_meta.get("mimeType", "")
     name = (file_meta.get("name") or "").lower()
     file_type = _FILE_TYPE_MAP.get(mime, "other")
-    doc_type = _classify_doc_type(name, file_type, mime)
+
+    # Read the document before deciding what it is. Classifying on the filename
+    # alone sent anything without a keyword to "other", which the router ignores.
+    # Extraction is best-effort: an unreadable file still gets cached by name.
+    text = ""
+    if file_type in ("google_doc", "pdf", "docx", "txt", "vtt"):
+        try:
+            text = download_drive_file_text(user_id, file_meta["id"], mime)
+        except Exception as exc:
+            print(f"[drive-intel] text extraction failed for {file_meta.get('name')}: {exc}")
+
+    doc_type = _classify_doc_type(name, file_type, mime, text)
+    # Log the outcome: a silent extraction failure and a genuinely unclassifiable
+    # document both end as doc_type="other", and without this there is no way to
+    # tell them apart from the outside.
+    print(f"[drive-intel] {file_meta.get('name')}: type={file_type} extracted={len(text)} chars -> doc_type={doc_type}")
 
     # Mark as seen in the cache immediately (avoids re-processing on next run).
-    # Link to a client by file name now; transcript/note handlers below refine it
-    # with the document body.
-    client_id = _resolve_client_id(user_id, file_meta.get("name", ""))
+    # The body is a stronger client signal than the file name, so pass both.
+    client_id = _resolve_client_id(user_id, file_meta.get("name", ""), text)
     db.table("drive_doc_cache").upsert(
         {
             "user_id": user_id,
@@ -197,22 +211,46 @@ def _route_file(user_id: str, file_meta: dict, service, db) -> None:
         _handle_transcript(user_id, file_meta, service, db)
     elif doc_type in ("contract", "invoice", "receipt"):
         _queue_document_review(user_id, file_meta, doc_type, db)
-    elif doc_type in ("brief", "scope", "proposal") and file_type == "google_doc":
+    elif doc_type in ("brief", "scope", "proposal"):
+        # Previously gated on file_type == "google_doc", so a .docx brief was
+        # classified and then silently dropped. document_text.extract_text
+        # handles docx/pdf/txt, so there is no reason to restrict it.
         _save_as_client_note(user_id, file_meta, service, db)
     # Spreadsheets and other types: logged in cache, no action taken
 
 
-def _classify_doc_type(name: str, file_type: str, mime: str) -> str:
-    if any(kw in name for kw in ("transcript", "recording", "meeting notes")):
-        return "transcript"
-    if any(kw in name for kw in ("contract", "agreement", "nda", "sow")):
-        return "contract"
-    if any(kw in name for kw in ("invoice", "inv-", "inv ")):
-        return "invoice"
-    if any(kw in name for kw in ("receipt", "payment")):
-        return "receipt"
-    if any(kw in name for kw in ("brief", "scope", "proposal", "rfp", "rfi")):
-        return "brief"
+_DOC_TYPE_KEYWORDS = (
+    ("transcript", ("transcript", "recording", "meeting notes")),
+    ("contract", ("contract", "agreement", "nda", "sow", "statement of work")),
+    ("invoice", ("invoice", "inv-", "inv ")),
+    ("receipt", ("receipt", "payment")),
+    ("brief", ("brief", "scope", "proposal", "rfp", "rfi")),
+)
+
+
+def _classify_doc_type(name: str, file_type: str, mime: str, text: str = "") -> str:
+    """Classify by filename first, then by the document's own opening text.
+
+    Filename remains the strongest signal — people do name files well, and it is
+    free. But classifying on the name ALONE meant any document not happening to
+    contain a keyword became "other", for which the router takes no action. A
+    real file called `DQ_Implimentation_Usecase.docx` was ingested and produced
+    nothing at all.
+
+    `text` is the extracted body; only its opening is inspected, which is where
+    document types announce themselves ("MASTER SERVICES AGREEMENT", "INVOICE
+    #123"), and it keeps the scan cheap on long files.
+    """
+    for doc_type, keywords in _DOC_TYPE_KEYWORDS:
+        if any(kw in name for kw in keywords):
+            return doc_type
+
+    head = (text or "")[:2000].lower()
+    if head:
+        for doc_type, keywords in _DOC_TYPE_KEYWORDS:
+            if any(kw in head for kw in keywords):
+                return doc_type
+
     return "other"
 
 
