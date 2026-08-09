@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import os
 from datetime import timedelta
 from pathlib import Path
 
 from ..config import settings
+
+logger = logging.getLogger(__name__)
 
 # backend dir (…/kora/backend) and repo root — used to resolve a relative
 # GOOGLE_APPLICATION_CREDENTIALS path no matter the process working directory.
@@ -144,6 +147,44 @@ def download_bytes(user_id: str, gcs_path: str) -> bytes:
 
 
 # ── Signed URLs (browser download) ────────────────────────────────────────────
+def _signing_kwargs() -> dict:
+    """Extra `generate_signed_url` kwargs for runtimes that hold no private key.
+
+    On Cloud Run the ambient identity is `compute_engine.Credentials` — a bare
+    access token with no private key — so signing locally raises
+    "you need a private key to sign credentials" and every PDF download 500s.
+    Handing `generate_signed_url` the service-account email plus a live token
+    makes it sign through the IAM SignBlob API instead, which needs
+    `roles/iam.serviceAccountTokenCreator` on the SA itself (granted by
+    ops/gcp_bootstrap.sh).
+
+    Returns `{}` when the credentials CAN sign on their own (a service-account
+    JSON via GOOGLE_APPLICATION_CREDENTIALS, i.e. local dev), so nothing about
+    local behaviour changes.
+
+    This is the class of bug no hermetic test can see: the code path is identical,
+    only the ambient credential type differs between laptop and Cloud Run.
+    """
+    try:
+        from google.auth import default as _google_auth_default
+        from google.auth.transport.requests import Request as _AuthRequest
+
+        creds, _ = _google_auth_default()
+        # Service-account credentials expose a `signer` holding the private key.
+        if getattr(creds, "signer", None) is not None:
+            return {}
+        if not getattr(creds, "valid", False):
+            creds.refresh(_AuthRequest())
+        email = getattr(creds, "service_account_email", None)
+        token = getattr(creds, "token", None)
+        if not email or not token:
+            return {}
+        return {"service_account_email": email, "access_token": token}
+    except Exception:  # pragma: no cover - never let signing setup break the request
+        logger.warning("Could not determine IAM signing credentials; attempting direct sign", exc_info=True)
+        return {}
+
+
 def get_signed_url(
     user_id: str,
     gcs_path: str,
@@ -162,6 +203,7 @@ def get_signed_url(
         method="GET",
         response_disposition=disposition,
         version="v4",
+        **_signing_kwargs(),
     )
 
 
