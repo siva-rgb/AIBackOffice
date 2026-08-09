@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, Request
 from fastapi.responses import StreamingResponse
 
 from .. import store
@@ -112,6 +112,7 @@ def _scheduler_user_id() -> str:
 
 @router.post("/follow-up")
 async def run_follow_up(
+    request: Request,
     authorization: str | None = Header(default=None),
     is_cron: bool = Depends(verify_cron_secret),
 ):
@@ -120,7 +121,7 @@ async def run_follow_up(
         result = run_follow_up_agent(_scheduler_user_id(), "scheduler")
         return {"ok": True, "scanned": result.scanned, "sent": result.sent, "details": result.details}
     # User path (demo button): requires auth — pass the header through explicitly.
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     rl = check_rate_limit(f"ai:followup:{user.id}", max_requests=30, window_seconds=3600)
     if not rl.allowed:
         raise HTTPException(status_code=429, detail="Rate limit reached. Try again shortly.")

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 
 from .. import store
 from ..dependencies import get_current_user, verify_cron_secret
@@ -144,6 +144,7 @@ async def refresh_client_view(client_id: str, user: User = Depends(get_current_u
 
 @router.post("/views/refresh-all")
 async def refresh_all_client_views(
+    request: Request,
     authorization: str | None = Header(default=None),
     is_cron: bool = Depends(verify_cron_secret),
 ):
@@ -151,7 +152,7 @@ async def refresh_all_client_views(
     x-cron-secret; a signed-in user may refresh their own set."""
     if is_cron:
         return pm_agent.refresh_all_views(_scheduler_user_id())
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     return pm_agent.refresh_all_views(user.id)
 
 

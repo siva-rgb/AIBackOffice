@@ -47,6 +47,7 @@ async def sync_email_intel(
 
 @router.post("/run")
 async def run_email_intel(
+    request: Request,
     background_tasks: BackgroundTasks,
     authorization: str | None = Header(default=None),
     is_cron: bool = Depends(verify_cron_secret),
@@ -59,7 +60,7 @@ async def run_email_intel(
         # Keep the Gmail push watch alive (expires ~7 days). No-op if push unset.
         background_tasks.add_task(renew_watch_if_configured, uid)
         return {"status": "syncing", "trigger": "scheduler"}
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     background_tasks.add_task(sync_client_email_intel, user.id, True)
     return {"status": "syncing", "trigger": "user"}
 

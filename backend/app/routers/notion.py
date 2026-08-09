@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, Request
 from fastapi.responses import RedirectResponse
 
 from .. import store
@@ -76,6 +76,7 @@ async def notion_select(payload: SelectPagesRequest, user: User = Depends(get_cu
 
 @router.post("/run")
 async def notion_run(
+    request: Request,
     background_tasks: BackgroundTasks,
     authorization: str | None = Header(default=None),
     is_cron: bool = Depends(verify_cron_secret),
@@ -85,7 +86,7 @@ async def notion_run(
     if is_cron:
         background_tasks.add_task(notion_ingest.ingest, _scheduler_user_id())
         return {"status": "ingesting", "trigger": "scheduler"}
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     result = notion_ingest.ingest(user.id)
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result.get("error", "Ingest failed."))

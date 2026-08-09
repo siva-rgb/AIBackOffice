@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request
 
 from .. import store
 from ..config import settings
@@ -57,6 +57,7 @@ async def memory_stats(user: User = Depends(get_current_user)):
 
 @router.post("/reindex")
 async def reindex_memory(
+    request: Request,
     background_tasks: BackgroundTasks,
     authorization: str | None = Header(default=None),
     is_cron: bool = Depends(verify_cron_secret),
@@ -67,5 +68,5 @@ async def reindex_memory(
     if is_cron:
         background_tasks.add_task(memory_recall.reindex, _scheduler_user_id())
         return {"status": "reindexing", "trigger": "scheduler"}
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     return memory_recall.reindex(user.id)

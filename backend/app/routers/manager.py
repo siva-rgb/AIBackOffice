@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 
 from ..dependencies import get_current_user, verify_cron_secret
 from ..models import CamelModel, User
@@ -40,6 +40,7 @@ def _scheduler_user_id() -> str:
 
 @router.post("/run")
 async def run_manager(
+    request: Request,
     authorization: str | None = Header(default=None),
     is_cron: bool = Depends(verify_cron_secret),
 ):
@@ -58,7 +59,7 @@ async def run_manager(
 
             logging.getLogger("kora").warning("daily digest email failed: %s", exc)
         return result
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     rl = check_rate_limit(f"ai:manager:{user.id}", max_requests=30, window_seconds=3600)
     if not rl.allowed:
         raise HTTPException(status_code=429, detail="Rate limit reached. Try again shortly.")

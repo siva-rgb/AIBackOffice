@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 
 from .. import store
 from ..config import settings
@@ -36,13 +36,14 @@ def _scheduler_user_id() -> str:
 
 @router.post("/run")
 async def run_butler(
+    request: Request,
     authorization: str | None = Header(default=None),
     is_cron: bool = Depends(verify_cron_secret),
 ):
     """Generate the morning briefing. Scheduler path uses x-cron-secret; user path requires auth."""
     if is_cron:
         return butler.generate_morning_briefing(_scheduler_user_id(), triggered_by="scheduler")
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     rl = check_rate_limit(f"ai:butler:{user.id}", max_requests=30, window_seconds=3600)
     if not rl.allowed:
         raise HTTPException(status_code=429, detail="Rate limit reached. Try again shortly.")

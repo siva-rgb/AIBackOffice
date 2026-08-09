@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request
 
 from .. import store
 from ..config import settings
@@ -33,6 +33,7 @@ async def sync_drive(
 
 @router.post("/run")
 async def run_drive(
+    request: Request,
     background_tasks: BackgroundTasks,
     authorization: str | None = Header(default=None),
     is_cron: bool = Depends(verify_cron_secret),
@@ -42,7 +43,7 @@ async def run_drive(
     if is_cron:
         background_tasks.add_task(sync_drive_intel, _scheduler_user_id())
         return {"status": "syncing", "trigger": "scheduler"}
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     background_tasks.add_task(sync_drive_intel, user.id)
     return {"status": "syncing", "trigger": "user"}
 

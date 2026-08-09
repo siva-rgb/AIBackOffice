@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Request
 
 from .. import store
 from ..config import settings
@@ -39,6 +39,7 @@ async def sync(user: User = Depends(get_current_user)):
 
 @router.post("/run")
 async def run_graph(
+    request: Request,
     authorization: str | None = Header(default=None),
     is_cron: bool = Depends(verify_cron_secret),
 ):
@@ -46,7 +47,7 @@ async def run_graph(
     also works for a manual run."""
     if is_cron:
         return {"trigger": "scheduler", **sync_graph(_scheduler_user_id())}
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     return {"trigger": "user", **sync_graph(user.id)}
 
 
