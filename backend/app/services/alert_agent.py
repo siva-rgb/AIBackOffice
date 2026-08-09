@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime, timedelta, timezone
 
 from .. import store
@@ -125,7 +126,20 @@ def _now() -> str:
 
 
 def _digest_source_id(day_iso: str) -> str:
-    return f"digest:{day_iso}"
+    """Stable per-day id used to dedupe "today's digest is already queued".
+
+    Must be a real UUID: it is stored in and compared against
+    `manager_tasks.source_record_id`, which Postgres declares as UUID. The
+    previous `f"digest:{day_iso}"` was accepted by the in-memory mock store
+    (plain string comparison) but made Postgres raise 22P02
+    `invalid input syntax for type uuid`, 500-ing the whole digest endpoint —
+    and only once Gmail was connected, because the not-connected path returns
+    before reaching here.
+
+    uuid5 keeps the two properties the dedupe relies on: deterministic for a
+    given day, distinct across days.
+    """
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"kora:digest:{day_iso}"))
 
 
 def build_digest_email(user_id: str) -> dict:
