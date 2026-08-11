@@ -29,6 +29,18 @@ _FILE_TYPE_MAP = {
     "application/vnd.google-apps.spreadsheet": "spreadsheet",
 }
 
+# Drive v3 returns My Drive only unless these are set, so a Workspace user whose
+# watched folder or Meet transcripts live in a **shared drive** got an empty scan
+# and no error to explain it — the same silent-nothing failure as D-017.
+#
+# Two constants because the parameters differ per method:
+#   files.list      → both flags
+#   files.get       → supportsAllDrives only (includeItemsFromAllDrives is a
+#                     list-only parameter; passing it raises TypeError)
+#   files.export    → takes neither, and needs neither
+ALL_DRIVES_LIST = {"supportsAllDrives": True, "includeItemsFromAllDrives": True}
+ALL_DRIVES_GET = {"supportsAllDrives": True}
+
 
 def _db():
     from supabase import create_client
@@ -148,12 +160,12 @@ def download_drive_file_text(user_id: str, file_id: str, mime_type: str = "") ->
         content = service.files().export(fileId=file_id, mimeType="text/plain").execute()
         return content.decode("utf-8", errors="ignore") if isinstance(content, bytes) else str(content)
 
-    raw = service.files().get_media(fileId=file_id).execute()
+    raw = service.files().get_media(fileId=file_id, **ALL_DRIVES_GET).execute()
     if not isinstance(raw, bytes):
         return str(raw)
     # Resolve a filename for extension-based extraction.
     try:
-        meta = service.files().get(fileId=file_id, fields="name").execute()
+        meta = service.files().get(fileId=file_id, fields="name", **ALL_DRIVES_GET).execute()
         name = meta.get("name", "document")
     except Exception:
         name = "document"
@@ -195,6 +207,7 @@ def _list_folder_files(service, folder_id: str) -> list:
                     fields="nextPageToken, files(id, name, mimeType, modifiedTime, size)",
                     pageSize=100,
                     pageToken=page_token,
+                    **ALL_DRIVES_LIST,
                 )
                 .execute()
             )
@@ -225,6 +238,7 @@ def _find_meet_transcripts(service) -> list:
             q=query,
             fields="files(id, name, mimeType, modifiedTime)",
             pageSize=20,
+            **ALL_DRIVES_LIST,
         )
         .execute()
     )
@@ -347,6 +361,15 @@ def _is_transcript_name(name: str) -> bool:
     return any(kw in name for kw in ("transcript", "meet recording", "recorded meeting", "call transcript"))
 
 
+def _existing_meeting_id(user_id: str, file_id: str, db) -> str | None:
+    """The meeting already created from this Drive file, if any."""
+    try:
+        rows = db.table("drive_doc_cache").select("meeting_id").eq("user_id", user_id).eq("drive_file_id", file_id).execute().data or []
+        return (rows[0] or {}).get("meeting_id") if rows else None
+    except Exception:
+        return None
+
+
 def _handle_transcript(user_id: str, file_meta: dict, service, db) -> None:
     """Download a Drive transcript file and trigger meeting agent processing."""
     try:
@@ -355,12 +378,19 @@ def _handle_transcript(user_id: str, file_meta: dict, service, db) -> None:
         mime = file_meta.get("mimeType", "")
         file_id = file_meta["id"]
 
-        if mime == "application/vnd.google-apps.document":
-            content = service.files().export(fileId=file_id, mimeType="text/plain").execute()
-            text = content.decode("utf-8", errors="ignore") if isinstance(content, bytes) else str(content)
-        else:
-            content = service.files().get_media(fileId=file_id).execute()
-            text = content.decode("utf-8", errors="ignore") if isinstance(content, bytes) else str(content)
+        # `_filter_unprocessed` re-queues a file whose modifiedTime changed, and
+        # this function used to insert unconditionally — so editing a transcript
+        # produced a second meeting and a second set of action items. Contracts
+        # already dedupe via drive_source_id; transcripts did not.
+        already = _existing_meeting_id(user_id, file_id, db)
+        if already:
+            print(f"[drive-intel] {file_meta.get('name')}: already processed as meeting {already}, skipping")
+            return
+
+        # Raw get_media returns the *encoded* bytes — for a .docx or .pdf named
+        # "transcript" that decoded to binary noise and fed it to the meeting
+        # agent. download_drive_file_text runs the right extractor per type.
+        text = download_drive_file_text(user_id, file_id, mime)
 
         # Resolve the client from the file name + transcript body (stronger).
         client_id = _resolve_client_id(user_id, file_meta.get("name", ""), text)

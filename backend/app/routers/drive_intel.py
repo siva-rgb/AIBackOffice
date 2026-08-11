@@ -7,7 +7,7 @@ from ..config import settings
 from ..dependencies import get_current_user, verify_cron_secret
 from ..models import User
 from ..seed import DEMO_USER_ID
-from ..services.drive_intel import sync_drive_intel
+from ..services.drive_intel import ALL_DRIVES_GET, ALL_DRIVES_LIST, sync_drive_intel
 from ..services.google_auth import get_user_credentials
 from ..utils.casing import camelize
 
@@ -84,7 +84,11 @@ async def list_drive_folders(
         query += f" and name contains '{q.replace(chr(39), chr(92) + chr(39))}'"
 
     try:
-        result = service.files().list(q=query, fields="files(id, name, modifiedTime)", orderBy="modifiedTime desc", pageSize=100).execute()
+        # ALL_DRIVES_LIST: without it a Workspace user's shared-drive folders are
+        # absent from this list, so they cannot pick the folder they meant to.
+        result = (
+            service.files().list(q=query, fields="files(id, name, modifiedTime)", orderBy="modifiedTime desc", pageSize=100, **ALL_DRIVES_LIST).execute()
+        )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Could not list Drive folders: {exc}") from exc
 
@@ -111,7 +115,7 @@ async def set_drive_folder(
         # Validate before storing: an unreachable or non-folder id would silently
         # sync nothing, which is the failure mode this endpoint exists to end.
         try:
-            meta = service.files().get(fileId=folder_id, fields="id, name, mimeType, trashed").execute()
+            meta = service.files().get(fileId=folder_id, fields="id, name, mimeType, trashed", **ALL_DRIVES_GET).execute()
         except Exception as exc:
             raise HTTPException(status_code=404, detail="That folder isn't reachable with your Google connection") from exc
         if meta.get("mimeType") != "application/vnd.google-apps.folder":

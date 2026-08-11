@@ -145,8 +145,10 @@ class FakeDrive:
     def files(self):
         return self
 
-    def list(self, q="", fields="", pageSize=100, pageToken=None):
+    def list(self, q="", fields="", pageSize=100, pageToken=None, **kw):
+        # **kw absorbs the shared-drive flags; asserted on separately below.
         self.queries.append(q)
+        self.kwargs = kw
         folder_id = q.split("'")[1]
         pages = self.tree.get(folder_id, [[]])
         idx = int(pageToken) if pageToken else 0
@@ -196,3 +198,9 @@ class TestFolderListing:
         """Drive allows multiple parents; revisiting a folder must not spin."""
         svc = FakeDrive({"root": [[folder("sub")]], "sub": [[folder("root"), doc("a")]]})
         assert [f["id"] for f in _list_folder_files(svc, "root")] == ["a"]
+
+    def test_the_scan_asks_for_shared_drive_items(self, monkeypatch):
+        """A watched folder inside a shared drive must not scan up empty."""
+        svc = FakeDrive({"root": [[doc("a")]]})
+        _list_folder_files(svc, "root")
+        assert svc.kwargs == {"supportsAllDrives": True, "includeItemsFromAllDrives": True}
