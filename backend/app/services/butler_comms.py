@@ -56,14 +56,25 @@ def _graph_history(user_id: str, client_name: str) -> str:
 
 def _recall_context(user_id: str, client_id: str, client_name: str, intent: str) -> str:
     """Hybrid semantic recall of relevant past context for this draft — grounds
-    the email in what actually happened, beyond the structured graph edges."""
+    the email in what actually happened, beyond the structured graph edges.
+
+    Client scoping is a hard boundary here, because this text goes into the
+    prompt for an email addressed *to* this client. The previous fallback simply
+    dropped the client filter, and it fired precisely when a client had no
+    memories yet — a new client — so another client's rates, complaints or
+    contract terms could land in the draft. The fallback now keeps only rows
+    belonging to no client (business-wide knowledge such as playbook entries);
+    anything tagged to a different client is discarded.
+    """
     try:
         from .memory_recall import recall
 
-        hits = recall(user_id, f"{client_name} {intent}", k=4, client_id=client_id)
-        # Fall back to an unscoped recall if nothing is tagged to this client.
+        query = f"{client_name} {intent}"
+        hits = recall(user_id, query, k=4, client_id=client_id)
         if not hits:
-            hits = recall(user_id, f"{client_name} {intent}", k=4)
+            # Over-fetch: the filter drops rows after ranking, and we still want
+            # up to 4 usable ones.
+            hits = [h for h in recall(user_id, query, k=20) if not h.get("client_id")][:4]
         return "; ".join(h["content"][:140] for h in hits)
     except Exception:
         return ""

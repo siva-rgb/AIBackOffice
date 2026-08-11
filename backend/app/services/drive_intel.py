@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -35,29 +36,64 @@ def _db():
     return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
 
+_MIN_BODY_NAME_LEN = 4
+
+
+def _normalize(text: str) -> str:
+    """Lowercase and reduce every run of non-alphanumerics to a single space.
+
+    "Northwind_Brief-v2.docx" becomes " northwind brief v2 docx ". The padding
+    spaces let `_mentions` test whole-token containment without a regex, and
+    normalising separators is what makes `_` and `-` behave as word breaks.
+    """
+    return " " + re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip() + " "
+
+
+def _mentions(haystack: str, name: str) -> bool:
+    """Whole-token containment — `haystack` must already be `_normalize`d."""
+    needle = _normalize(name)
+    return len(needle) > 2 and needle in haystack
+
+
 def _resolve_client_id(user_id: str, name: str = "", text: str = "") -> str | None:
-    """Best-effort: link a Drive file to a Butler client. Strongest signal is the
-    client's name in the file name; otherwise the client's email/name inside the
-    document body. Returns the client id or None."""
+    """Best-effort: link a Drive file to a Butler client. Returns an id or None.
+
+    Matching is whole-token rather than substring, so a client called "Apex" is
+    matched by the word "apex" and no longer by "apexon-retro.docx". Ambiguity
+    resolves conservatively: when the body names two clients we return None
+    instead of taking whichever came first out of `list_clients`. A wrong tag is
+    worse than no tag — it files one client's document on another's page, and
+    from there into that client's recall scope.
+    """
     try:
         from .. import store
 
         clients = store.list_clients(user_id)
     except Exception:
         return None
-    fname = (name or "").lower()
-    body = (text or "")[:4000].lower()
-    fallback = None
-    for c in clients:
-        cname = (c.name or "").lower().strip()
-        if cname and cname in fname:
-            return c.id  # strong: client name in the file name
-        emails = [c.email] + list(getattr(c, "contact_emails", None) or [])
-        if any(e and e.lower() in body for e in emails):
-            fallback = fallback or c.id
-        elif cname and cname in body:
-            fallback = fallback or c.id
-    return fallback
+
+    fname = _normalize(name)
+    body = _normalize((text or "")[:4000])
+
+    # Strongest signal: the client's name in the file name. Two clients can both
+    # match ("Acme" and "Acme Digital" for acme-digital-msa.pdf); the longer name
+    # is the more specific one, so it wins.
+    by_name = [c for c in clients if _mentions(fname, c.name or "")]
+    if by_name:
+        return max(by_name, key=lambda c: len((c.name or "").strip())).id
+
+    # Next: an email address in the body. It identifies exactly one client, so a
+    # single hit is trustworthy even in a document that mentions several names.
+    by_email = [c for c in clients if any(e and _mentions(body, e) for e in [c.email, *(getattr(c, "contact_emails", None) or [])])]
+    if by_email:
+        return by_email[0].id if len(by_email) == 1 else None
+
+    # Weakest: the client's name in the body. Short names throw too many false
+    # positives to be worth reading, and a document naming two clients is
+    # genuinely ambiguous — "similar to the Northwind build" inside Acme's brief
+    # must not file it under Northwind.
+    by_body = [c for c in clients if len((c.name or "").strip()) >= _MIN_BODY_NAME_LEN and _mentions(body, c.name or "")]
+    return by_body[0].id if len(by_body) == 1 else None
 
 
 def sync_drive_intel(user_id: str) -> None:
@@ -126,17 +162,58 @@ def download_drive_file_text(user_id: str, file_id: str, mime_type: str = "") ->
     return extract_text(name, mime_type or None, raw)
 
 
+_FOLDER_MIME = "application/vnd.google-apps.folder"
+_MAX_FOLDER_FILES = 300
+_MAX_FOLDER_DEPTH = 3
+
+
 def _list_folder_files(service, folder_id: str) -> list:
-    result = (
-        service.files()
-        .list(
-            q=f"'{folder_id}' in parents and trashed = false",
-            fields="files(id, name, mimeType, modifiedTime, size)",
-            pageSize=50,
-        )
-        .execute()
-    )
-    return result.get("files", [])
+    """Every file under the watched folder, subfolders included.
+
+    Was one non-recursive page of 50, which failed two ways: a `Kora/Contracts/`
+    layout ingested nothing at all, and past 50 files the rest was dropped
+    silently — and since Drive's default ordering isn't newest-first, it wasn't
+    even "the 50 most recent". Depth and total stay capped so one enormous
+    folder can't stall the daily sync for every other user.
+    """
+    files: list[dict] = []
+    seen: set[str] = set()
+    frontier: list[tuple[str, int]] = [(folder_id, 0)]
+
+    while frontier and len(files) < _MAX_FOLDER_FILES:
+        current, depth = frontier.pop(0)
+        if current in seen:
+            continue  # Drive lets one folder sit under several parents.
+        seen.add(current)
+
+        page_token = None
+        while len(files) < _MAX_FOLDER_FILES:
+            result = (
+                service.files()
+                .list(
+                    q=f"'{current}' in parents and trashed = false",
+                    fields="nextPageToken, files(id, name, mimeType, modifiedTime, size)",
+                    pageSize=100,
+                    pageToken=page_token,
+                )
+                .execute()
+            )
+            for f in result.get("files", []):
+                if f.get("mimeType") == _FOLDER_MIME:
+                    if depth < _MAX_FOLDER_DEPTH:
+                        frontier.append((f["id"], depth + 1))
+                    continue
+                files.append(f)
+                if len(files) >= _MAX_FOLDER_FILES:
+                    break
+            page_token = result.get("nextPageToken")
+            if not page_token:
+                break
+
+    if len(files) >= _MAX_FOLDER_FILES:
+        # Say so rather than let a truncated scan read as a complete one.
+        print(f"[drive-intel] folder scan hit the {_MAX_FOLDER_FILES}-file cap — some files were not read")
+    return files
 
 
 def _find_meet_transcripts(service) -> list:

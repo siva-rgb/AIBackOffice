@@ -80,7 +80,7 @@ export function FolderPicker() {
           <p className="mt-1 text-sm text-gray-500">
             {selected ? (
               <>
-                Kora reads documents you put in <strong>{selected.name}</strong>.
+                Kora reads documents you put in <strong>{selected.name}</strong> and its subfolders.
               </>
             ) : (
               <>Pick a folder. Until you do, Kora only picks up Meet transcripts.</>
