@@ -72,3 +72,32 @@ class TestContentIsReadWhenTheNameSaysNothing:
         """Extraction is best-effort; no text must not raise."""
         assert _classify_doc_type("notes.docx", "docx", "", "") == "other"
         assert _classify_doc_type("notes.docx", "docx", "", None) == "other"  # type: ignore[arg-type]
+
+
+class TestDriveSourceId:
+    """manager_tasks.source_record_id is a UUID column; Drive ids are not UUIDs.
+
+    Queueing a contract found in Drive stored the raw Google file id there, which
+    Postgres rejects with 22P02 — the same defect already fixed for the daily
+    digest, at a second call site.
+    """
+
+    def test_is_a_valid_uuid(self):
+        import uuid as _uuid
+
+        from app.services.drive_intel import drive_source_id
+
+        value = drive_source_id("187A7iKJ7m0R4H83qDCSwta1i2tgT95XY")
+        assert _uuid.UUID(value)
+        assert value == str(_uuid.UUID(value))
+
+    def test_is_stable_per_file(self):
+        """Dedupe depends on it — one file must not queue two review tasks."""
+        from app.services.drive_intel import drive_source_id
+
+        assert drive_source_id("abc123") == drive_source_id("abc123")
+
+    def test_differs_between_files(self):
+        from app.services.drive_intel import drive_source_id
+
+        assert drive_source_id("abc123") != drive_source_id("abc124")

@@ -1,9 +1,21 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from ..config import settings
 from .google_auth import get_user_credentials
+
+
+def drive_source_id(drive_file_id: str) -> str:
+    """Stable UUID for a Drive file, for UUID-typed source_record_id columns.
+
+    Drive ids are opaque Google strings, not UUIDs, and Postgres rejects them
+    with 22P02. uuid5 keeps the dedupe property that matters: the same file
+    always maps to the same id, so a document is queued for review once.
+    """
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"kora:drive:{drive_file_id}"))
+
 
 _FILE_TYPE_MAP = {
     "application/vnd.google-apps.document": "google_doc",
@@ -318,7 +330,12 @@ def _queue_document_review(user_id: str, file_meta: dict, doc_type: str, db) -> 
     from .. import store
 
     title = f"Review {doc_type} from Drive: {file_meta.get('name', 'Document')}"
-    if store.find_open_manager_task(user_id, "review_contract", file_meta["id"]):
+    # manager_tasks.source_record_id is a UUID column, but a Drive file id is an
+    # opaque Google string ("187A7iKJ7m0R4H83qDCSwta1i2tgT95XY"). Storing it raw
+    # makes Postgres raise 22P02 — the same defect already fixed for the daily
+    # digest. Derive a stable UUID; the real id stays in `payload.driveFileId`.
+    src = drive_source_id(file_meta["id"])
+    if store.find_open_manager_task(user_id, "review_contract", src):
         return
     store.insert_manager_task(
         ManagerTask(
@@ -331,17 +348,21 @@ def _queue_document_review(user_id: str, file_meta: dict, doc_type: str, db) -> 
             status="proposed",
             payload={"driveFileId": file_meta["id"], "fileName": file_meta.get("name"), "docType": doc_type, "mimeType": file_meta.get("mimeType", "")},
             source_record_type="drive_file",
-            source_record_id=file_meta["id"],
+            source_record_id=src,
             created_at=datetime.now(timezone.utc).isoformat(),
         )
     )
 
 
 def _save_as_client_note(user_id: str, file_meta: dict, service, db) -> None:
-    """Export a Google Doc (brief/scope) and save as a client note."""
+    """Save a brief/scope/proposal as a client note.
+
+    Uses download_drive_file_text rather than files().export, which only works
+    for native Google Docs — a .docx would raise, be swallowed by the except
+    below, and silently save nothing.
+    """
     try:
-        content = service.files().export(fileId=file_meta["id"], mimeType="text/plain").execute()
-        text = content.decode("utf-8", errors="ignore") if isinstance(content, bytes) else str(content)
+        text = download_drive_file_text(user_id, file_meta["id"], file_meta.get("mimeType", ""))
 
         client_id = _resolve_client_id(user_id, file_meta.get("name", ""), text)
         db.table("client_notes").insert(
