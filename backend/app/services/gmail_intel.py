@@ -333,7 +333,10 @@ def _analyze_threads(
     except Exception:
         pass
 
-    combined = sanitize_prompt_input("\n\n===\n\n".join(thread_summaries)[:_MAX_COMBINED_CHARS])
+    # max_len is explicit: it defaults to 2000, so all the per-message and
+    # per-thread budgeting above was thrown away and only the first quarter of
+    # the assembled context ever reached the model.
+    combined = sanitize_prompt_input("\n\n===\n\n".join(thread_summaries)[:_MAX_COMBINED_CHARS], max_len=_MAX_COMBINED_CHARS)
 
     prompt = f"""Analyze these email threads between a business owner and their client.
 Extract structured business intelligence.

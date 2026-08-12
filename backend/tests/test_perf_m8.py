@@ -14,7 +14,7 @@ from app.clients import pool
 from app.dependencies import get_current_user
 from app.main import app
 from app.models import Invoice, User
-from app.services import llm, supervisor
+from app.services import ai_backend, llm, supervisor
 from app.services.import_jobs import create_job, get_job, run_import_job
 from app.utils.csv_parser import ParsedRow
 from app.utils.request_cache import begin_request_cache, end_request_cache, request_cached
@@ -194,7 +194,11 @@ def test_async_chat_offloads_blocking_store_io(user_id, monkeypatch):
             model="mock",
         )
 
-    monkeypatch.setattr(supervisor.llm, "achat_messages", fake_achat_messages)
+    # Patch the *active* transport rather than reaching through supervisor: the
+    # module no longer imports `llm` directly, it asks `ai_backend` which of the
+    # two transports (gateway / Vertex) is live. In the suite that resolves to
+    # `llm`, but going through the router keeps this test honest if that changes.
+    monkeypatch.setattr(ai_backend.active(), "achat_messages", fake_achat_messages)
 
     out = asyncio.run(supervisor.chat_agentic_async(user_id, "hello", []))
 

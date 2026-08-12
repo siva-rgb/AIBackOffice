@@ -16,6 +16,10 @@ from . import agent_logger, storage
 from .vertex_ai import generate_with_retry, get_ai
 
 _MAX_REVIEW_CHARS = 60_000
+# A single contract term (scope, payment schedule, SLA) routinely runs past the
+# sanitizer's old 2000-char default, which silently cut it before it reached the
+# model. Explicit here so the cap is a decision rather than a fallback.
+_MAX_TERM_CHARS = 5_000
 _SEVERITIES = {"high", "medium", "low"}
 
 _TITLES = {
@@ -30,7 +34,7 @@ _TITLES = {
 def _sanitize_terms(terms: dict) -> dict:
     clean = {}
     for k, v in terms.items():
-        clean[k] = safe_sanitize(v) if isinstance(v, str) else v
+        clean[k] = safe_sanitize(v, max_len=_MAX_TERM_CHARS) if isinstance(v, str) else v
     return clean
 
 
@@ -39,7 +43,7 @@ def generate_contract(user: User, req: GenerateContractRequest) -> Contract:
     ai = get_ai()
     payload = {
         "type": req.type,
-        "client_name": safe_sanitize(req.client_name),
+        "client_name": safe_sanitize(req.client_name, max_len=200),
         "provider_name": req.provider_name or user.business_name or user.full_name or "Service Provider",
         "jurisdiction": req.jurisdiction,
         "terms": _sanitize_terms(req.terms),

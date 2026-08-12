@@ -346,7 +346,7 @@ def compose_client_view(user_id: str, client_id: str, *, chat=None, persist: boo
 
     `chat` is injectable purely so tests can drive the analysts with known token
     counts and prove parallelism + isolation without a live gateway. In
-    production it defaults to `llm.chat`.
+    production it defaults to the active AI backend (`ai_backend.active().chat`).
     """
     client = store.get_client(user_id, client_id)
     if not client:

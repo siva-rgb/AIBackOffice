@@ -11,6 +11,12 @@ from . import agent_logger
 from .vertex_ai import generate_with_retry, get_ai
 
 
+# Transcript sent to the model. `meetings.raw_transcript` stores 10k; this is
+# the analysis window. Must be passed to sanitize_prompt_input explicitly —
+# its max_len defaults to 2000.
+_MAX_TRANSCRIPT_CHARS = 8000
+
+
 def _db():
     from supabase import create_client
 
@@ -51,7 +57,11 @@ def process_transcript(
         client_context = f"Client: {c['name']}. Context: {c.get('what_we_do', '')}."
 
     try:
-        safe_transcript = sanitize_prompt_input(transcript_text[:8000])
+        # max_len is explicit because it defaults to 2000: slicing to 8000 here
+        # and then handing it to the sanitizer quietly threw away three quarters
+        # of every transcript. Decisions and next steps are agreed at the END of
+        # a meeting, so the part being dropped was the part that mattered.
+        safe_transcript = sanitize_prompt_input(transcript_text[:_MAX_TRANSCRIPT_CHARS], max_len=_MAX_TRANSCRIPT_CHARS)
         prompt = _build_mom_prompt(safe_transcript, client_context)
 
         ai = get_ai()

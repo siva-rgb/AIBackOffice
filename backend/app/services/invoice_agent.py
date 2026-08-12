@@ -85,8 +85,8 @@ def contract_context(user_id: str, contract_id: str | None) -> dict:
     clause = find_payment_clause(contract.content_md)
     if not clause:
         return {}
-    label = safe_sanitize((contract.title or (contract.type or "agreement").replace("_", " ")).strip())
-    safe_clause = safe_sanitize(clause)
+    label = safe_sanitize((contract.title or (contract.type or "agreement").replace("_", " ")).strip(), max_len=200)
+    safe_clause = safe_sanitize(clause, max_len=4000)
     ctx = {
         "contract_payment_clause": safe_clause,
         "contract_reference": f"the {label}",
@@ -129,7 +129,7 @@ def run_follow_up_agent(user_id: str, triggered_by: str = "scheduler") -> Follow
         params = {
             "attempt": attempt,
             "business_name": user.business_name if user else "Your business",
-            "client_name": safe_sanitize(inv.client_name),
+            "client_name": safe_sanitize(inv.client_name, max_len=200),
             "invoice_number": inv.invoice_number,
             "currency": inv.currency,
             "amount": inv.total,
@@ -234,7 +234,7 @@ def send_follow_up_for(user_id: str, invoice_id: str, triggered_by: str = "user"
     params = {
         "attempt": attempt,
         "business_name": user.business_name if user else "Your business",
-        "client_name": safe_sanitize(inv.client_name),
+        "client_name": safe_sanitize(inv.client_name, max_len=200),
         "invoice_number": inv.invoice_number,
         "currency": inv.currency,
         "amount": inv.total,
@@ -319,7 +319,7 @@ def generate_demand_letter(user_id: str, invoice_id: str, triggered_by: str = "u
     params = {
         "business_name": (user.business_name if user else None) or "Your business",
         "business_email": user.email if user else None,
-        "client_name": safe_sanitize(inv.client_name),
+        "client_name": safe_sanitize(inv.client_name, max_len=200),
         "client_email": inv.client_email,
         "invoice_number": inv.invoice_number,
         "invoice_date": (inv.sent_at or inv.created_at or "")[:10] or None,

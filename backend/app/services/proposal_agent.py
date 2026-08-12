@@ -39,11 +39,11 @@ def generate_proposal(user: User, req: ProposalGenerateRequest) -> Proposal:
 
     payload = {
         "business_name": user.business_name or user.full_name or "Service Provider",
-        "client_name": safe_sanitize(client_name),
-        "title": safe_sanitize(req.title),
-        "scope_description": safe_sanitize(req.scope_description),
-        "deliverables_raw": safe_sanitize(req.deliverables_raw),
-        "timeline_description": safe_sanitize(req.timeline_description),
+        "client_name": safe_sanitize(client_name, max_len=200),
+        "title": safe_sanitize(req.title, max_len=200),
+        "scope_description": safe_sanitize(req.scope_description, max_len=5000),
+        "deliverables_raw": safe_sanitize(req.deliverables_raw, max_len=5000),
+        "timeline_description": safe_sanitize(req.timeline_description, max_len=2000),
         "total_amount": req.total_amount,
         "currency": req.currency,
         "pricing_type": req.pricing_type,

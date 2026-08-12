@@ -22,11 +22,22 @@ class PromptInjectionError(ValueError):
 
 
 def sanitize_prompt_input(value: str, *, max_len: int = 2000) -> str:
-    """Strip control chars, reject injection attempts, and truncate."""
+    """Strip control chars, reject injection attempts, and truncate.
+
+    `max_len` defaults to 2000 for short fields (names, titles, a chat message).
+    **Callers handling long content must pass it explicitly** — several didn't,
+    and the sanitizer silently discarded three quarters of every meeting
+    transcript and email-thread bundle before the model ever saw them. The
+    truncation log line below exists so that loss is never silent again, and
+    `tests/security/test_sanitizer_max_len_lint.py` requires every call site to
+    state its cap.
+    """
     clean = _CONTROL_CHARS.sub("", value)
     for pattern in _INJECTION_PATTERNS:
         if pattern.search(clean):
             raise PromptInjectionError("Invalid input detected")
+    if len(clean) > max_len:
+        print(f"[sanitize] truncated {len(clean)} chars to {max_len} — raise max_len at this call site if the tail matters")
     return clean[:max_len]
 
 

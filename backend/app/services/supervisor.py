@@ -8,7 +8,7 @@ from .. import store
 from ..config import settings
 from ..models import Alert, ManagerTask
 from ..utils.request_cache import request_cached
-from . import agent_logger, ai_backend, llm
+from . import agent_logger, ai_backend
 from .bookkeeper import recategorize_uncategorized
 from .cashflow_agent import compute_forecast
 from .cost import estimate_cost_usd

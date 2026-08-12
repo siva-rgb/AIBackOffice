@@ -59,7 +59,7 @@ def ingest_transactions(user_id: str, currency: str, rows: list[ParsedRow]) -> I
                 "id": t.id,
                 "date": t.date,
                 # sanitize user-supplied description before it enters the prompt
-                "description": safe_sanitize(t.description),
+                "description": safe_sanitize(t.description, max_len=500),
                 "amount": t.amount,
             }
             for t in batch
@@ -159,7 +159,7 @@ def recategorize_uncategorized(user_id: str, max_txns: int = 50) -> int:
     if not pending:
         return 0
     ai = get_ai()
-    items = [{"id": t.id, "date": t.date, "description": safe_sanitize(t.description), "amount": t.amount} for t in pending]
+    items = [{"id": t.id, "date": t.date, "description": safe_sanitize(t.description, max_len=500), "amount": t.amount} for t in pending]
     try:
         call = generate_with_retry(lambda: ai.categorize_transactions(items))
     except Exception:
