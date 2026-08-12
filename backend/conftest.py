@@ -39,6 +39,14 @@ os.environ["BASE_URL"] = ""
 os.environ["KORA_AI_BACKEND"] = "mock"
 os.environ["GOOGLE_CLOUD_PROJECT_ID"] = ""
 
+# Embeddings need their own muzzle: they are selected by EMBEDDING_MODEL, not by
+# KORA_AI_BACKEND, so pinning the mock provider above does nothing for them. With
+# the default `gemini-embedding-001` (a bare name → Vertex) plus ambient ADC,
+# `embeddings.is_enabled()` returns True and every recall test embeds for real —
+# caught by the suite jumping from 22s to 112s. Blank it so the lexical-fallback
+# path is the default, exactly as the `no_embeddings` docstring already claims.
+os.environ["EMBEDDING_MODEL"] = ""
+
 # Notion: blank both the internal key and the OAuth pair so tests control the
 # auth mode explicitly via monkeypatch instead of inheriting the developer's.
 os.environ["NOTION_API_KEY"] = ""

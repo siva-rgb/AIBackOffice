@@ -41,23 +41,26 @@ class Settings(BaseSettings):
     # default rather than 404-ing every agent call. See services/vertex_llm.py.
     MODEL_NAME: str = "azure.gpt-4.1"
 
-    # Embeddings for semantic/hybrid memory recall. These stay on the OpenAI-
-    # compatible gateway even when chat runs on Vertex: vectors from different
-    # models are not comparable, so switching the embedding model invalidates
-    # every stored vector and recall degrades to lexical-only until a full
-    # /api/memory/reindex completes. Deliberate decision, not an oversight.
-    # Must be a model your key exposes (this gateway
-    # prefixes them like the chat models: azure.text-embedding-3-small /
-    # -3-large / -ada-002, or vertex_ai.text-embedding-005). Empty or an
-    # unavailable model disables semantic ranking gracefully — recall then falls
-    # back to lexical-only, so the feature never hard-breaks.
-    EMBEDDING_MODEL: str = "azure.text-embedding-3-small"
+    # Embeddings for semantic/hybrid memory recall. The *shape* of this name
+    # picks the backend (services/embeddings.py):
+    #   'gemini-embedding-001'         → Vertex AI directly, via ADC
+    #   'azure.text-embedding-3-small' → the OpenAI-compatible gateway, which
+    #                                    namespaces models with a provider prefix
+    # Empty or an unavailable model disables semantic ranking gracefully — recall
+    # falls back to lexical-only, so the feature never hard-breaks.
+    #
+    # CHANGING THIS INVALIDATES EVERY STORED VECTOR. Embeddings are only
+    # comparable to others from the same model, so recall silently returns
+    # nothing useful until `POST /api/memory/reindex` has re-embedded every row.
+    EMBEDDING_MODEL: str = "gemini-embedding-001"
 
     # Dimensionality of the embedding model above. Must match the `vector(N)`
-    # column on agent_memory.embedding_vec (M10 migration). Defaults to 1536
-    # (text-embedding-3-small / ada-002). Operators swapping to text-embedding-
-    # 3-large should set 3072 AND re-issue the column type — recorded as
-    # FU-M10-dim-change-migration.
+    # column on agent_memory.embedding_vec (M10 migration).
+    #
+    # Passed to Vertex as `output_dimensionality`, so gemini-embedding-001
+    # (natively 3072) is asked for 1536 and fits the existing column with no
+    # migration. Operators changing this MUST also re-issue the column type and
+    # rebuild the HNSW index — recorded as FU-M10-dim-change-migration.
     EMBEDDING_DIM: int = 1536
 
     # M10 — which recall backend the service layer uses.
