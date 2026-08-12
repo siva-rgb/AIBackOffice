@@ -46,6 +46,7 @@ run gcloud services enable \
   artifactregistry.googleapis.com \
   secretmanager.googleapis.com \
   iamcredentials.googleapis.com \
+  aiplatform.googleapis.com \
   --project="$PROJECT_ID"
 
 # --------------------------------------------------- 2. Artifact Registry ----
@@ -200,6 +201,17 @@ run gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SA" \
   --member="serviceAccount:${RUNTIME_SA}" \
   --role="roles/iam.serviceAccountTokenCreator" \
   --project="$PROJECT_ID" >/dev/null
+
+# Vertex AI (KORA_AI_BACKEND=vertex). The Gemini transport authenticates with
+# Application Default Credentials — on Cloud Run that is this service account,
+# and it holds no aiplatform role by default. Without this every agent call
+# fails 403 while the service itself stays healthy, so the app looks up but
+# every AI feature is dead.
+log "granting aiplatform.user to $RUNTIME_SA (Vertex AI)"
+run gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${RUNTIME_SA}" \
+  --role="roles/aiplatform.user" \
+  --condition=None >/dev/null
 
 # Cloud Build deploys the services and calls `gcloud secrets describe` to work out
 # which secrets exist (ops/secrets.sh), so the build identity needs Run admin, the

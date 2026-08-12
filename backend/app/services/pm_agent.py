@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from .. import store
-from . import butler, cost, llm, memory_recall, rollup
+from . import ai_backend, butler, cost, llm, memory_recall, rollup
 
 # ── Budget + shape constants ────────────────────────────────────────────────
 ANALYST_MAX_TOKENS = 600  # output cap per analyst
@@ -281,7 +281,7 @@ def _run_analyst(key: str, ctx: dict, allowed: set[str], chat) -> AnalystResult:
     """Run one analyst. NEVER raises — a failure becomes a degraded section."""
     spec = _SPECS[key]
     try:
-        if chat is None or not llm.is_configured():
+        if chat is None or not ai_backend.is_configured():
             return AnalystResult(key=key, summary=_fallback_summary(key, ctx), degraded=True)
 
         brief = spec["brief"](ctx)
@@ -352,7 +352,7 @@ def compose_client_view(user_id: str, client_id: str, *, chat=None, persist: boo
     if not client:
         return None
     if chat is None:
-        chat = llm.chat
+        chat = ai_backend.active().chat
 
     ctx = _gather(user_id, client)
     allowed = _ground_truth_figures(ctx)

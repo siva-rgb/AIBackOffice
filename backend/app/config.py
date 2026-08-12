@@ -17,20 +17,36 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Backends. AI: 'auto' (default) uses the OpenAI-compatible gateway when
-    # MODEL_API_KEY is set, otherwise the deterministic mock. Force with
-    # 'openai' / 'mock' / 'vertex'. Data: 'mock' (in-memory) or 'supabase'.
+    # Backends. Data: 'mock' (in-memory) or 'supabase'.
+    #
+    # AI backend — which transport the agents' model calls use:
+    #   'vertex' — Google Vertex AI (Gemini) via Application Default Credentials
+    #   'openai' — the OpenAI-compatible gateway below
+    #   'mock'   — deterministic, network-free provider
+    #   'auto'   — Vertex when ADC + a project resolve, else the gateway when
+    #              MODEL_API_KEY is set, else mock
+    #
+    # Note that 'auto' prefers Vertex, and Vertex authenticates with ADC rather
+    # than an env var — so blanking MODEL_API_KEY is NOT enough to keep a process
+    # offline. The test suite pins 'mock' in conftest.py for exactly this reason.
     KORA_DATA_BACKEND: str = "mock"
     KORA_AI_BACKEND: str = "auto"
 
-    # OpenAI-compatible LLM gateway (e.g. the PwC GenAI shared service used for
-    # development; swap to Google Vertex AI for production per SKILL.md §7).
+    # OpenAI-compatible LLM gateway. Still used for embeddings (see below) and
+    # available as an alternative chat transport via KORA_AI_BACKEND=openai.
     MODEL_API_KEY: str = ""
     BASE_URL: str = ""
+    # Chat/generation model. On Vertex this must be a Gemini id (e.g.
+    # 'gemini-2.5-flash'); a leftover gateway id is corrected to the Vertex
+    # default rather than 404-ing every agent call. See services/vertex_llm.py.
     MODEL_NAME: str = "azure.gpt-4.1"
 
-    # Embeddings for semantic/hybrid memory recall — uses the same OpenAI-
-    # compatible gateway above. Must be a model your key exposes (this gateway
+    # Embeddings for semantic/hybrid memory recall. These stay on the OpenAI-
+    # compatible gateway even when chat runs on Vertex: vectors from different
+    # models are not comparable, so switching the embedding model invalidates
+    # every stored vector and recall degrades to lexical-only until a full
+    # /api/memory/reindex completes. Deliberate decision, not an oversight.
+    # Must be a model your key exposes (this gateway
     # prefixes them like the chat models: azure.text-embedding-3-small /
     # -3-large / -ada-002, or vertex_ai.text-embedding-005). Empty or an
     # unavailable model disables semantic ranking gracefully — recall then falls

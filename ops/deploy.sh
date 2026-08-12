@@ -77,7 +77,7 @@ deploy_backend() {
     --region="${REGION}" \
     --platform=managed \
     --allow-unauthenticated \
-    --set-env-vars="ENVIRONMENT=${ENVIRONMENT},ALLOW_DEMO_USER=false,KORA_DATA_BACKEND=supabase,FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-},KORA_AI_BACKEND=${KORA_AI_BACKEND:-auto},MODEL_NAME=${MODEL_NAME:-azure.gpt-4o-mini},GOOGLE_CLOUD_PROJECT_ID=${GCP_PROJECT_ID},GOOGLE_CLOUD_LOCATION=${REGION}" \
+    --set-env-vars="ENVIRONMENT=${ENVIRONMENT},ALLOW_DEMO_USER=false,KORA_DATA_BACKEND=supabase,FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-},KORA_AI_BACKEND=${KORA_AI_BACKEND:-vertex},MODEL_NAME=${MODEL_NAME:-gemini-2.5-flash},GOOGLE_CLOUD_PROJECT_ID=${GCP_PROJECT_ID},GOOGLE_CLOUD_LOCATION=${REGION}" \
     "$(kora_secret_flag "${GCP_PROJECT_ID}")" \
     "$@"
 }

@@ -20,7 +20,7 @@ substitutions:
   _BACKEND_SERVICE: kora-backend
   _FRONTEND_SERVICE: kora-frontend
   _FRONTEND_ORIGIN: ""          # e.g. https://kora-frontend-xxxx-uc.a.run.app
-  _MODEL_NAME: "azure.gpt-4o-mini"
+  _MODEL_NAME: "gemini-2.5-flash"
   # $SHORT_SHA is only populated for trigger-driven builds; manual
   # `gcloud builds submit` would resolve it to an empty tag. Pass _TAG explicitly.
   _TAG: "manual"
@@ -69,7 +69,7 @@ steps:
           --region="${_REGION}" \
           --platform=managed \
           --allow-unauthenticated \
-          --set-env-vars="ENVIRONMENT=${_ENVIRONMENT},ALLOW_DEMO_USER=false,KORA_DATA_BACKEND=supabase,FRONTEND_ORIGIN=${_FRONTEND_ORIGIN},KORA_AI_BACKEND=auto,MODEL_NAME=${_MODEL_NAME},GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=${_REGION}" \
+          --set-env-vars="ENVIRONMENT=${_ENVIRONMENT},ALLOW_DEMO_USER=false,KORA_DATA_BACKEND=supabase,FRONTEND_ORIGIN=${_FRONTEND_ORIGIN},KORA_AI_BACKEND=vertex,MODEL_NAME=${_MODEL_NAME},GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=${_REGION}" \
           "$$SECRET_FLAG"
 
   # 3. Capture the backend URL into a workspace file for the next step.

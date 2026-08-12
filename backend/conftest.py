@@ -30,6 +30,15 @@ os.environ["KORA_DATA_BACKEND"] = "mock"
 os.environ["MODEL_API_KEY"] = ""
 os.environ["BASE_URL"] = ""
 
+# Blanking keys is no longer sufficient on its own: the Vertex transport
+# authenticates with Application Default Credentials, not an env var, so on any
+# machine that has run `gcloud auth application-default login` (and on every
+# Cloud Build worker) `KORA_AI_BACKEND=auto` would resolve to Vertex and the
+# suite would issue *live, billable* model calls. Pin the mock provider.
+# Tests that exercise the Vertex transport patch it explicitly instead.
+os.environ["KORA_AI_BACKEND"] = "mock"
+os.environ["GOOGLE_CLOUD_PROJECT_ID"] = ""
+
 # Notion: blank both the internal key and the OAuth pair so tests control the
 # auth mode explicitly via monkeypatch instead of inheriting the developer's.
 os.environ["NOTION_API_KEY"] = ""

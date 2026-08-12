@@ -8,7 +8,7 @@ from .. import store
 from ..config import settings
 from ..models import Alert, ManagerTask
 from ..utils.request_cache import request_cached
-from . import agent_logger, llm
+from . import agent_logger, ai_backend, llm
 from .bookkeeper import recategorize_uncategorized
 from .cashflow_agent import compute_forecast
 from .cost import estimate_cost_usd
@@ -1183,7 +1183,7 @@ _TOOLS = [
 
 def _agentic_available() -> bool:
     try:
-        return llm.is_configured() and get_ai().__class__.__name__ == "RealLLMProvider"
+        return ai_backend.is_configured() and get_ai().__class__.__name__ == "RealLLMProvider"
     except Exception:
         return False
 
@@ -1226,7 +1226,7 @@ def chat_agentic(user_id: str, message: str, history: list[dict] | None = None) 
     reply = ""
     try:
         for _ in range(5):
-            turn = llm.chat_messages(messages, tools=_TOOLS, temperature=0.3, max_tokens=800)
+            turn = ai_backend.active().chat_messages(messages, tools=_TOOLS, temperature=0.3, max_tokens=800)
             in_tok += turn.input_tokens
             out_tok += turn.output_tokens
             model = turn.model
@@ -1271,7 +1271,7 @@ def chat_agentic(user_id: str, message: str, history: list[dict] | None = None) 
         output={"reply": reply[:500], "queued": queued},
         model_used=model or settings.MODEL_NAME,
         tokens_used=in_tok + out_tok,
-        cost_usd=estimate_cost_usd(in_tok, out_tok),
+        cost_usd=estimate_cost_usd(in_tok, out_tok, model),
         triggered_by="user",
         source_record_type="supervisor",
     )
@@ -1306,7 +1306,7 @@ async def chat_agentic_async(user_id: str, message: str, history: list[dict] | N
     reply = ""
     try:
         for _ in range(5):
-            turn = await llm.achat_messages(messages, tools=_TOOLS, temperature=0.3, max_tokens=800)
+            turn = await ai_backend.active().achat_messages(messages, tools=_TOOLS, temperature=0.3, max_tokens=800)
             in_tok += turn.input_tokens
             out_tok += turn.output_tokens
             model = turn.model
@@ -1352,7 +1352,7 @@ async def chat_agentic_async(user_id: str, message: str, history: list[dict] | N
         output={"reply": reply[:500], "queued": queued},
         model_used=model or settings.MODEL_NAME,
         tokens_used=in_tok + out_tok,
-        cost_usd=estimate_cost_usd(in_tok, out_tok),
+        cost_usd=estimate_cost_usd(in_tok, out_tok, model),
         triggered_by="user",
         source_record_type="supervisor",
     )
