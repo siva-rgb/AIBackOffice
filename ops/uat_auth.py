@@ -62,6 +62,12 @@ def skip(case: str, detail: str) -> None:
     print(f"  {YELLOW}SKIP{RESET}  {case} — {detail}")
 
 
+def note(detail: str) -> None:
+    """Context for the reader. Not a case — never counted in the tally, so it
+    cannot turn a healthy run amber."""
+    print(f"  {YELLOW}note{RESET}  {detail}")
+
+
 def section(title: str) -> None:
     print(f"\n{BOLD}── {title}{RESET}")
 
@@ -131,17 +137,48 @@ def login(supabase_url: str, anon_key: str, email: str, password: str) -> str | 
     return None
 
 
+def login_identity(supabase_url: str, anon_key: str, email: str, password: str) -> str | None:
+    """The auth provider's own user id for these credentials.
+
+    Identity is asserted against this rather than against the profile email:
+    `users.email` (where notifications go) and the auth identity (what you log
+    in with) are deliberately allowed to differ — that is how the demo tenant
+    keeps a published `demo@kora.app` login while its digests go to a real
+    inbox. Comparing ids checks the thing that actually matters: the token
+    resolves to the account we signed in as.
+    """
+    status, body = request(
+        "POST",
+        f"{supabase_url}/auth/v1/token?grant_type=password",
+        body={"email": email, "password": password},
+        headers={"apikey": anon_key},
+    )
+    if status == 200 and isinstance(body, dict):
+        return ((body.get("user") or {}) if isinstance(body.get("user"), dict) else {}).get("id")
+    return None
+
+
 def money(x) -> float:
     """Round to cents so float noise never fails an arithmetic assertion."""
     return round(float(x or 0), 2)
 
 
 # ──────────────────────────────────────────────────────────────── the cases ──
-def check_identity(api: str, tok_a: str, email_a: str) -> dict:
+def check_identity(api: str, tok_a: str, email_a: str, auth_user_id: str | None = None) -> dict:
     section("Identity & profile — AUTH-02, AUTH-05")
     status, me = request("GET", f"{api}/api/me", tok_a)
-    if not expect("AUTH-02 /api/me returns the authenticated user", status == 200 and isinstance(me, dict) and me.get("email") == email_a, f"{me.get('email') if isinstance(me, dict) else ''}", f"status={status} body={str(me)[:120]}"):
+    resolved = me.get("id") if isinstance(me, dict) else None
+    # Assert the token resolves to the account we signed in as. Previously this
+    # compared `me.email` to the login email, which fails the moment a tenant's
+    # notification address differs from its auth identity — a supported setup,
+    # and the one the demo tenant uses. Worse, the failure returned {} and every
+    # downstream check that needed the user id then mis-reported: OBS-04 compared
+    # log rows against an empty id and announced a cross-tenant leak.
+    matches = bool(resolved) and (resolved == auth_user_id if auth_user_id else True)
+    if not expect("AUTH-02 /api/me returns the authenticated user", status == 200 and matches, f"id={resolved}", f"status={status} body={str(me)[:120]}"):
         return {}
+    if isinstance(me, dict) and me.get("email") != email_a:
+        note(f"profile email ({me.get('email')}) differs from the login email ({email_a}) — expected when notifications are redirected")
 
     status, comp = request("GET", f"{api}/api/profile/completeness", tok_a)
     expect(
@@ -451,8 +488,13 @@ def check_observability(api: str, tok: str, user_id: str) -> None:
         return
     ok("OBS-01 agent log loads", f"{len(entries)} entries")
 
-    foreign = [e.get("userId") for e in entries if e.get("userId") and e.get("userId") != user_id]
-    expect("OBS-04 agent log contains only this tenant's rows", not foreign, "", f"{len(foreign)} foreign rows — cross-tenant leak")
+    if not user_id:
+        # Without a known tenant id every row looks foreign, which reads as an
+        # S1 leak. Refuse to render a verdict rather than raise a false alarm.
+        skip("OBS-04", "tenant id unknown (AUTH-02 did not resolve) — cannot judge log ownership")
+    else:
+        foreign = [e.get("userId") for e in entries if e.get("userId") and e.get("userId") != user_id]
+        expect("OBS-04 agent log contains only this tenant's rows", not foreign, f"{len(entries)} rows, all this tenant", f"{len(foreign)} foreign rows — cross-tenant leak")
 
     blob = json.dumps(entries)
     leaked = re.findall(r"\b(sk_live_|sk_test_|service_role|eyJhbGciOi)[A-Za-z0-9_\-]{6,}", blob)
@@ -680,7 +722,8 @@ def main() -> int:
     else:
         skip("tenant B", "set UAT_B_EMAIL/UAT_B_PASSWORD to enable isolation + gating cases")
 
-    me = check_identity(api, tok_a, email_a)
+    auth_id_a = login_identity(supabase_url, anon_key, email_a, pass_a)
+    me = check_identity(api, tok_a, email_a, auth_id_a)
     user_id, plan_a = me.get("id", ""), me.get("plan", "free")
 
     if tok_b:
