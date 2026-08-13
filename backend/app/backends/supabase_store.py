@@ -906,15 +906,27 @@ def _missing_vector_column(exc: BaseException) -> bool:
 
 
 def _write_agent_memory(user_id: str, payload: dict, existing_id: str | None):
-    """Insert or update an agent_memory row, tolerating a missing pgvector column.
+    """Insert or update an agent_memory row, tolerating an unavailable pgvector column.
 
-    `AGENT_MEMORY_VECTOR_BACKEND` defaults to "jsonb" so the M10 migration
-    (2026-07-29_pgvector_agent_memory.sql) is optional — but this payload always
-    carried `embedding_vec`, and PostgREST rejects the *entire* write when a
-    column is unknown. On a database without that migration every remember()
-    failed with PGRST204, and `remember()` swallows exceptions, so semantic
-    memory silently stayed empty while the reindex happily reported the rows it
-    had "processed". Found on staging with 0 rows after a clean reindex.
+    PostgREST validates write payloads against its **schema cache** and rejects
+    the *entire* row with PGRST204 when a column isn't in it. That happens in two
+    situations, and the error text does not distinguish them:
+
+      * the M10 migration (2026-07-29_pgvector_agent_memory.sql) was never run —
+        legitimate, since `AGENT_MEMORY_VECTOR_BACKEND` defaults to "jsonb" and
+        documents that migration as optional;
+      * the migration *was* run but PostgREST's cache is stale and has not picked
+        the column up yet.
+
+    The second is what actually bit staging: `embedding_vec` existed in Postgres
+    (a plain SELECT on it succeeded) while every write failed PGRST204. Because
+    `remember()` is best-effort and swallows exceptions, semantic memory stayed
+    empty while the reindex endpoint cheerfully reported the rows it had
+    "processed" — 0 rows stored against "playbook: 7, graph_fact: 6".
+
+    Retrying without the column keeps the memory either way. The JSONB
+    `embedding` column is what the default recall backend reads, so nothing is
+    lost beyond the ANN index.
     """
     global _HAS_EMBEDDING_VEC
 

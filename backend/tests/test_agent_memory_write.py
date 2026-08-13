@@ -1,14 +1,18 @@
-"""Semantic memory must still record when the pgvector migration isn't applied.
+"""Semantic memory must still record when `embedding_vec` is unavailable.
 
-`AGENT_MEMORY_VECTOR_BACKEND` defaults to "jsonb" so the M10 migration
-(2026-07-29_pgvector_agent_memory.sql) is optional. But `upsert_agent_memory`
-always put `embedding_vec` in the payload, and PostgREST rejects the *whole*
-write when a column is unknown — so on a database without that migration every
-`remember()` failed with PGRST204. `remember()` swallows exceptions, so nothing
-surfaced: the reindex endpoint cheerfully reported "playbook: 7, graph_fact: 6"
-while `agent_memory` stayed at 0 rows. Found on live staging.
+PostgREST validates writes against its **schema cache** and rejects the whole
+row with PGRST204 when a column isn't in it. Two different causes produce the
+identical error: the optional M10 pgvector migration was never run, or it was
+run and PostgREST's cache is stale.
 
-The write now falls back to a payload without the vector column and says so once.
+Staging hit the second. `embedding_vec` existed in Postgres — a plain SELECT on
+it returned 200 — while every write failed PGRST204. `remember()` is
+best-effort and swallows exceptions, so `agent_memory` sat at 0 rows while the
+reindex endpoint reported "playbook: 7, graph_fact: 6" as though it had stored
+them. Once the cache refreshed, the same reindex stored 13/13.
+
+Retrying without the column keeps the memory under either cause. The JSONB
+`embedding` column is what the default recall backend reads.
 """
 
 from __future__ import annotations
