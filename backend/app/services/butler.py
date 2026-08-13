@@ -134,16 +134,40 @@ def compute_client_health(user_id: str, client: Client, *, persist: bool = True)
 
 
 # --- Client list + detail (for the frontend) --------------------------------
+_ACTIVE_ENGAGEMENT_STATUSES = ("active", "on_track", "at_risk", "planning")
+
+
 def list_clients_enriched(user_id: str, status: str | None = None) -> list[dict]:
+    """Clients plus financials and active-engagement counts, in three queries.
+
+    Previously this looped over clients calling `_client_invoices` and
+    `list_engagements` per client — and `_client_invoices` itself re-fetched the
+    tenant's ENTIRE invoice list every time. Five clients meant eleven round
+    trips, five of them full-table reads, and the endpoint measured ~7.6s
+    against the deployed backend.
+
+    The data is the same; it is now fetched once and grouped in memory. Cost is
+    independent of client count instead of linear in it.
+    """
+    clients = store.list_clients(user_id, status=status)
+    if not clients:
+        return []
+
+    invoices_by_client: dict[str, list] = {}
+    for inv in store.list_invoices(user_id):
+        invoices_by_client.setdefault(_norm(inv.client_name), []).append(inv)
+
+    # list_engagements(user_id) with no client_id returns the whole tenant's set.
+    active_by_client: dict[str, int] = {}
+    for eng in store.list_engagements(user_id):
+        if eng.status in _ACTIVE_ENGAGEMENT_STATUSES:
+            active_by_client[eng.client_id] = active_by_client.get(eng.client_id, 0) + 1
+
     out = []
-    for c in store.list_clients(user_id, status=status):
-        invoices = _client_invoices(user_id, c.name)
-        fin = _financials(invoices)
-        engagements = store.list_engagements(user_id, c.id)
-        active = [e for e in engagements if e.status in ("active", "on_track", "at_risk", "planning")]
+    for c in clients:
         row = c.model_dump(by_alias=True)
-        row["financials"] = fin
-        row["activeEngagementCount"] = len(active)
+        row["financials"] = _financials(invoices_by_client.get(_norm(c.name), []))
+        row["activeEngagementCount"] = active_by_client.get(c.id, 0)
         row["daysSinceActivity"] = _days_since(c.last_activity_at)
         out.append(row)
     return out

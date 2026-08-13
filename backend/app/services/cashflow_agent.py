@@ -1,10 +1,105 @@
 from __future__ import annotations
 
+import threading
+import time
 from datetime import date, timedelta
 
 from .. import store
 from . import agent_logger
 from .vertex_ai import generate_with_retry, get_ai
+
+# ── Insight cache ───────────────────────────────────────────────────────────
+# The numeric projection is deterministic and costs two reads. The LLM pass that
+# decorates it with risks and actions is a synchronous Vertex call, and it was
+# the whole response time: /api/cashflow/forecast measured 12-26s against the
+# deployed backend, on a plain GET the dashboard issues on load.
+#
+# So the request no longer waits for it. Cached insights are served alongside
+# freshly computed numbers; a miss schedules generation in the background and
+# returns the projection immediately, with the insights appearing on the next
+# load. The numbers are never stale — only the commentary is, by at most the TTL.
+#
+# This depends on Cloud Run running with --no-cpu-throttling, without which CPU
+# is withdrawn after the response and the background thread would simply freeze.
+_INSIGHTS_TTL = 600.0  # seconds
+_insights_cache: dict[tuple[str, int], tuple[float, dict, tuple]] = {}
+_insights_inflight: set[tuple[str, int]] = set()
+_insights_lock = threading.Lock()
+
+_EMPTY_INSIGHTS = {"key_risks": [], "recommended_actions": [], "confidence_score": 0.7, "assumptions": []}
+_PENDING_NOTE = "AI insights are still being generated — the numeric projection below is complete and current."
+
+
+def clear_insights_cache() -> None:
+    """Drop cached insights. For tests, and for any caller that wants a rebuild."""
+    with _insights_lock:
+        _insights_cache.clear()
+        _insights_inflight.clear()
+
+
+def _cached_insights(key: tuple[str, int]) -> tuple[dict, tuple] | None:
+    with _insights_lock:
+        entry = _insights_cache.get(key)
+        if not entry:
+            return None
+        expires_at, insights, meta = entry
+        if expires_at <= time.monotonic():
+            _insights_cache.pop(key, None)
+            return None
+        return insights, meta
+
+
+def _generate_insights(user_id: str, key: tuple[str, int], snapshot: dict) -> None:
+    """Run the LLM pass and cache it. Never raises — it runs unattended.
+
+    m4-lint: store-only — `snapshot` is built entirely from transactions and
+    invoices by compute_forecast (sums, dates, probabilities), and
+    `assemble_context` returns the tenant's own learned playbook. No
+    user-authored free text reaches the prompt. This marker moved here with the
+    call itself; it previously sat on compute_forecast.
+    """
+    try:
+        enriched = dict(snapshot)
+        try:
+            from .playbook import assemble_context
+
+            business_context = assemble_context(user_id, "forecast")
+            if business_context:
+                enriched["business_context"] = business_context
+        except Exception:
+            pass
+
+        ai = get_ai()
+        call = generate_with_retry(lambda: ai.generate_cashflow_insights(enriched))
+        meta = (call.model_used, call.tokens_used, call.latency_ms, call.cost_usd)
+        with _insights_lock:
+            _insights_cache[key] = (time.monotonic() + _INSIGHTS_TTL, call.data, meta)
+    except Exception as exc:  # graceful degradation — the projection still stands
+        agent_logger.log_action(
+            user_id=user_id,
+            agent_type="cashflow_forecaster",
+            action="Cash flow insight generation failed — numeric forecast served",
+            input=snapshot,
+            output={"error": str(exc)},
+            status="error",
+            error_message=str(exc),
+            triggered_by="user",
+            source_record_type="cashflow",
+        )
+    finally:
+        with _insights_lock:
+            _insights_inflight.discard(key)
+
+
+def _schedule_insights(user_id: str, key: tuple[str, int], snapshot: dict) -> None:
+    """Start one background generation per key. Concurrent dashboard loads must
+    not each fire their own Vertex call for the same forecast."""
+    with _insights_lock:
+        if key in _insights_inflight:
+            return
+        _insights_inflight.add(key)
+    threading.Thread(target=_generate_insights, args=(user_id, key, snapshot), daemon=True).start()
+
 
 # Cash-flow forecast (SKILL.md §5 Module 7 + modules.md#cashflow).
 # Numeric projection is deterministic; the LLM adds risks/actions/assumptions.
@@ -131,35 +226,17 @@ def compute_forecast(user_id: str, horizon_days: int = 90, with_insights: bool =
         "conservative_balance_14d": forecast[min(14, horizon_days)]["conservative"],
     }
 
-    insights = {"key_risks": [], "recommended_actions": [], "confidence_score": 0.7, "assumptions": []}
+    insights = dict(_EMPTY_INSIGHTS)
     model_used = tokens = latency = cost = None
     if with_insights:
-        try:
-            from .playbook import assemble_context
-
-            business_context = assemble_context(user_id, "forecast")
-            if business_context:
-                snapshot["business_context"] = business_context
-        except Exception:
-            pass
-        ai = get_ai()
-        try:
-            call = generate_with_retry(lambda: ai.generate_cashflow_insights(snapshot))
-            insights = call.data
-            model_used, tokens, latency, cost = call.model_used, call.tokens_used, call.latency_ms, call.cost_usd
-        except Exception as exc:  # graceful degradation
-            insights["assumptions"] = ["AI insights unavailable; showing numeric projection only."]
-            agent_logger.log_action(
-                user_id=user_id,
-                agent_type="cashflow_forecaster",
-                action="Cash flow insight generation failed — numeric forecast served",
-                input=snapshot,
-                output={"error": str(exc)},
-                status="error",
-                error_message=str(exc),
-                triggered_by="user",
-                source_record_type="cashflow",
-            )
+        key = (user_id, horizon_days)
+        cached = _cached_insights(key)
+        if cached is not None:
+            insights, (model_used, tokens, latency, cost) = cached
+        else:
+            # Serve the projection now; the commentary follows on the next load.
+            _schedule_insights(user_id, key, snapshot)
+            insights["assumptions"] = [_PENDING_NOTE]
 
     agent_logger.log_action(
         user_id=user_id,

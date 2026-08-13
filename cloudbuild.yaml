@@ -21,6 +21,12 @@ substitutions:
   _FRONTEND_SERVICE: kora-frontend
   _FRONTEND_ORIGIN: ""          # e.g. https://kora-frontend-xxxx-uc.a.run.app
   _MODEL_NAME: "gemini-2.5-flash"
+  # Keep one instance warm. Cloud Run scales to zero by default, and a cold
+  # start on this image measured ~20s — paid by whoever arrives after a quiet
+  # period, which for a public deployment is most first impressions.
+  # minScale is applied PER REVISION: setting it on the service alone does not
+  # touch revisions already serving traffic, so it belongs in the deploy.
+  _MIN_INSTANCES: "1"
   # $SHORT_SHA is only populated for trigger-driven builds; manual
   # `gcloud builds submit` would resolve it to an empty tag. Pass _TAG explicitly.
   _TAG: "manual"
@@ -78,6 +84,7 @@ steps:
           --platform=managed \
           --allow-unauthenticated \
           --no-cpu-throttling \
+          --min-instances=${_MIN_INSTANCES} \
           --set-env-vars="^@^ENVIRONMENT=${_ENVIRONMENT}@ALLOW_DEMO_USER=false@KORA_DATA_BACKEND=supabase@FRONTEND_ORIGIN=${_FRONTEND_ORIGIN}@KORA_AI_BACKEND=vertex@MODEL_NAME=${_MODEL_NAME}@GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID@GOOGLE_CLOUD_LOCATION=${_REGION}@PROTECTED_TENANT_IDS=${_PROTECTED_TENANT_IDS}@SEED_SAMPLE_DATA_ON_SIGNUP=${_SEED_SAMPLE_DATA_ON_SIGNUP}" \
           "$$SECRET_FLAG"
 

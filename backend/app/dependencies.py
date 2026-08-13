@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import time
+
 from fastapi import Depends, Header, HTTPException, Request
 
 from .config import settings
@@ -17,6 +20,61 @@ from .utils.request_context import set_user_id
 
 _PLAN_RANK = {"free": 0, "starter": 1, "pro": 2}
 
+# ── Verified-token cache ────────────────────────────────────────────────────
+# store.verify_token() costs TWO sequential network round trips — auth.get_user()
+# against Supabase, then the profile row — and it runs before EVERY authenticated
+# request. Measured against the deployed backend that was ~1.3s of the response
+# time on endpoints that do almost no work, and a dashboard render fires several
+# requests at once, each paying it again.
+#
+# The trade this buys: a session that is revoked, or a plan that changes, stays
+# in effect for up to TTL seconds on instances that already cached it. That is
+# why the window is deliberately small — long enough to cover one page's burst
+# of parallel calls and a navigation or two, short enough that a revoked token
+# is not meaningfully useful. Anything longer would be trading real auth
+# freshness for diminishing latency returns.
+#
+# Per-process and non-authoritative: it is a latency cache, never a source of
+# truth, and losing it costs only speed. Tokens are keyed by hash so raw
+# credentials are not held in a long-lived structure.
+_TOKEN_CACHE_TTL = 30.0
+_TOKEN_CACHE_MAX = 512
+_token_cache: dict[str, tuple[float, User]] = {}
+
+
+def _token_key(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _cached_user(token: str) -> User | None:
+    entry = _token_cache.get(_token_key(token))
+    if not entry:
+        return None
+    expires_at, user = entry
+    if expires_at <= time.monotonic():
+        _token_cache.pop(_token_key(token), None)
+        return None
+    return user
+
+
+def _cache_user(token: str, user: User) -> None:
+    """Only successful verifications are cached — a rejected token must hit
+    Supabase every time, so a token cannot be denied once and then pass later
+    (or vice versa) from stale state."""
+    now = time.monotonic()
+    if len(_token_cache) >= _TOKEN_CACHE_MAX:
+        for key in [k for k, (exp, _) in _token_cache.items() if exp <= now]:
+            _token_cache.pop(key, None)
+        if len(_token_cache) >= _TOKEN_CACHE_MAX:
+            _token_cache.clear()  # bounded memory beats clever eviction here
+    _token_cache[_token_key(token)] = (now + _TOKEN_CACHE_TTL, user)
+
+
+def clear_token_cache() -> None:
+    """Drop every cached verification. Used by tests, and available to any code
+    that needs an immediate re-check rather than waiting out the TTL."""
+    _token_cache.clear()
+
 
 def _bearer(authorization: str | None) -> str | None:
     if authorization and authorization.lower().startswith("bearer "):
@@ -32,7 +90,11 @@ async def get_current_user(
         token = _bearer(authorization)
         # Real auth: verify the Supabase access token and load the profile.
         if token and token != "demo":
-            user = store.verify_token(token)
+            user = _cached_user(token)
+            if user is None:
+                user = store.verify_token(token)
+                if user:
+                    _cache_user(token, user)
             if user:
                 _stamp(request, user)
                 return user
