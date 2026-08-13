@@ -206,6 +206,14 @@ g5_smoke() {
   fi
   have curl || { bad "curl not available"; return; }
 
+  # Every scored request retries transient transport failures first. A dropped
+  # TLS handshake or a cold instance yields http_code 000, and scoring that as a
+  # product defect turns local network noise into a red gate — which is worse
+  # than a missed check, because the run then reports failures the deployment
+  # does not have. Observed for real: a production smoke run reported a CORS
+  # misconfiguration and an unreachable /privacy that were both fine on retry.
+  local RETRY=(--retry 3 --retry-all-errors --retry-delay 1)
+
   local body code hdrs
   # Cloud Run scales to zero, and a cold start can exceed the per-check timeout —
   # which would fail the gate for a reason that has nothing to do with the build.
@@ -213,7 +221,7 @@ g5_smoke() {
   printf '  ....  warming %s (cold starts can take ~30s)\n' "$TARGET"
   curl -s -o /dev/null --max-time 120 "$TARGET/health" || true
   # -- OBS-05: health is up and does not leak config secrets ------------------
-  body="$(curl -fsS --max-time 20 "$TARGET/health" 2>&1)"
+  body="$(curl -fsS "${RETRY[@]}" --max-time 20 "$TARGET/health" 2>&1)"
   if [ $? -eq 0 ] && printf '%s' "$body" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then
     ok "health returns status ok"
     printf '        %s\n' "$body"
@@ -230,7 +238,7 @@ g5_smoke() {
   # -- AUTH-04: protected endpoints reject anonymous callers -----------------
   local ep
   for ep in /api/invoices /api/clients /api/tasks /api/bookkeeping/transactions /api/stories; do
-    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$TARGET$ep")"
+    code="$(curl -s -o /dev/null -w '%{http_code}' "${RETRY[@]}" --max-time 20 "$TARGET$ep")"
     case "$code" in
       401|403) ok "AUTH-04 $ep rejects anonymous ($code)" ;;
       200)     bad "AUTH-04 $ep returned 200 to an ANONYMOUS caller — S1 auth bypass" ;;
@@ -239,7 +247,7 @@ g5_smoke() {
   done
 
   # -- AUTH-08: security headers --------------------------------------------
-  hdrs="$(curl -sSI --max-time 20 "$TARGET/health" 2>/dev/null | tr 'A-Z' 'a-z')"
+  hdrs="$(curl -sSI "${RETRY[@]}" --max-time 20 "$TARGET/health" 2>/dev/null | tr 'A-Z' 'a-z')"
   local h
   for h in x-content-type-options x-frame-options strict-transport-security content-security-policy; do
     if printf '%s' "$hdrs" | grep -q "^$h:"; then ok "AUTH-08 header $h present"
@@ -247,7 +255,7 @@ g5_smoke() {
   done
 
   # -- stack traces must never reach the client (OBS-06) ---------------------
-  body="$(curl -sS --max-time 20 "$TARGET/api/definitely-not-a-real-route" 2>&1)"
+  body="$(curl -sS "${RETRY[@]}" --max-time 20 "$TARGET/api/definitely-not-a-real-route" 2>&1)"
   if printf '%s' "$body" | grep -Eqi 'traceback|File "/|line [0-9]+, in '; then
     bad "OBS-06 a stack trace leaked to the client"
   else
@@ -256,16 +264,16 @@ g5_smoke() {
 
   # -- frontend reachability + API wiring ------------------------------------
   if [ -n "$FRONTEND" ]; then
-    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$FRONTEND/")"
+    code="$(curl -s -o /dev/null -w '%{http_code}' "${RETRY[@]}" --max-time 30 "$FRONTEND/")"
     [ "$code" = "200" ] && ok "frontend / returns 200" || bad "frontend / returned $code"
 
     for ep in /login /signup /privacy /terms; do
-      code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$FRONTEND$ep")"
+      code="$(curl -s -o /dev/null -w '%{http_code}' "${RETRY[@]}" --max-time 30 "$FRONTEND$ep")"
       [ "$code" = "200" ] && ok "public page $ep returns 200" || bad "public page $ep returned $code"
     done
 
     # AUTH-04 at the edge: middleware must bounce anonymous users off /dashboard.
-    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$FRONTEND/dashboard")"
+    code="$(curl -s -o /dev/null -w '%{http_code}' "${RETRY[@]}" --max-time 30 "$FRONTEND/dashboard")"
     case "$code" in
       200) bad "AUTH-04 /dashboard served 200 to an anonymous browser — middleware gate broken" ;;
       3*|401|403|307|302) ok "AUTH-04 /dashboard redirects anonymous users ($code)" ;;
@@ -273,7 +281,7 @@ g5_smoke() {
     esac
 
     # CORS: the deployed frontend origin must be allowed by the backend.
-    hdrs="$(curl -sS -o /dev/null -D - --max-time 20 -H "Origin: $FRONTEND" "$TARGET/health" 2>/dev/null | tr 'A-Z' 'a-z')"
+    hdrs="$(curl -sS -o /dev/null -D - "${RETRY[@]}" --max-time 20 -H "Origin: $FRONTEND" "$TARGET/health" 2>/dev/null | tr 'A-Z' 'a-z')"
     if printf '%s' "$hdrs" | grep -q 'access-control-allow-origin'; then
       ok "CORS allows the deployed frontend origin"
     else

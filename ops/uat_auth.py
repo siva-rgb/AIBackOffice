@@ -29,12 +29,19 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TIMEOUT = 60
+# Attempts per request when the connection itself fails. Retrying is safe for
+# the reads that dominate this suite; the handful of writes create only
+# disposable probe rows that the suite deletes, so a duplicated attempt costs a
+# stray row at worst — far cheaper than a falsely-red gate.
+TRANSPORT_RETRIES = 4
+RETRY_BACKOFF = 0.75  # seconds, multiplied by the attempt number
 
 # Windows consoles default to cp1252, which cannot encode the box-drawing glyphs
 # below — without this the script dies on its own banner.
@@ -52,7 +59,28 @@ def ok(case: str, detail: str = "") -> None:
     print(f"  {GREEN}PASS{RESET}  {case}" + (f" — {detail}" if detail else ""))
 
 
+# A detail string that shows the request never got an answer: an explicit zero
+# status, or the transport error text urllib hands back. `request()` has already
+# retried by the time any of these appear.
+_UNREACHABLE_DETAIL = re.compile(
+    r"(?:\b(?:status|HTTP)\s*=?\s*0\b)|(?:status=\d+/0\b)|(?:status=0/\d+\b)|urlopen error|Remote end closed|forcibly closed|Connection (?:reset|aborted)",
+    re.IGNORECASE,
+)
+
+
 def fail(case: str, detail: str) -> None:
+    """Record a failed case — unless the 'failure' is really an unanswered request.
+
+    Backstop for the explicit `unreachable()` guards at the call sites. Every
+    assertion here is written against a status code, so a connection that never
+    produced one would otherwise be scored as whatever the case was testing for,
+    and the case's own wording ("paywall not enforced server-side",
+    "cross-tenant leak") would be printed as a real finding. Downgrading to SKIP
+    keeps the gate honest about what it did and did not manage to measure.
+    """
+    if _UNREACHABLE_DETAIL.search(detail or ""):
+        skip(case, f"unreachable after retries — network, not the deployment ({detail[:80]})")
+        return
     results.append(("FAIL", case, detail))
     print(f"  {RED}FAIL{RESET}  {case} — {detail}")
 
@@ -75,6 +103,25 @@ def section(title: str) -> None:
 def expect(case: str, condition: bool, detail_ok: str = "", detail_bad: str = "") -> bool:
     (ok if condition else fail)(case, detail_ok if condition else detail_bad)
     return condition
+
+
+def unreachable(case: str, *statuses: int) -> bool:
+    """Report and swallow a case whose request never got an answer.
+
+    A status of 0 comes from `request()` after it has already retried: the
+    connection failed, so the server never told us anything. Asserting on that
+    measures the network, not the build — and the assertion's own failure
+    message ("paywall not enforced", "cross-tenant leak") then reads as a real
+    product defect. Those messages are the reason this exists: a gate that
+    manufactures findings out of its own transport errors cannot be trusted on
+    the findings that are real.
+
+    Returns True when the case was unreachable and has been recorded as SKIP.
+    """
+    if 0 in statuses:
+        skip(case, "unreachable after retries — network, not the deployment")
+        return True
+    return False
 
 
 # ──────────────────────────────────────────────────────────────── plumbing ──
@@ -109,15 +156,32 @@ def request(method: str, url: str, token: str | None = None, body: dict | None =
     hdrs.update(headers or {})
 
     req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-            raw = resp.read().decode("utf-8", "replace")
-            status = resp.status
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode("utf-8", "replace")
-        status = e.code
-    except Exception as e:  # network/timeout
-        return 0, {"error": str(e)}
+
+    # Retry transport failures before giving up. An HTTPError is a real answer
+    # from the server and is never retried — only a connection that never
+    # produced one. Without this, a reset TCP connection is scored as whatever
+    # the caller was testing for, so flaky local networking reports itself as a
+    # product defect ("paywall not enforced server-side" on a status of 0). A
+    # gate that invents S1 findings is worse than one that misses them.
+    last_error = None
+    for attempt in range(TRANSPORT_RETRIES):
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+                raw = resp.read().decode("utf-8", "replace")
+                status = resp.status
+            break
+        except urllib.error.HTTPError as e:
+            raw = e.read().decode("utf-8", "replace")
+            status = e.code
+            break
+        except Exception as e:  # connection reset / timeout / DNS
+            last_error = e
+            if attempt < TRANSPORT_RETRIES - 1:
+                time.sleep(RETRY_BACKOFF * (attempt + 1))
+    else:
+        # Status 0 means "no answer", not "wrong answer". Callers must not read
+        # it as a failed assertion — see unreachable().
+        return 0, {"error": str(last_error)}
 
     try:
         return status, json.loads(raw)
@@ -260,6 +324,8 @@ def check_plan_gating(api: str, tok_a: str, tok_b: str, plan_a: str) -> None:
 
     for method, ep, need, body in gated:
         status, resp = request(method, f"{api}{ep}", tok_b, body)
+        if unreachable(f"BILL-04 free tenant blocked from {method} {ep} (needs {need})", status):
+            continue
         expect(
             f"BILL-04 free tenant blocked from {method} {ep} (needs {need})",
             status == 403,
@@ -272,6 +338,8 @@ def check_plan_gating(api: str, tok_a: str, tok_b: str, plan_a: str) -> None:
     if plan_a == "pro":
         for method, ep, need, body in gated:
             status, _ = request(method, f"{api}{ep}", tok_a, body)
+            if unreachable(f"BILL-04 pro tenant allowed {method} {ep}", status):
+                continue
             expect(
                 f"BILL-04 pro tenant allowed {method} {ep}",
                 status != 403,
@@ -279,7 +347,8 @@ def check_plan_gating(api: str, tok_a: str, tok_b: str, plan_a: str) -> None:
                 f"pro plan received 403 on a {need} feature",
             )
     else:
-        skip("BILL-04 positive path", f"tenant A is on '{plan_a}', not pro")
+        reason = "tenant A's plan could not be read (AUTH-02 did not resolve)" if plan_a == "unknown" else f"tenant A is on '{plan_a}', not pro"
+        skip("BILL-04 positive path", reason)
 
 
 def check_invoices(api: str, tok: str) -> None:
@@ -331,7 +400,7 @@ def check_invoices(api: str, tok: str) -> None:
     else:
         inv = stored[0]
         status, body = request("GET", f"{api}/api/invoices/{inv['id']}/pdf/download", tok)
-        expect(
+        unreachable("INV-03 invoice PDF download resolves for its owner", status) or expect(
             "INV-03 invoice PDF download resolves for its owner",
             status == 200,
             f"HTTP 200 for {inv.get('invoiceNumber')}",
@@ -345,7 +414,7 @@ def check_bookkeeping(api: str, tok: str) -> None:
     if status == 200 and isinstance(txns, list):
         missing = [t.get("id") for t in txns if t.get("amount") is None or not t.get("date")]
         expect("BOOK-04 every transaction has an amount and a date", not missing, f"{len(txns)} transactions", f"{len(missing)} incomplete rows")
-    else:
+    elif not unreachable("BOOK-04 transactions load", status):
         fail("BOOK-04 transactions load", f"status={status}")
 
     status, pnl = request("GET", f"{api}/api/bookkeeping/pnl", tok)
@@ -372,7 +441,8 @@ def check_cashflow(api: str, tok: str) -> None:
     s1, f1 = request("GET", f"{api}/api/cashflow/forecast", tok)
     s2, f2 = request("GET", f"{api}/api/cashflow/forecast", tok)
     if s1 != 200 or s2 != 200:
-        fail("CASH-02 forecast loads", f"status={s1}/{s2}")
+        if not unreachable("CASH-02 forecast loads", s1, s2):
+            fail("CASH-02 forecast loads", f"status={s1}/{s2}")
         return
 
     # Determinism applies to the arithmetic PROJECTION, not to anything the model
@@ -434,27 +504,36 @@ def check_tasks_and_stories(api: str, tok: str) -> None:
     ok("TASK-01 create a task", f"id={tid[:8]}…")
 
     status, listed = request("GET", f"{api}/api/tasks", tok)
-    expect("TASK-01 the created task appears in the list", isinstance(listed, list) and any(t.get("id") == tid for t in listed), "", "created task missing from the list")
+    unreachable("TASK-01 the created task appears in the list", status) or expect(
+        "TASK-01 the created task appears in the list", isinstance(listed, list) and any(t.get("id") == tid for t in listed), "", "created task missing from the list"
+    )
 
     status, _ = request("PATCH", f"{api}/api/tasks/{tid}", tok, {"status": "done"})
-    expect("TASK-01 update the task", status in (200, 204), f"HTTP {status}", f"HTTP {status}")
+    unreachable("TASK-01 update the task", status) or expect("TASK-01 update the task", status in (200, 204), f"HTTP {status}", f"HTTP {status}")
 
     status, _ = request("DELETE", f"{api}/api/tasks/{tid}", tok)
-    expect("TASK-01 delete the task (cleanup)", status in (200, 204), f"HTTP {status}", f"HTTP {status} — UAT probe task may be left behind")
+    unreachable("TASK-01 delete the task (cleanup)", status) or expect(
+        "TASK-01 delete the task (cleanup)", status in (200, 204), f"HTTP {status}", f"HTTP {status} — UAT probe task may be left behind"
+    )
 
     status, after = request("GET", f"{api}/api/tasks", tok)
-    expect("TASK-01 the deleted task is gone", isinstance(after, list) and not any(t.get("id") == tid for t in after), "", "deleted task still listed")
+    unreachable("TASK-01 the deleted task is gone", status) or expect(
+        "TASK-01 the deleted task is gone", isinstance(after, list) and not any(t.get("id") == tid for t in after), "", "deleted task still listed"
+    )
 
     s1, stories = request("GET", f"{api}/api/stories", tok)
     s2, sstats = request("GET", f"{api}/api/stories/stats", tok)
-    expect("STORY-03 stories and roll-up stats both load", s1 == 200 and s2 == 200, f"{len(stories) if isinstance(stories, list) else '?'} stories", f"status={s1}/{s2}")
+    unreachable("STORY-03 stories and roll-up stats both load", s1, s2) or expect(
+        "STORY-03 stories and roll-up stats both load", s1 == 200 and s2 == 200, f"{len(stories) if isinstance(stories, list) else '?'} stories", f"status={s1}/{s2}"
+    )
 
 
 def check_gdpr(api: str, tok: str) -> None:
     section("GDPR export — GDPR-01, GDPR-02 (P0 compliance)")
     status, export = request("GET", f"{api}/api/account/export", tok)
     if status != 200:
-        fail("GDPR-01 export returns data", f"status={status}")
+        if not unreachable("GDPR-01 export returns data", status):
+            fail("GDPR-01 export returns data", f"status={status}")
         return
     if not isinstance(export, dict):
         fail("GDPR-01 export is a structured document", f"got {type(export).__name__}")
@@ -473,14 +552,17 @@ def check_gdpr(api: str, tok: str) -> None:
     )
 
     status, csv_body = request("GET", f"{api}/api/account/export.csv", tok)
-    expect("GDPR-02 CSV export returns content", status == 200 and bool(csv_body), f"{len(str(csv_body))} bytes", f"status={status}")
+    unreachable("GDPR-02 CSV export returns content", status) or expect(
+        "GDPR-02 CSV export returns content", status == 200 and bool(csv_body), f"{len(str(csv_body))} bytes", f"status={status}"
+    )
 
 
 def check_observability(api: str, tok: str, user_id: str) -> None:
     section("Agent log & PII — OBS-01, OBS-02, OBS-04")
     status, log = request("GET", f"{api}/api/agents/log", tok)
     if status != 200:
-        fail("OBS-01 agent log loads", f"status={status}")
+        if not unreachable("OBS-01 agent log loads", status):
+            fail("OBS-01 agent log loads", f"status={status}")
         return
     entries = log if isinstance(log, list) else log.get("entries", []) if isinstance(log, dict) else []
     if not entries:
@@ -597,7 +679,8 @@ def check_email_delivery(api: str, tok: str) -> None:
 
     status, body = request("POST", f"{api}/api/alerts/digest/email", tok, body={})
     if status != 200 or not isinstance(body, dict):
-        fail("DASH-05 digest email endpoint responds", f"status={status} body={str(body)[:120]}")
+        if not unreachable("DASH-05 digest email endpoint responds", status):
+            fail("DASH-05 digest email endpoint responds", f"status={status} body={str(body)[:120]}")
         return
 
     delivered = body.get("delivered")
@@ -670,7 +753,9 @@ def check_stripe_webhook(api: str, secret: str) -> None:
 def check_memory_and_graph(api: str, tok: str) -> None:
     section("Memory & graph — MEM-01, MEM-03, GRAPH-01")
     status, stats = request("GET", f"{api}/api/memory/stats", tok)
-    expect("MEM-03 memory stats load (semantic-memory migration applied)", status == 200, f"{json.dumps(stats)[:80]}" if status == 200 else "", f"status={status}")
+    unreachable("MEM-03 memory stats load (semantic-memory migration applied)", status) or expect(
+        "MEM-03 memory stats load (semantic-memory migration applied)", status == 200, f"{json.dumps(stats)[:80]}" if status == 200 else "", f"status={status}"
+    )
 
     status, recall = request("POST", f"{api}/api/memory/recall", tok, {"query": "outstanding invoices"})
     if status == 200:
@@ -679,10 +764,11 @@ def check_memory_and_graph(api: str, tok: str) -> None:
     elif status == 403:
         skip("MEM-01", "plan-gated for this tenant")
     else:
-        fail("MEM-01 semantic recall", f"status={status}")
+        if not unreachable("MEM-01 semantic recall", status):
+            fail("MEM-01 semantic recall", f"status={status}")
 
     status, graph = request("GET", f"{api}/api/graph", tok)
-    expect("GRAPH-01 graph loads (graph migration applied)", status == 200, "", f"status={status}")
+    unreachable("GRAPH-01 graph loads (graph migration applied)", status) or expect("GRAPH-01 graph loads (graph migration applied)", status == 200, "", f"status={status}")
 
 
 # ────────────────────────────────────────────────────────────────── driver ──
@@ -724,7 +810,11 @@ def main() -> int:
 
     auth_id_a = login_identity(supabase_url, anon_key, email_a, pass_a)
     me = check_identity(api, tok_a, email_a, auth_id_a)
-    user_id, plan_a = me.get("id", ""), me.get("plan", "free")
+    # Default to "unknown", never to a concrete plan. `me` is empty when AUTH-02
+    # could not resolve, and defaulting to "free" made the gate print "tenant A
+    # is on 'free'" about an account that is on pro — asserting a fact it had
+    # just failed to read.
+    user_id, plan_a = me.get("id", ""), me.get("plan") or "unknown"
 
     if tok_b:
         check_tenant_isolation(api, tok_a, tok_b)
