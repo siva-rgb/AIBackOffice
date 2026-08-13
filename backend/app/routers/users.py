@@ -52,6 +52,13 @@ async def update_me(patch: ProfileUpdate, user: User = Depends(get_current_user)
             seed_from_onboarding(user.id, profile_dict)
         except Exception:
             pass
+        # Optionally populate the empty tenant with the sample business so the
+        # agents have something to reason about on first login. No-op unless
+        # SEED_SAMPLE_DATA_ON_SIGNUP is set, and never raises — a failed sample
+        # must not block the user from finishing onboarding.
+        from ..services.sample_data import seed_sample_workspace
+
+        seed_sample_workspace(user.id)
         # M9.3 — first-time onboarding completion captures consent. Idempotent:
         # we never downgrade an existing consent_version.
         if not updated.consent_version:

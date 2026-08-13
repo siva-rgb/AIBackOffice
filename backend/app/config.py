@@ -84,6 +84,26 @@ class Settings(BaseSettings):
     DEMO_EMAIL: str = "demo@kora.app"
     ALLOW_DEMO_USER: bool = True
 
+    # Tenants whose data is SHARED between many people (the published demo
+    # account every evaluator signs into with the same credentials). Erasure is
+    # refused for these, because it is not one user deleting their own data —
+    # it destroys the account for everyone who signs in after them, revokes the
+    # owner's Google grant, and deletes the auth identity behind the published
+    # login. Comma-separated user ids; empty disables the guard entirely, so
+    # ordinary self-service deletion is untouched for every real tenant.
+    #
+    # Matched on ID, never on email: D-014 repointed the demo tenant's
+    # `users.email` at the operator's real inbox, so an email match would
+    # silently stop protecting the very account it was written for.
+    PROTECTED_TENANT_IDS: str = ""
+
+    # Populate a brand-new tenant with the sample business when onboarding
+    # completes (see services/sample_data.py). OFF by default on purpose:
+    # writing invented clients and invoices into a real person's books must be
+    # an operator's explicit choice. Enabled for the public evaluation
+    # deployment, where an empty tenant would show an evaluator nothing.
+    SEED_SAMPLE_DATA_ON_SIGNUP: bool = False
+
     # Google Cloud / Vertex AI
     GOOGLE_CLOUD_PROJECT_ID: str = ""
     GOOGLE_CLOUD_LOCATION: str = "us-central1"

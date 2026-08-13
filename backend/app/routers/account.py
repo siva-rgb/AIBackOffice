@@ -6,10 +6,11 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..backends.user_data import CURRENT_CONSENT_VERSION
+from ..config import settings
 from ..dependencies import get_current_user
 from ..models import User
 from .. import store
@@ -179,6 +180,22 @@ async def _delete_payload(user: User) -> dict:
     }
 
 
+def _is_protected_tenant(user_id: str) -> bool:
+    """True when this tenant is a SHARED account that must not be erased.
+
+    Right-to-erasure assumes the caller owns the data they are destroying. That
+    assumption breaks for the published demo account: everyone signs in with the
+    same credentials, so one caller's "delete my account" silently destroys the
+    seeded data, revokes the owner's Google grant, and deletes the auth identity
+    behind the printed login — for every later visitor, irreversibly.
+
+    Configured via PROTECTED_TENANT_IDS and empty by default, so a real tenant's
+    own deletion is never affected.
+    """
+    raw = settings.PROTECTED_TENANT_IDS or ""
+    return bool(user_id) and user_id in {part.strip() for part in raw.split(",") if part.strip()}
+
+
 @router.delete("/delete")
 async def delete_account(user: User = Depends(get_current_user)):
     """Permanently delete the account and all associated data (GDPR right to erasure).
@@ -187,7 +204,23 @@ async def delete_account(user: User = Depends(get_current_user)):
     rows → delete auth identity → append a no-PII audit row. The response's
     `deleted` flag is honest: false (with `errors`) if identity/data removal
     failed; best-effort step failures appear in `warnings`.
+
+    Shared demo tenants are refused outright (409) rather than being given a
+    fake success. Reporting `deleted: true` without deleting would be exactly
+    the dishonest response `_delete_payload` was written to avoid.
     """
+    if _is_protected_tenant(user.id):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This is a shared demo account, so erasure is disabled — the data here "
+                "belongs to everyone evaluating Kora, not to one signed-in visitor, and "
+                "deleting it would remove the account for every later visitor. Nothing "
+                "was deleted. Data export (GET /api/account/export) works normally, and "
+                "creating your own account gives you a private tenant where deletion is "
+                "fully enabled."
+            ),
+        )
     return await _delete_payload(user)
 
 
