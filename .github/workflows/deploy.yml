@@ -92,6 +92,13 @@ jobs:
           REGION: ${{ env.REGION }}
           SHA: ${{ github.sha }}
           FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          # Runtime behaviour that must survive every deploy. `gcloud run deploy
+          # --set-env-vars` REPLACES the whole env set, so anything omitted here
+          # is silently dropped from the service — and both of these fail quietly:
+          # the demo tenant becomes deletable by any visitor again, and new
+          # tenants stop being seeded. Set them per GitHub Environment.
+          PROTECTED_TENANT_IDS: ${{ vars.PROTECTED_TENANT_IDS }}
+          SEED_SAMPLE_DATA_ON_SIGNUP: ${{ vars.SEED_SAMPLE_DATA_ON_SIGNUP }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID: ${{ secrets.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID }}
@@ -124,6 +131,13 @@ jobs:
           SHA: ${{ github.sha }}
           CANARY_PERCENT: ${{ env.CANARY_PERCENT }}
           FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          # Runtime behaviour that must survive every deploy. `gcloud run deploy
+          # --set-env-vars` REPLACES the whole env set, so anything omitted here
+          # is silently dropped from the service — and both of these fail quietly:
+          # the demo tenant becomes deletable by any visitor again, and new
+          # tenants stop being seeded. Set them per GitHub Environment.
+          PROTECTED_TENANT_IDS: ${{ vars.PROTECTED_TENANT_IDS }}
+          SEED_SAMPLE_DATA_ON_SIGNUP: ${{ vars.SEED_SAMPLE_DATA_ON_SIGNUP }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID: ${{ secrets.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID }}
@@ -155,6 +169,13 @@ jobs:
           SHA: ${{ github.sha }}
           CANARY_PERCENT: ${{ env.CANARY_PERCENT }}
           FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          # Runtime behaviour that must survive every deploy. `gcloud run deploy
+          # --set-env-vars` REPLACES the whole env set, so anything omitted here
+          # is silently dropped from the service — and both of these fail quietly:
+          # the demo tenant becomes deletable by any visitor again, and new
+          # tenants stop being seeded. Set them per GitHub Environment.
+          PROTECTED_TENANT_IDS: ${{ vars.PROTECTED_TENANT_IDS }}
+          SEED_SAMPLE_DATA_ON_SIGNUP: ${{ vars.SEED_SAMPLE_DATA_ON_SIGNUP }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID: ${{ secrets.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID }}
