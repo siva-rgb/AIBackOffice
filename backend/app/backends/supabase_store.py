@@ -859,7 +859,7 @@ def upsert_agent_memory(user_id: str, row: dict) -> dict:
                 patch["salience"] = float(row["salience"])
             if row.get("source") is not None:
                 patch["source"] = row["source"]
-            r = repo(user_id).raw_table("agent_memory").update(patch).eq("id", ex["id"]).eq("user_id", user_id).execute()
+            r = _write_agent_memory(user_id, patch, existing_id=ex["id"])
             return r.data[0] if r.data else {**ex, **patch}
 
     new_row = {
@@ -881,7 +881,7 @@ def upsert_agent_memory(user_id: str, row: dict) -> dict:
         "created_at": now,
         "updated_at": now,
     }
-    insert_r = repo(user_id).insert("agent_memory", new_row).execute()
+    insert_r = _write_agent_memory(user_id, new_row, existing_id=None)
     return insert_r.data[0] if insert_r.data else new_row
 
 
@@ -893,6 +893,51 @@ def _vector_literal(vec) -> str:
     is one-way and not part of the runtime app surface).
     """
     return "[" + ",".join(repr(float(x)) for x in vec) + "]"
+
+
+# Whether agent_memory.embedding_vec exists. None = not yet probed.
+_HAS_EMBEDDING_VEC: bool | None = None
+
+
+def _missing_vector_column(exc: BaseException) -> bool:
+    """PostgREST reports an unknown column as PGRST204 with the name in it."""
+    text = str(getattr(exc, "args", None) or exc)
+    return "embedding_vec" in text and ("PGRST204" in text or "schema cache" in text)
+
+
+def _write_agent_memory(user_id: str, payload: dict, existing_id: str | None):
+    """Insert or update an agent_memory row, tolerating a missing pgvector column.
+
+    `AGENT_MEMORY_VECTOR_BACKEND` defaults to "jsonb" so the M10 migration
+    (2026-07-29_pgvector_agent_memory.sql) is optional — but this payload always
+    carried `embedding_vec`, and PostgREST rejects the *entire* write when a
+    column is unknown. On a database without that migration every remember()
+    failed with PGRST204, and `remember()` swallows exceptions, so semantic
+    memory silently stayed empty while the reindex happily reported the rows it
+    had "processed". Found on staging with 0 rows after a clean reindex.
+    """
+    global _HAS_EMBEDDING_VEC
+
+    def _send(body: dict):
+        if existing_id:
+            return repo(user_id).raw_table("agent_memory").update(body).eq("id", existing_id).eq("user_id", user_id).execute()
+        return repo(user_id).insert("agent_memory", body).execute()
+
+    if _HAS_EMBEDDING_VEC is False:
+        return _send({k: v for k, v in payload.items() if k != "embedding_vec"})
+    try:
+        result = _send(payload)
+        _HAS_EMBEDDING_VEC = True
+        return result
+    except Exception as exc:
+        if not _missing_vector_column(exc):
+            raise
+        _HAS_EMBEDDING_VEC = False
+        print(
+            "[memory] agent_memory.embedding_vec is missing — storing JSONB embeddings only. "
+            "Apply migrations/2026-07-29_pgvector_agent_memory.sql to enable ANN recall."
+        )
+        return _send({k: v for k, v in payload.items() if k != "embedding_vec"})
 
 
 def get_agent_memory(

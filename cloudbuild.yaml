@@ -69,6 +69,7 @@ steps:
           --region="${_REGION}" \
           --platform=managed \
           --allow-unauthenticated \
+          --no-cpu-throttling \
           --set-env-vars="ENVIRONMENT=${_ENVIRONMENT},ALLOW_DEMO_USER=false,KORA_DATA_BACKEND=supabase,FRONTEND_ORIGIN=${_FRONTEND_ORIGIN},KORA_AI_BACKEND=vertex,MODEL_NAME=${_MODEL_NAME},GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=${_REGION}" \
           "$$SECRET_FLAG"
 
