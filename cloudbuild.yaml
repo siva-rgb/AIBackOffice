@@ -109,9 +109,18 @@ steps:
       - "-c"
       - |
         BACKEND_URL="$$(cat /workspace/backend_url.txt)"
+        # _FRONTEND_ORIGIN is a comma-separated CORS allow-list (one deployment
+        # answers on both its legacy *.a.run.app and its newer *.run.app name).
+        # NEXT_PUBLIC_APP_URL is a single URL the app builds links from, so take
+        # the first entry — the canonical public address — not the whole list.
+        # Two steps on purpose: ${_FRONTEND_ORIGIN} is a Cloud Build
+        # substitution, not a shell variable, so it cannot be expanded with
+        # bash's %% operator directly. Land it in a shell variable first.
+        ORIGINS="${_FRONTEND_ORIGIN}"
+        APP_URL="$${ORIGINS%%,*}"
         docker build \
           --build-arg NEXT_PUBLIC_API_URL="$$BACKEND_URL" \
-          --build-arg NEXT_PUBLIC_APP_URL="${_FRONTEND_ORIGIN}" \
+          --build-arg NEXT_PUBLIC_APP_URL="$$APP_URL" \
           --build-arg NEXT_PUBLIC_SUPABASE_URL="${_NEXT_PUBLIC_SUPABASE_URL}" \
           --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${_NEXT_PUBLIC_SUPABASE_ANON_KEY}" \
           --build-arg NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID="${_NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID}" \

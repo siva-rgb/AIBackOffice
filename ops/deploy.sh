@@ -107,10 +107,17 @@ backend_url() {
 
 build_push_frontend() {
   local api_url="$1"
-  log "build frontend → ${FRONTEND_IMG} (NEXT_PUBLIC_API_URL=${api_url})"
+  # FRONTEND_ORIGIN is a comma-separated CORS allow-list: one deployment answers
+  # on both its legacy *.a.run.app name and its newer *.run.app name, and the
+  # browser sends whichever the user typed. NEXT_PUBLIC_APP_URL is a single URL
+  # the app builds links from, so it takes the FIRST entry — the canonical
+  # public address — rather than the whole list, which would bake
+  # "https://a,https://b" into every generated link.
+  local app_url="${FRONTEND_ORIGIN%%,*}"
+  log "build frontend → ${FRONTEND_IMG} (NEXT_PUBLIC_API_URL=${api_url}, NEXT_PUBLIC_APP_URL=${app_url})"
   docker build \
     --build-arg NEXT_PUBLIC_API_URL="${api_url}" \
-    --build-arg NEXT_PUBLIC_APP_URL="${FRONTEND_ORIGIN:-}" \
+    --build-arg NEXT_PUBLIC_APP_URL="${app_url}" \
     --build-arg NEXT_PUBLIC_SUPABASE_URL="${NEXT_PUBLIC_SUPABASE_URL:-}" \
     --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}" \
     --build-arg NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID="${NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID:-}" \
