@@ -84,16 +84,25 @@ deploy_backend() {
     "$@"
 }
 
-# Prints the URL the frontend should call. For canary that is the tagged
-# revision URL so canary frontend traffic hits canary backend traffic.
+# Prints the URL the frontend should call: always the STABLE service URL.
+#
+# This used to return the canary-tagged revision URL during a canary deploy, so
+# that canary frontend traffic would hit canary backend traffic. That reasoning
+# is right about intent and wrong about lifetime. NEXT_PUBLIC_API_URL is inlined
+# into the frontend bundle at BUILD time, and the canary image is the very image
+# `prod-promote` later routes 100% of traffic to — so promoting shipped a
+# production frontend permanently hard-wired to a tagged revision URL. Every CI
+# run then re-pointed the live site at whatever the tag meant that day, which is
+# what kept having to be untangled by hand after each deploy.
+#
+# Pointing at the stable URL loses nothing: the backend service itself is split
+# `canary=${CANARY_PERCENT}`, so that share of requests to the stable URL are
+# already served by the canary revision. Canary backend code still gets real
+# traffic — through the split that exists for exactly this, rather than through
+# a hostname frozen into a bundle.
 backend_url() {
-  if [ "${1:-}" = "canary" ]; then
-    gcloud run services describe "${BACKEND_SVC}" --region="${REGION}" --format=json \
-      | jq -r '.status.traffic[] | select(.tag=="canary") | .url' | head -n1
-  else
-    gcloud run services describe "${BACKEND_SVC}" --region="${REGION}" \
-      --format='value(status.url)'
-  fi
+  gcloud run services describe "${BACKEND_SVC}" --region="${REGION}" \
+    --format='value(status.url)'
 }
 
 build_push_frontend() {
@@ -141,7 +150,9 @@ case "$MODE" in
     # New revision, zero live traffic, reachable only at its canary tag URL.
     build_push_backend
     deploy_backend --no-traffic --tag=canary
-    api="$(backend_url canary)"
+    # Stable URL, not the canary tag — see backend_url(). The canary revision
+    # still gets its share via the backend traffic split below.
+    api="$(backend_url)"
     build_push_frontend "${api}"
     deploy_frontend --no-traffic --tag=canary
     # Send a slice of real traffic to the canary; remainder stays on stable.
