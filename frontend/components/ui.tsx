@@ -97,3 +97,72 @@ export function Badge({ value, label }: { value: string; label?: string }) {
     </span>
   );
 }
+
+/* ── Loading placeholders ───────────────────────────────────────────────────
+ *
+ * Every dashboard route is an async server component with `force-dynamic`, so
+ * navigation waits on a server round trip. Without a `loading.tsx` Next keeps
+ * the PREVIOUS page on screen for that whole time and renders nothing new —
+ * the click appears to do nothing at all, which is what users reported.
+ *
+ * These mirror the real Card/StatCard geometry so the layout does not jump when
+ * the content arrives. `aria-hidden` keeps the decorative bars out of the
+ * accessibility tree; the surrounding region announces the loading state once.
+ */
+
+export function Skeleton({ className }: { className?: string }) {
+  return <div aria-hidden className={cn('animate-pulse rounded bg-gray-200', className)} />;
+}
+
+/** Screen-reader announcement + visual bars. One per loading route. */
+export function LoadingRegion({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div role="status" aria-busy="true" aria-live="polite">
+      <span className="sr-only">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+export function SkeletonStatCards({ count = 4 }: { count?: number }) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="mt-3 h-7 w-32" />
+          <Skeleton className="mt-3 h-3 w-16" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A card with a header and `rows` list items — the shape most pages use. */
+export function SkeletonCard({ rows = 3, className }: { rows?: number; className?: string }) {
+  return (
+    <div className={cn('rounded-xl border border-gray-200 bg-white shadow-sm', className)}>
+      <div className="border-b border-gray-100 px-5 py-4">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="mt-2 h-3 w-56" />
+      </div>
+      <div className="divide-y divide-gray-100">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="px-5 py-4">
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="mt-2 h-3 w-1/3" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function SkeletonPageHeading() {
+  return (
+    <div className="mb-6">
+      <Skeleton className="h-7 w-64" />
+      <Skeleton className="mt-2 h-4 w-80" />
+    </div>
+  );
+}

@@ -18,6 +18,7 @@ import {
   LogOut,
   Menu,
   X,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getSupabaseBrowser } from '@/lib/supabase/client';
@@ -41,12 +42,17 @@ function SidebarContent({
   initials,
   onClose,
   onSignOut,
+  pending,
+  onNavigate,
 }: {
   pathname: string;
   profile: { name: string; email: string } | null;
   initials: string;
   onClose?: () => void;
   onSignOut: () => void;
+  /** href of the item just clicked, while its page is still rendering */
+  pending: string | null;
+  onNavigate: (href: string) => void;
 }) {
   return (
     <>
@@ -74,18 +80,26 @@ function SidebarContent({
       <nav className="flex-1 overflow-y-auto space-y-1 px-3 py-2">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/');
+          // These routes render on the server, so a click is followed by a
+          // round trip. Marking the item you clicked answers "did that
+          // register?" immediately, and it names the destination — which the
+          // content-area skeleton cannot do.
+          const navigating = pending === href && !active;
           return (
             <Link
               key={href}
               href={href}
+              onClick={() => onNavigate(href)}
+              aria-busy={navigating}
               className={cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 active
                   ? 'bg-kora-50 text-kora-700'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+                navigating && 'bg-gray-50 text-gray-900',
               )}
             >
-              <Icon size={18} />
+              {navigating ? <Loader2 size={18} className="animate-spin text-kora-600" /> : <Icon size={18} />}
               {label}
             </Link>
           );
@@ -120,9 +134,12 @@ export function Sidebar() {
   const supabase = getSupabaseBrowser();
   const [profile, setProfile] = useState<{ name: string; email: string } | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Which nav item was just clicked, so it can show a spinner while the server
+  // renders the destination. Cleared once the pathname actually changes.
+  const [pending, setPending] = useState<string | null>(null);
 
   // Close drawer on navigation
-  useEffect(() => { setMobileOpen(false); }, [pathname]);
+  useEffect(() => { setMobileOpen(false); setPending(null); }, [pathname]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -147,7 +164,7 @@ export function Sidebar() {
     .join('')
     .toUpperCase();
 
-  const sharedProps = { pathname, profile, initials, onSignOut: signOut };
+  const sharedProps = { pathname, profile, initials, onSignOut: signOut, pending, onNavigate: setPending };
 
   return (
     <>
