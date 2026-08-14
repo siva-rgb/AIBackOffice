@@ -59,6 +59,12 @@ async def update_me(patch: ProfileUpdate, user: User = Depends(get_current_user)
         from ..services.sample_data import seed_sample_workspace
 
         seed_sample_workspace(user.id)
+        # Optionally grant the evaluation tier. No-op unless SIGNUP_PLAN is set,
+        # never downgrades, and never overwrites a plan the user already has.
+        from ..entitlements import grant_signup_plan
+
+        if grant_signup_plan(user.id, updated.plan):
+            updated = store.get_user(user.id) or updated
         # M9.3 — first-time onboarding completion captures consent. Idempotent:
         # we never downgrade an existing consent_version.
         if not updated.consent_version:

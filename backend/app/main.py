@@ -29,6 +29,7 @@ from .routers import (
     meetings,
     memory,
     notion,
+    plans,
     playbook,
     proposals,
     public,
@@ -182,6 +183,7 @@ app.include_router(proposals.router)
 app.include_router(retainers.router)
 app.include_router(storage.router)
 app.include_router(public.router)
+app.include_router(plans.router)
 # Google Butler (email_skill/)
 app.include_router(stripe_billing.router)
 app.include_router(stripe_connect.router)

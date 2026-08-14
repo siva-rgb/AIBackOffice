@@ -49,6 +49,130 @@ POLICY: dict[tuple[str, str], str] = {
 }
 
 
+# ── What the pricing page is allowed to claim ───────────────────────────────
+# The published plan comparison used to be hand-written in the frontend, and it
+# disagreed with this file in both directions: it sold "Morning briefing",
+# "Invoice follow-up agent" and a "20 transactions/month" cap that nothing
+# enforces, while listing the cash-flow forecast as Pro when POLICY unlocks it
+# at Starter. A pricing page a user can disprove in a minute is worse than no
+# pricing page.
+#
+# So the paid bullets are DERIVED from POLICY. Every key here must exist in
+# POLICY and vice versa — `test_plan_catalogue.py` fails otherwise, which means
+# gating a new route without describing it (or describing one that isn't gated)
+# breaks the build rather than shipping a false claim.
+#
+# Several routes deliberately share a label: the four contract routes are one
+# capability to a buyer, not four. Duplicate labels collapse when the payload is
+# built, preserving first-seen order.
+FEATURE_LABELS: dict[tuple[str, str], str] = {
+    ("POST", "/api/contracts/generate"): "Contract drafting & AI risk review",
+    ("POST", "/api/contracts/review"): "Contract drafting & AI risk review",
+    ("POST", "/api/contracts/review/upload"): "Contract drafting & AI risk review",
+    ("POST", "/api/contracts/{contract_id}/review"): "Contract drafting & AI risk review",
+    ("GET", "/api/cashflow/forecast"): "Cash-flow forecast with AI insight",
+    ("POST", "/api/memory/recall"): "Semantic search across your whole business",
+    ("POST", "/api/graph/sync"): "Client relationship graph",
+}
+
+# What every account gets without paying. This cannot be derived: gating is
+# allow-by-default, so "free" is everything absent from POLICY — an open-ended
+# set no table can enumerate. These strings are therefore a curated summary, and
+# each one is a claim about an UNGATED route. Adding any of these capabilities to
+# POLICY later without moving its bullet would make this list false, which is the
+# mistake being corrected here.
+FREE_FEATURES: tuple[str, ...] = (
+    "Unlimited transactions & bookkeeping",
+    "Invoicing, clients and contract storage",
+    "Butler morning briefing & quick capture",
+    "Invoice follow-up agent",
+    "Gmail, Drive, Calendar and Notion connections",
+)
+
+# Prices are shown to buyers, so they live in exactly one place rather than being
+# retyped in the UI. Verified against the Stripe API on 2026-08-14: starter
+# $29.00/month, pro $49.00/month, both active recurring prices. Changing a price
+# in Stripe means changing it here too — nothing enforces the pair at runtime,
+# because the amount actually charged comes from the Stripe price id, not this
+# string.
+_TIERS: tuple[tuple[str, str, str, str, str], ...] = (
+    # id, display name, price, period, one-line positioning
+    (FREE, "Free", "$0", "forever", "Run your books and get paid."),
+    (STARTER, "Starter", "$29", "/month", "Add the agents that watch your numbers."),
+    (PRO, "Pro", "$49", "/month", "Everything, including legal drafting."),
+)
+
+
+def plan_features(plan: str) -> list[str]:
+    """Bullets unlocked AT this tier, in POLICY order, de-duplicated by label."""
+    out: list[str] = []
+    for route, need in POLICY.items():
+        if need != plan:
+            continue
+        label = FEATURE_LABELS.get(route)
+        if label and label not in out:
+            out.append(label)
+    return out
+
+
+def plans_payload(price_ids: dict[str, str] | None = None) -> list[dict]:
+    """The published plan comparison, built from the enforcement table.
+
+    Each paid tier lists what IT adds, plus an explicit "Everything in <lower>"
+    line — the same shape the hand-written page used, so the visual design is
+    unchanged while the content becomes accountable to POLICY.
+    """
+    price_ids = price_ids or {}
+    plans: list[dict] = []
+    previous: str | None = None
+    for plan_id, name, price, period, tagline in _TIERS:
+        features = list(FREE_FEATURES) if plan_id == FREE else []
+        if previous:
+            features.append(f"Everything in {previous}")
+        features.extend(plan_features(plan_id))
+        plans.append(
+            {
+                "id": plan_id,
+                "name": name,
+                "price": price,
+                "period": period,
+                "tagline": tagline,
+                "features": features,
+                "priceId": price_ids.get(plan_id) or None,
+                "popular": plan_id == STARTER,
+            }
+        )
+        previous = name
+    return plans
+
+
+def grant_signup_plan(user_id: str, current_plan: str | None) -> str | None:
+    """Apply SIGNUP_PLAN to a new account, returning the plan set (or None).
+
+    Only ever moves a plan UP, and only from the free tier. An account that has
+    paid, or that an operator has already promoted, must not be rewritten by a
+    deployment flag — and re-running onboarding must not silently re-grant a tier
+    someone downgraded from.
+    """
+    from .config import settings  # local: config imports nothing from here
+
+    wanted = (settings.SIGNUP_PLAN or "").strip().lower()
+    if wanted not in _RANK or wanted == FREE:
+        return None
+    if rank(current_plan) >= _RANK[wanted]:
+        return None
+
+    from . import store
+
+    try:
+        store.update_user(user_id, {"plan": wanted})
+    except Exception as exc:  # pragma: no cover - depends on live schema
+        # A failed grant must not block onboarding; the user simply stays free.
+        print(f"[signup-plan] could not grant {wanted} to {user_id} ({type(exc).__name__}: {str(exc)[:100]})")
+        return None
+    return wanted
+
+
 def rank(plan: str | None) -> int:
     return _RANK.get(plan or "free", 0)
 

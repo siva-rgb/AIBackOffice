@@ -1,40 +1,18 @@
-from __future__ import annotations
+"""Plan lookup for billing.
 
-from datetime import datetime, timezone
+This module once also held PLAN_LIMITS — a second, hand-maintained table of
+what each tier unlocked. Nothing ever called the helpers that read it, so it
+silently disagreed with app/entitlements.POLICY (the real gate) and with the
+published pricing page, which had copied from it. Two tables describing the
+same thing, one of them enforced. Entitlements now live in exactly one place;
+this module only answers which plan a user is on.
+"""
+
+from __future__ import annotations
 
 from .. import store
 
 PLAN_RANK = {"free": 0, "starter": 1, "pro": 2}
-
-PLAN_LIMITS = {
-    "free": {
-        "transactions_per_month": 20,
-        "contracts_per_month": 1,
-        "invoice_followups": False,
-        "cashflow_forecast": False,
-        "butler_full": False,
-        "morning_briefing": False,
-        "proposals": False,
-    },
-    "starter": {
-        "transactions_per_month": None,
-        "contracts_per_month": None,
-        "invoice_followups": True,
-        "cashflow_forecast": False,
-        "butler_full": False,
-        "morning_briefing": True,
-        "proposals": False,
-    },
-    "pro": {
-        "transactions_per_month": None,
-        "contracts_per_month": None,
-        "invoice_followups": True,
-        "cashflow_forecast": True,
-        "butler_full": True,
-        "morning_briefing": True,
-        "proposals": True,
-    },
-}
 
 
 def get_user_plan(user_id: str) -> str:
@@ -50,28 +28,4 @@ def require_plan(user_id: str, min_plan: str) -> dict:
         "allowed": PLAN_RANK.get(current, 0) >= PLAN_RANK.get(min_plan, 0),
         "current_plan": current,
         "required_plan": min_plan,
-    }
-
-
-def check_feature(user_id: str, feature: str) -> bool:
-    plan = get_user_plan(user_id)
-    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
-    return bool(limits.get(feature, False))
-
-
-def check_transaction_limit(user_id: str) -> dict:
-    plan = get_user_plan(user_id)
-    limit = PLAN_LIMITS[plan]["transactions_per_month"]
-    if limit is None:
-        return {"allowed": True, "limit": None, "used": 0, "remaining": None}
-
-    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
-    transactions = store.list_transactions(user_id)
-    used = sum(1 for t in transactions if getattr(t, "created_at", "") >= month_start)
-
-    return {
-        "allowed": used < limit,
-        "limit": limit,
-        "used": used,
-        "remaining": max(0, limit - used),
     }

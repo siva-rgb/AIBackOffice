@@ -15,6 +15,7 @@ import {
   Settings,
   BrainCircuit,
   Briefcase,
+  CreditCard,
   LogOut,
   Menu,
   X,
@@ -33,6 +34,9 @@ const NAV = [
   { href: '/cashflow', label: 'Cash flow', icon: TrendingUp },
   { href: '/agents', label: 'AI Agents', icon: Bot },
   { href: '/settings', label: 'Business profile', icon: Settings },
+  // Pricing existed as a page but was reachable only from Settings → Billing,
+  // so nobody evaluating the product ever saw what it costs.
+  { href: '/pricing', label: 'Plans & pricing', icon: CreditCard },
   { href: '/about', label: 'How it works', icon: HelpCircle },
 ];
 

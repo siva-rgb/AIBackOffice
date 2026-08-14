@@ -116,6 +116,19 @@ class Settings(BaseSettings):
     # deployment, where an empty tenant would show an evaluator nothing.
     SEED_SAMPLE_DATA_ON_SIGNUP: bool = False
 
+    # Plan granted to a brand-new account when it finishes onboarding. Empty
+    # means "leave the database default", which is `free` — the correct
+    # behaviour for a real product.
+    #
+    # Set to "pro" for the public evaluation deployment. Four of the app's
+    # headline capabilities sit behind POLICY (cash-flow forecast, semantic
+    # recall, relationship graph, contract drafting), so an evaluator signing up
+    # with their own account otherwise meets a 403 on each of them and judges the
+    # product on the half they can reach. Granting the tier is honest in a way
+    # that removing the paywall is not: the gate still works, and the pricing
+    # page still shows what each tier costs.
+    SIGNUP_PLAN: str = ""
+
     # Google Cloud / Vertex AI
     GOOGLE_CLOUD_PROJECT_ID: str = ""
     GOOGLE_CLOUD_LOCATION: str = "us-central1"
