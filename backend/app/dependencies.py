@@ -147,3 +147,45 @@ def require_plan(min_plan: str):
 def verify_cron_secret(x_cron_secret: str | None = Header(default=None)) -> bool:
     """True when a valid scheduler secret is present (SKILL.md §16 Rule 8)."""
     return bool(x_cron_secret) and x_cron_secret == settings.CRON_SECRET
+
+
+# ── Which tenant the scheduler acts for ─────────────────────────────────────
+# Cron requests carry a shared secret, not a session, so there is no user on the
+# request to act as. Nine routers each grew their own copy of this lookup, and
+# every copy carried the same fault: when the lookup missed it fell back to the
+# literal string DEMO_USER_ID ("demo-user"). That is a valid id in mock mode and
+# a *syntactically invalid UUID* against Postgres, so the miss surfaced as
+# `22P02 invalid input syntax for type uuid` — a 500 with a traceback, three
+# frames below the real problem, on every scheduled run of every agent.
+#
+# The miss was not hypothetical: the demo tenant's row was later repointed to a
+# different email, and DEMO_EMAIL was never moved with it. A lookup keyed on a
+# mutable field is the wrong anchor for something ops depends on, so
+# SCHEDULER_USER_ID pins the tenant by id and takes precedence.
+#
+# Returning None on a miss is the point. The scheduler asking for a tenant that
+# does not exist is a configuration error, and it should say so plainly rather
+# than hand a bad id to the database and let it fail as a 500.
+def scheduler_user_id() -> str | None:
+    """The tenant scheduled runs act for, or None when none is configured."""
+    if settings.SCHEDULER_USER_ID:
+        return settings.SCHEDULER_USER_ID
+    if settings.KORA_DATA_BACKEND == "supabase":
+        user = store.get_user_by_email(settings.DEMO_EMAIL)
+        return user.id if user else None
+    return DEMO_USER_ID
+
+
+def require_scheduler_user_id() -> str:
+    """As above, but fails with an actionable 503 instead of a database error."""
+    user_id = scheduler_user_id()
+    if not user_id:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "No scheduler tenant is configured. Set SCHEDULER_USER_ID to the "
+                f"tenant's id, or point DEMO_EMAIL (currently {settings.DEMO_EMAIL!r}) "
+                "at a user that exists."
+            ),
+        )
+    return user_id

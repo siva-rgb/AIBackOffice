@@ -89,6 +89,13 @@ class Settings(BaseSettings):
     DEMO_EMAIL: str = "demo@kora.app"
     ALLOW_DEMO_USER: bool = True
 
+    # The tenant that scheduled (cron) agent runs act for. Cron carries a shared
+    # secret rather than a session, so there is no user on the request to act as.
+    # Set this to the tenant's id and it takes precedence over the DEMO_EMAIL
+    # lookup — an id is stable, whereas the demo account's email has already been
+    # repointed once, which silently broke every scheduled run.
+    SCHEDULER_USER_ID: str = ""
+
     # Tenants whose data is SHARED between many people (the published demo
     # account every evaluator signs into with the same credentials). Erasure is
     # refused for these, because it is not one user deleting their own data —

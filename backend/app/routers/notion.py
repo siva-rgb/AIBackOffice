@@ -3,23 +3,13 @@ from __future__ import annotations
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, Request
 from fastapi.responses import RedirectResponse
 
-from .. import store
 from ..config import settings
-from ..dependencies import get_current_user, verify_cron_secret
+from ..dependencies import get_current_user, require_scheduler_user_id, verify_cron_secret
 from ..models import CamelModel, User
-from ..seed import DEMO_USER_ID
 from ..services import notion_connector, notion_ingest
 from ..services.oauth_state import issue_oauth_state, verify_oauth_state
 
 router = APIRouter(prefix="/api/notion", tags=["notion"])
-
-
-def _scheduler_user_id() -> str:
-    if settings.KORA_DATA_BACKEND == "supabase":
-        u = store.get_user_by_email(settings.DEMO_EMAIL)
-        if u:
-            return u.id
-    return DEMO_USER_ID
 
 
 class SelectPagesRequest(CamelModel):
@@ -84,7 +74,7 @@ async def notion_run(
     """Ingest the selected Notion pages into semantic memory. One-way, read-only.
     Scheduler path uses x-cron-secret; the user path runs it for their own account."""
     if is_cron:
-        background_tasks.add_task(notion_ingest.ingest, _scheduler_user_id())
+        background_tasks.add_task(notion_ingest.ingest, require_scheduler_user_id())
         return {"status": "ingesting", "trigger": "scheduler"}
     user = await get_current_user(request, authorization)
     result = notion_ingest.ingest(user.id)

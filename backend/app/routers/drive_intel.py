@@ -2,24 +2,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 
-from .. import store
 from ..config import settings
-from ..dependencies import get_current_user, verify_cron_secret
+from ..dependencies import get_current_user, require_scheduler_user_id, verify_cron_secret
 from ..models import User
-from ..seed import DEMO_USER_ID
 from ..services.drive_intel import ALL_DRIVES_GET, ALL_DRIVES_LIST, sync_drive_intel
 from ..services.google_auth import get_user_credentials
 from ..utils.casing import camelize
 
 router = APIRouter(prefix="/api/drive", tags=["drive"])
-
-
-def _scheduler_user_id() -> str:
-    if settings.KORA_DATA_BACKEND == "supabase":
-        u = store.get_user_by_email(settings.DEMO_EMAIL)
-        if u:
-            return u.id
-    return DEMO_USER_ID
 
 
 @router.post("/sync")
@@ -42,7 +32,7 @@ async def run_drive(
     """Daily scheduled Drive sync. Scheduler path uses x-cron-secret; a user path
     (auth) also works for a manual run."""
     if is_cron:
-        background_tasks.add_task(sync_drive_intel, _scheduler_user_id())
+        background_tasks.add_task(sync_drive_intel, require_scheduler_user_id())
         return {"status": "syncing", "trigger": "scheduler"}
     user = await get_current_user(request, authorization)
     background_tasks.add_task(sync_drive_intel, user.id)

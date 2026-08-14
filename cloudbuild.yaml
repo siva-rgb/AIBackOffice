@@ -36,6 +36,8 @@ substitutions:
   # Account erasure is refused for these — see routers/account.py. Empty by
   # default so a private deployment never restricts a real user's deletion.
   _PROTECTED_TENANT_IDS: ""
+  # Tenant that scheduled cron runs act for (see app/dependencies.py).
+  _SCHEDULER_USER_ID: ""
   # Populate a brand-new tenant with the sample business on onboarding
   # completion. "true" only for public evaluation deployments — see
   # services/sample_data.py.
@@ -85,7 +87,7 @@ steps:
           --allow-unauthenticated \
           --no-cpu-throttling \
           --min-instances=${_MIN_INSTANCES} \
-          --set-env-vars="^@^ENVIRONMENT=${_ENVIRONMENT}@ALLOW_DEMO_USER=false@KORA_DATA_BACKEND=supabase@FRONTEND_ORIGIN=${_FRONTEND_ORIGIN}@KORA_AI_BACKEND=vertex@MODEL_NAME=${_MODEL_NAME}@GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID@GOOGLE_CLOUD_LOCATION=${_REGION}@PROTECTED_TENANT_IDS=${_PROTECTED_TENANT_IDS}@SEED_SAMPLE_DATA_ON_SIGNUP=${_SEED_SAMPLE_DATA_ON_SIGNUP}" \
+          --set-env-vars="^@^ENVIRONMENT=${_ENVIRONMENT}@ALLOW_DEMO_USER=false@KORA_DATA_BACKEND=supabase@FRONTEND_ORIGIN=${_FRONTEND_ORIGIN}@KORA_AI_BACKEND=vertex@MODEL_NAME=${_MODEL_NAME}@GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID@GOOGLE_CLOUD_LOCATION=${_REGION}@PROTECTED_TENANT_IDS=${_PROTECTED_TENANT_IDS}@SEED_SAMPLE_DATA_ON_SIGNUP=${_SEED_SAMPLE_DATA_ON_SIGNUP}@SCHEDULER_USER_ID=${_SCHEDULER_USER_ID}" \
           "$$SECRET_FLAG"
 
   # 3. Capture the backend URL into a workspace file for the next step.

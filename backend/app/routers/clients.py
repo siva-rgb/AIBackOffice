@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 
 from .. import store
-from ..dependencies import get_current_user, verify_cron_secret
+from ..dependencies import get_current_user, require_scheduler_user_id, verify_cron_secret
 from pydantic import Field
 
 from ..models import (
@@ -20,20 +20,10 @@ from ..models import (
     NoteCreate,
     User,
 )
-from ..config import settings
-from ..seed import DEMO_USER_ID
 from ..services import butler, pm_agent, rollup
 from ..utils.security import safe_sanitize
 
 router = APIRouter(prefix="/api/clients", tags=["clients"])
-
-
-def _scheduler_user_id() -> str:
-    if settings.KORA_DATA_BACKEND == "supabase":
-        u = store.get_user_by_email(settings.DEMO_EMAIL)
-        if u:
-            return u.id
-    return DEMO_USER_ID
 
 
 def _now() -> str:
@@ -151,7 +141,7 @@ async def refresh_all_client_views(
     """Nightly recompose of every client's view. Scheduler path uses
     x-cron-secret; a signed-in user may refresh their own set."""
     if is_cron:
-        return pm_agent.refresh_all_views(_scheduler_user_id())
+        return pm_agent.refresh_all_views(require_scheduler_user_id())
     user = await get_current_user(request, authorization)
     return pm_agent.refresh_all_views(user.id)
 

@@ -5,11 +5,9 @@ import json
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 
-from .. import store
 from ..config import settings
-from ..dependencies import get_current_user, verify_cron_secret
+from ..dependencies import get_current_user, require_scheduler_user_id, verify_cron_secret
 from ..models import CamelModel, User
-from ..seed import DEMO_USER_ID
 from ..services.gmail_intel import (
     handle_push_notification,
     register_gmail_watch,
@@ -24,14 +22,6 @@ router = APIRouter(prefix="/api/gmail", tags=["gmail"])
 class DraftRequest(CamelModel):
     context: str = "follow up"
     tone: str = "professional"
-
-
-def _scheduler_user_id() -> str:
-    if settings.KORA_DATA_BACKEND == "supabase":
-        u = store.get_user_by_email(settings.DEMO_EMAIL)
-        if u:
-            return u.id
-    return DEMO_USER_ID
 
 
 @router.post("/sync")
@@ -55,7 +45,7 @@ async def run_email_intel(
     """Daily scheduled Gmail intel sync. Scheduler path uses x-cron-secret; a
     user path (auth) also works for a manual full refresh."""
     if is_cron:
-        uid = _scheduler_user_id()
+        uid = require_scheduler_user_id()
         background_tasks.add_task(sync_client_email_intel, uid, True)
         # Keep the Gmail push watch alive (expires ~7 days). No-op if push unset.
         background_tasks.add_task(renew_watch_if_configured, uid)

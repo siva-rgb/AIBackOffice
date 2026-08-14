@@ -6,8 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, 
 from fastapi.responses import StreamingResponse
 
 from .. import store
-from ..config import settings
-from ..dependencies import get_current_user, verify_cron_secret
+from ..dependencies import get_current_user, require_scheduler_user_id, verify_cron_secret
 from ..models import (
     CreateInvoiceRequest,
     Invoice,
@@ -16,7 +15,6 @@ from ..models import (
     UpdateInvoiceStatusRequest,
     User,
 )
-from ..seed import DEMO_USER_ID
 from ..services.invoice_agent import generate_demand_letter, run_follow_up_agent
 from ..utils.rate_limit import check_rate_limit
 
@@ -100,16 +98,6 @@ async def create_invoice(
     return saved
 
 
-def _scheduler_user_id() -> str:
-    """Resolve the user the scheduler runs for. In Supabase mode this is the
-    demo user's real UUID; in mock mode the literal demo id."""
-    if settings.KORA_DATA_BACKEND == "supabase":
-        u = store.get_user_by_email(settings.DEMO_EMAIL)
-        if u:
-            return u.id
-    return DEMO_USER_ID
-
-
 @router.post("/follow-up")
 async def run_follow_up(
     request: Request,
@@ -118,7 +106,7 @@ async def run_follow_up(
 ):
     # Scheduler path: a Cloud Run worker calls with x-cron-secret (no session).
     if is_cron:
-        result = run_follow_up_agent(_scheduler_user_id(), "scheduler")
+        result = run_follow_up_agent(require_scheduler_user_id(), "scheduler")
         return {"ok": True, "scanned": result.scanned, "sent": result.sent, "details": result.details}
     # User path (demo button): requires auth — pass the header through explicitly.
     user = await get_current_user(request, authorization)

@@ -1,9 +1,19 @@
 name: Kora scheduled agent runs
 
-# Fires the three cron endpoints on the deployed backend.
-# Requires two repository secrets:
-#   KORA_API_URL    — e.g. https://kora-api-xxxx-uc.a.run.app
-#   KORA_CRON_SECRET — must match CRON_SECRET in backend .env
+# Fires the scheduled agent endpoints on the deployed backend.
+#
+# Requires two REPOSITORY secrets (Settings ▸ Secrets and variables ▸ Actions):
+#   KORA_API_URL     — the backend service URL, e.g. https://kora-backend-xxxx-uc.a.run.app
+#   KORA_CRON_SECRET — must match CRON_SECRET on the deployed backend
+#
+# Repository, not environment. This workflow deliberately declares no
+# `environment:`, so the secrets that deploy.yml reads from the staging and
+# production environments are NOT visible here. Putting these two in an
+# environment instead is the failure mode that made every job expand the URL to
+# an empty string and exit 3.
+#
+# Every job delegates to .github/scripts/cron-call.sh — see that file for why
+# the call needs a request body and an explicit secret check.
 
 on:
   schedule:
@@ -41,132 +51,116 @@ jobs:
       github.event_name == 'workflow_dispatch' && (inputs.job == 'supervisor' || inputs.job == 'all') ||
       github.event_name == 'schedule' && startsWith(github.event.schedule, '0 7')
     runs-on: ubuntu-latest
+    env:
+      KORA_API_URL: ${{ secrets.KORA_API_URL }}
+      KORA_CRON_SECRET: ${{ secrets.KORA_CRON_SECRET }}
     steps:
+      - uses: actions/checkout@v4
       - name: Run supervisor pass
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            "${{ secrets.KORA_API_URL }}/api/manager/run" \
-            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
-            -H "Content-Type: application/json")
-          echo "HTTP $STATUS"
-          [ "$STATUS" = "200" ] || exit 1
+        run: .github/scripts/cron-call.sh /api/manager/run
 
   butler:
     if: >
       github.event_name == 'workflow_dispatch' && (inputs.job == 'butler' || inputs.job == 'all') ||
       github.event_name == 'schedule' && startsWith(github.event.schedule, '30 7')
     runs-on: ubuntu-latest
+    env:
+      KORA_API_URL: ${{ secrets.KORA_API_URL }}
+      KORA_CRON_SECRET: ${{ secrets.KORA_CRON_SECRET }}
     steps:
+      - uses: actions/checkout@v4
       - name: Run butler morning briefing
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            "${{ secrets.KORA_API_URL }}/api/butler/run" \
-            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
-            -H "Content-Type: application/json")
-          echo "HTTP $STATUS"
-          [ "$STATUS" = "200" ] || exit 1
+        run: .github/scripts/cron-call.sh /api/butler/run
 
   invoices:
     if: >
       github.event_name == 'workflow_dispatch' && (inputs.job == 'invoices' || inputs.job == 'all') ||
       github.event_name == 'schedule' && startsWith(github.event.schedule, '0 9')
     runs-on: ubuntu-latest
+    env:
+      KORA_API_URL: ${{ secrets.KORA_API_URL }}
+      KORA_CRON_SECRET: ${{ secrets.KORA_CRON_SECRET }}
     steps:
+      - uses: actions/checkout@v4
       - name: Run invoice follow-up campaign
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            "${{ secrets.KORA_API_URL }}/api/invoices/run-follow-ups" \
-            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
-            -H "Content-Type: application/json")
-          echo "HTTP $STATUS"
-          [ "$STATUS" = "200" ] || exit 1
+        # Path is /follow-up — the workflow asked for /run-follow-ups, which no
+        # route ever answered, so this job returned 405 rather than running.
+        run: .github/scripts/cron-call.sh /api/invoices/follow-up
 
   gmail:
     if: >
       github.event_name == 'workflow_dispatch' && (inputs.job == 'gmail' || inputs.job == 'all') ||
       github.event_name == 'schedule' && startsWith(github.event.schedule, '30 6')
     runs-on: ubuntu-latest
+    env:
+      KORA_API_URL: ${{ secrets.KORA_API_URL }}
+      KORA_CRON_SECRET: ${{ secrets.KORA_CRON_SECRET }}
     steps:
+      - uses: actions/checkout@v4
       - name: Run Gmail client-email intel sync
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            "${{ secrets.KORA_API_URL }}/api/gmail/run" \
-            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
-            -H "Content-Type: application/json")
-          echo "HTTP $STATUS"
-          [ "$STATUS" = "200" ] || exit 1
+        run: .github/scripts/cron-call.sh /api/gmail/run
 
   drive:
     if: >
       github.event_name == 'workflow_dispatch' && (inputs.job == 'drive' || inputs.job == 'all') ||
       github.event_name == 'schedule' && startsWith(github.event.schedule, '45 6')
     runs-on: ubuntu-latest
+    env:
+      KORA_API_URL: ${{ secrets.KORA_API_URL }}
+      KORA_CRON_SECRET: ${{ secrets.KORA_CRON_SECRET }}
     steps:
+      - uses: actions/checkout@v4
       - name: Run Drive intel sync
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            "${{ secrets.KORA_API_URL }}/api/drive/run" \
-            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
-            -H "Content-Type: application/json")
-          echo "HTTP $STATUS"
-          [ "$STATUS" = "200" ] || exit 1
+        run: .github/scripts/cron-call.sh /api/drive/run
 
   graph:
     if: >
       github.event_name == 'workflow_dispatch' && (inputs.job == 'graph' || inputs.job == 'all') ||
       github.event_name == 'schedule' && startsWith(github.event.schedule, '50 6')
     runs-on: ubuntu-latest
+    env:
+      KORA_API_URL: ${{ secrets.KORA_API_URL }}
+      KORA_CRON_SECRET: ${{ secrets.KORA_CRON_SECRET }}
     steps:
+      - uses: actions/checkout@v4
       - name: Run graph memory sync
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            "${{ secrets.KORA_API_URL }}/api/graph/run" \
-            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
-            -H "Content-Type: application/json")
-          echo "HTTP $STATUS"
-          [ "$STATUS" = "200" ] || exit 1
+        run: .github/scripts/cron-call.sh /api/graph/run
 
   memory:
     if: >
       github.event_name == 'workflow_dispatch' && (inputs.job == 'memory' || inputs.job == 'all') ||
       github.event_name == 'schedule' && startsWith(github.event.schedule, '55 6')
     runs-on: ubuntu-latest
+    env:
+      KORA_API_URL: ${{ secrets.KORA_API_URL }}
+      KORA_CRON_SECRET: ${{ secrets.KORA_CRON_SECRET }}
     steps:
+      - uses: actions/checkout@v4
       - name: Run semantic memory reindex
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            "${{ secrets.KORA_API_URL }}/api/memory/reindex" \
-            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
-            -H "Content-Type: application/json")
-          echo "HTTP $STATUS"
-          [ "$STATUS" = "200" ] || exit 1
+        run: .github/scripts/cron-call.sh /api/memory/reindex
 
   notion:
     if: >
       github.event_name == 'workflow_dispatch' && (inputs.job == 'notion' || inputs.job == 'all') ||
       github.event_name == 'schedule' && startsWith(github.event.schedule, '10 7')
     runs-on: ubuntu-latest
+    env:
+      KORA_API_URL: ${{ secrets.KORA_API_URL }}
+      KORA_CRON_SECRET: ${{ secrets.KORA_CRON_SECRET }}
     steps:
+      - uses: actions/checkout@v4
       - name: Ingest Notion pages into semantic memory (read-only)
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            "${{ secrets.KORA_API_URL }}/api/notion/run" \
-            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
-            -H "Content-Type: application/json")
-          echo "HTTP $STATUS"
-          [ "$STATUS" = "200" ] || exit 1
+        run: .github/scripts/cron-call.sh /api/notion/run
 
   client_views:
     if: >
       github.event_name == 'workflow_dispatch' && (inputs.job == 'client_views' || inputs.job == 'all') ||
       github.event_name == 'schedule' && startsWith(github.event.schedule, '20 7')
     runs-on: ubuntu-latest
+    env:
+      KORA_API_URL: ${{ secrets.KORA_API_URL }}
+      KORA_CRON_SECRET: ${{ secrets.KORA_CRON_SECRET }}
     steps:
+      - uses: actions/checkout@v4
       - name: Recompose per-client views (PM agent fan-out)
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            "${{ secrets.KORA_API_URL }}/api/clients/views/refresh-all" \
-            -H "x-cron-secret: ${{ secrets.KORA_CRON_SECRET }}" \
-            -H "Content-Type: application/json")
-          echo "HTTP $STATUS"
-          [ "$STATUS" = "200" ] || exit 1
+        run: .github/scripts/cron-call.sh /api/clients/views/refresh-all

@@ -2,10 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 
-from ..dependencies import get_current_user, verify_cron_secret
+from ..dependencies import get_current_user, require_scheduler_user_id, verify_cron_secret
 from ..models import CamelModel, User
-from ..seed import DEMO_USER_ID
-from ..config import settings
 from .. import store
 from ..services import supervisor
 from ..utils.rate_limit import check_rate_limit
@@ -30,14 +28,6 @@ async def get_manager(user: User = Depends(get_current_user)):
     return supervisor.manager_snapshot(user.id)
 
 
-def _scheduler_user_id() -> str:
-    if settings.KORA_DATA_BACKEND == "supabase":
-        u = store.get_user_by_email(settings.DEMO_EMAIL)
-        if u:
-            return u.id
-    return DEMO_USER_ID
-
-
 @router.post("/run")
 async def run_manager(
     request: Request,
@@ -47,7 +37,7 @@ async def run_manager(
     """Run a full supervisor pass: reconcile → assess → queue → briefing.
     Scheduler path uses x-cron-secret; user path requires auth."""
     if is_cron:
-        uid = _scheduler_user_id()
+        uid = require_scheduler_user_id()
         result = supervisor.run_supervisor(uid, triggered_by="scheduler")
         # Email the owner their daily digest (Gmail → Resend → no-op).
         try:

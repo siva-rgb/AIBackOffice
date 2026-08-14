@@ -99,6 +99,7 @@ jobs:
           # tenants stop being seeded. Set them per GitHub Environment.
           PROTECTED_TENANT_IDS: ${{ vars.PROTECTED_TENANT_IDS }}
           SEED_SAMPLE_DATA_ON_SIGNUP: ${{ vars.SEED_SAMPLE_DATA_ON_SIGNUP }}
+          SCHEDULER_USER_ID: ${{ vars.SCHEDULER_USER_ID }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID: ${{ secrets.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID }}
@@ -138,6 +139,7 @@ jobs:
           # tenants stop being seeded. Set them per GitHub Environment.
           PROTECTED_TENANT_IDS: ${{ vars.PROTECTED_TENANT_IDS }}
           SEED_SAMPLE_DATA_ON_SIGNUP: ${{ vars.SEED_SAMPLE_DATA_ON_SIGNUP }}
+          SCHEDULER_USER_ID: ${{ vars.SCHEDULER_USER_ID }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID: ${{ secrets.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID }}
@@ -176,6 +178,7 @@ jobs:
           # tenants stop being seeded. Set them per GitHub Environment.
           PROTECTED_TENANT_IDS: ${{ vars.PROTECTED_TENANT_IDS }}
           SEED_SAMPLE_DATA_ON_SIGNUP: ${{ vars.SEED_SAMPLE_DATA_ON_SIGNUP }}
+          SCHEDULER_USER_ID: ${{ vars.SCHEDULER_USER_ID }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID: ${{ secrets.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID }}

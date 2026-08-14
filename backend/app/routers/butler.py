@@ -5,10 +5,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 
 from .. import store
-from ..config import settings
-from ..dependencies import get_current_user, verify_cron_secret
+from ..dependencies import get_current_user, require_scheduler_user_id, verify_cron_secret
 from ..models import CaptureCreate, QuickCapture, User
-from ..seed import DEMO_USER_ID
 from ..services import butler
 from ..utils.rate_limit import check_rate_limit
 from ..utils.security import PromptInjectionError, sanitize_prompt_input
@@ -26,14 +24,6 @@ async def get_butler(user: User = Depends(get_current_user)):
     return butler.butler_snapshot(user.id)
 
 
-def _scheduler_user_id() -> str:
-    if settings.KORA_DATA_BACKEND == "supabase":
-        u = store.get_user_by_email(settings.DEMO_EMAIL)
-        if u:
-            return u.id
-    return DEMO_USER_ID
-
-
 @router.post("/run")
 async def run_butler(
     request: Request,
@@ -42,7 +32,7 @@ async def run_butler(
 ):
     """Generate the morning briefing. Scheduler path uses x-cron-secret; user path requires auth."""
     if is_cron:
-        return butler.generate_morning_briefing(_scheduler_user_id(), triggered_by="scheduler")
+        return butler.generate_morning_briefing(require_scheduler_user_id(), triggered_by="scheduler")
     user = await get_current_user(request, authorization)
     rl = check_rate_limit(f"ai:butler:{user.id}", max_requests=30, window_seconds=3600)
     if not rl.allowed:

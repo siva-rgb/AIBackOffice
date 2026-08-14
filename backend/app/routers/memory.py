@@ -2,23 +2,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request
 
-from .. import store
-from ..config import settings
-from ..dependencies import get_current_user, verify_cron_secret
+from ..dependencies import get_current_user, require_scheduler_user_id, verify_cron_secret
 from ..models import CamelModel, User
-from ..seed import DEMO_USER_ID
 from ..entitlements import enforce_plan
 from ..services import memory_recall
 
 router = APIRouter(prefix="/api/memory", tags=["memory"])
-
-
-def _scheduler_user_id() -> str:
-    if settings.KORA_DATA_BACKEND == "supabase":
-        u = store.get_user_by_email(settings.DEMO_EMAIL)
-        if u:
-            return u.id
-    return DEMO_USER_ID
 
 
 class RecallRequest(CamelModel):
@@ -66,7 +55,7 @@ async def reindex_memory(
     Scheduler path uses x-cron-secret (async); a user path runs inline so the
     response carries the counts."""
     if is_cron:
-        background_tasks.add_task(memory_recall.reindex, _scheduler_user_id())
+        background_tasks.add_task(memory_recall.reindex, require_scheduler_user_id())
         return {"status": "reindexing", "trigger": "scheduler"}
     user = await get_current_user(request, authorization)
     return memory_recall.reindex(user.id)
