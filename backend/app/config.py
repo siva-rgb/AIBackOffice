@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     # Default stays on "jsonb" until an operator has run the migration + backfill.
     AGENT_MEMORY_VECTOR_BACKEND: str = "jsonb"
 
+    # Allowed browser origin(s) for CORS — comma-separated. A Cloud Run service
+    # answers on two hostnames (the legacy *-HASH-REGION.a.run.app and the newer
+    # *-PROJECTNUMBER.REGION.run.app), and a visitor may arrive on either, so
+    # both usually belong here. Used for CORS only; redirect URLs come from
+    # NEXT_PUBLIC_APP_URL / BASE_URL.
     FRONTEND_ORIGIN: str = "http://localhost:3000"
 
     # Supabase (service role — backend only)

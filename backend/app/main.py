@@ -107,10 +107,20 @@ app.add_middleware(AccessLogMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS so the Next.js frontend can call the API with the Supabase JWT.
-# In production only the deployed origin (FRONTEND_ORIGIN) is allowed; the
+# In production only the deployed origin(s) (FRONTEND_ORIGIN) are allowed; the
 # localhost dev origins (incl. :3001, Next's busy-port fallback) are added ONLY
 # outside production so prod CORS isn't loosened by hardcoded localhost.
-_cors_origins = [settings.FRONTEND_ORIGIN]
+#
+# FRONTEND_ORIGIN is comma-separated because one deployment legitimately answers
+# on more than one origin. Cloud Run serves every service on TWO hostnames — the
+# older `SERVICE-HASH-REGION.a.run.app` and the newer
+# `SERVICE-PROJECTNUMBER.REGION.run.app` — and the console shows the new one
+# while our deploy scripts read the old one. Both load the app, so a visitor can
+# arrive on either, but only the configured origin passed CORS: the page
+# rendered and then every API call failed as "Failed to fetch", which reads like
+# a network fault rather than a policy rejection. Listing both is the fix; this
+# is still an explicit allow-list, not a wildcard.
+_cors_origins = [origin.strip() for origin in (settings.FRONTEND_ORIGIN or "").split(",") if origin.strip()]
 if settings.ENVIRONMENT != "production":
     _cors_origins += [
         "http://localhost:3000",
