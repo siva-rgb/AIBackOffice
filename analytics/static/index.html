@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Kora — usage</title>
+<style>
+  /* Palette roles. Light values on :root; dark redefined for both the OS
+     setting and an explicit stamp, so neither can strand the other. */
+  :root {
+    color-scheme: light;
+    --plane:        #f9f9f7;
+    --surface:      #fcfcfb;
+    --ink:          #0b0b0b;
+    --ink-2:        #52514e;
+    --muted:        #898781;
+    --grid:         #e1e0d9;
+    --axis:         #c3c2b7;
+    --hairline:     rgba(11,11,11,0.10);
+    --series-1:     #2a78d6;   /* blue   — user-triggered */
+    --series-2:     #eb6834;   /* orange — scheduler */
+    --series-3:     #1baf7a;   /* aqua   — cross-module */
+    --seq-fill:     #cde2fb;
+    --good:         #0ca30c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --plane:    #0d0d0d;
+      --surface:  #1a1a19;
+      --ink:      #ffffff;
+      --ink-2:    #c3c2b7;
+      --muted:    #898781;
+      --grid:     #2c2c2a;
+      --axis:     #383835;
+      --hairline: rgba(255,255,255,0.10);
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --seq-fill: #184f95;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane: #0d0d0d; --surface: #1a1a19; --ink: #fff; --ink-2: #c3c2b7;
+    --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+    --hairline: rgba(255,255,255,0.10);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --seq-fill: #184f95;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 64px;
+    background: var(--plane); color: var(--ink);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1140px; margin: 0 auto; }
+
+  header h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+  header p  { margin: 6px 0 0; color: var(--ink-2); }
+  .meta { margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .meta a { color: var(--series-1); }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: 12px; padding: 20px;
+  }
+  h2 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
+  .sub { margin: 0 0 18px; font-size: 12px; color: var(--muted); }
+
+  /* KPI row */
+  .kpis { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 28px 0 12px; }
+  .kpi .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .kpi .value { margin-top: 8px; font-size: 34px; font-weight: 700; line-height: 1; }
+  .kpi .hint  { margin-top: 8px; font-size: 12px; color: var(--ink-2); }
+
+  .grid2 { display: grid; gap: 12px; grid-template-columns: 1fr; margin-top: 12px; }
+  @media (min-width: 860px) { .grid2 { grid-template-columns: 3fr 2fr; } }
+
+  /* Charts scroll inside their own box; the page never scrolls sideways. */
+  .plot { overflow-x: auto; }
+  svg { display: block; max-width: 100%; }
+  .tick { font-size: 10px; fill: var(--muted); }
+  .barlabel { font-size: 11px; fill: var(--ink-2); }
+  .barvalue { font-size: 11px; fill: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+  /* Legend — always present for >= 2 series, so identity is never colour alone */
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; font-size: 12px; color: var(--ink-2); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--hairline); white-space: nowrap; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:hover { background: color-mix(in srgb, var(--series-1) 6%, transparent); }
+  .tablewrap { overflow-x: auto; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; border: 1px solid var(--hairline); color: var(--ink-2); }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .never { color: var(--muted); }
+
+  .outcome { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--hairline); }
+  .outcome .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .outcome-v { margin-top: 6px; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .section-title { margin: 34px 0 10px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .note { margin-top: 10px; font-size: 12px; color: var(--muted); }
+
+  #tip {
+    position: fixed; pointer-events: none; opacity: 0; transition: opacity .1s;
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: 8px;
+    padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.16); z-index: 10;
+  }
+  #tip b { font-variant-numeric: tabular-nums; }
+  .state { padding: 40px 0; text-align: center; color: var(--muted); }
+  .err { color: #d03b3b; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Kora — real usage</h1>
+    <p>Live figures read from the production database. Nothing here is illustrative.</p>
+    <div class="meta" id="meta">Loading…</div>
+  </header>
+
+  <div id="content" class="state">Reading the database…</div>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const tip = $('tip');
+const fmt = (n) => (n ?? 0).toLocaleString('en-US');
+
+function showTip(evt, html) {
+  tip.innerHTML = html;
+  tip.style.opacity = '1';
+  const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = evt.clientX + pad, y = evt.clientY + pad;
+  if (x + w > innerWidth - 8) x = evt.clientX - w - pad;
+  if (y + h > innerHeight - 8) y = evt.clientY - h - pad;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+}
+const hideTip = () => { tip.style.opacity = '0'; };
+
+function shortDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+function whenRelative(iso) {
+  if (!iso) return null;
+  const mins = Math.floor((Date.now() - new Date(iso)) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + ' min ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + (hrs === 1 ? ' hour ago' : ' hours ago');
+  const days = Math.floor(hrs / 24);
+  return days + (days === 1 ? ' day ago' : ' days ago');
+}
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ── Area chart: agent runs per day ─────────────────────────────────────────
+   One series, so no legend box — the title names it. Every calendar day gets
+   its real width, gaps included: compressing quiet days would draw a busier
+   product than the one that exists.                                          */
+function areaChart(daily, width) {
+  if (!daily.length) return '<p class="sub">No activity recorded yet.</p>';
+  // Drawn at the container's true pixel width so one SVG unit is one pixel.
+  // Stretching a fixed viewBox to fill instead would need
+  // preserveAspectRatio="none", which distorts every label and stroke with it.
+  const W = Math.max(620, width || 0), H = 190, L = 38, R = 16, T = 14, B = 26;
+  const iw = W - L - R, ih = H - T - B;
+  const max = Math.max(1, ...daily.map(d => d.runs));
+  const x = i => L + (daily.length === 1 ? iw / 2 : (i / (daily.length - 1)) * iw);
+  const y = v => T + ih - (v / max) * ih;
+
+  const line = daily.map((d, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(d.runs).toFixed(1)}`).join('');
+  const area = `${line}L${x(daily.length - 1).toFixed(1)},${(T + ih).toFixed(1)}L${x(0).toFixed(1)},${(T + ih).toFixed(1)}Z`;
+
+  const ticks = [0, Math.round(max / 2), max].filter((v, i, a) => a.indexOf(v) === i);
+  const grid = ticks.map(v =>
+    `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>
+     <text class="tick" x="${L - 6}" y="${y(v) + 3}" text-anchor="end">${v}</text>`).join('');
+
+  // The first and last labels anchor inward. Centred on the end points they
+  // overhang the viewBox and get clipped — "15 Aug" rendered as "15 Au".
+  const step = Math.max(1, Math.ceil(daily.length / 8));
+  const xlabels = daily.map((d, i) => {
+    const isLast = i === daily.length - 1;
+    if (!(i % step === 0 || isLast)) return '';
+    if (isLast && (daily.length - 1) % step !== 0 && (daily.length - 1) % step < step / 2) return '';
+    const anchor = i === 0 ? 'start' : isLast ? 'end' : 'middle';
+    return `<text class="tick" x="${x(i)}" y="${H - 8}" text-anchor="${anchor}">${shortDate(d.date)}</text>`;
+  }).join('');
+
+  // Invisible hit columns — a 7px-wide day is far too small a hover target.
+  const hits = daily.map((d, i) => {
+    const w = Math.max(6, iw / daily.length);
+    return `<rect x="${x(i) - w / 2}" y="${T}" width="${w}" height="${ih}" fill="transparent"
+      data-d="${d.date}" data-r="${d.runs}" data-s="${d.signups}" class="hit"/>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img"
+      aria-label="Agent runs per day">
+    ${grid}
+    <path d="${area}" fill="var(--series-1)" opacity="0.14"/>
+    <path d="${line}" fill="none" stroke="var(--series-1)" stroke-width="2"
+          stroke-linejoin="round" stroke-linecap="round"/>
+    <line x1="${L}" x2="${W - R}" y1="${T + ih}" y2="${T + ih}" stroke="var(--axis)" stroke-width="1"/>
+    ${xlabels}
+    <line id="cross" x1="0" x2="0" y1="${T}" y2="${T + ih}" stroke="var(--axis)" stroke-width="1" opacity="0"/>
+    <circle id="crossdot" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2" opacity="0"/>
+    ${hits}
+  </svg>`;
+}
+
+/* ── Horizontal bars: runs by agent type ────────────────────────────────────
+   Magnitude, not identity — one sequential hue, never eight. 4px rounded ends
+   anchored to the baseline.                                                   */
+function barList(rows, keyName, valName) {
+  if (!rows.length) return '<p class="sub">Nothing recorded yet.</p>';
+  const max = Math.max(...rows.map(r => r[valName]));
+  return `<div>${rows.map(r => {
+    const pct = (r[valName] / max) * 100;
+    const label = String(r[keyName]).replace(/_/g, ' ');
+    return `<div style="margin-bottom:10px" class="hit-bar" data-label="${esc(label)}" data-v="${r[valName]}">
+      <div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:3px">
+        <span class="barlabel" style="text-transform:capitalize">${esc(label)}</span>
+        <span class="barvalue">${fmt(r[valName])}</span>
+      </div>
+      <div style="height:8px;background:var(--grid);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:var(--series-1);border-radius:4px"></div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+/* ── Stacked bar: what triggered the work ───────────────────────────────────
+   Identity, so categorical — three validated slots, direct-labelled. The light
+   aqua sits below 3:1 on this surface, so the labels are the documented relief,
+   not decoration. 2px surface gaps separate the segments.                     */
+function triggerBar(byTrigger, byStatus) {
+  const total = byTrigger.reduce((s, t) => s + t.runs, 0);
+  if (!total) return '<p class="sub">No agent activity yet.</p>';
+  const colors = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)'];
+  const NAMES = { user: 'A person clicked', scheduler: 'Ran on a schedule', cross_module: 'One agent called another' };
+  const segs = byTrigger.slice(0, 3);
+
+  const runs = Object.values(byStatus || {}).reduce((a, b) => a + b, 0);
+  const ok = (byStatus || {}).success || 0;
+  const failed = runs - ok;
+
+  return `
+    <div style="display:flex;height:34px;border-radius:6px;overflow:hidden;gap:2px">
+      ${segs.map((t, i) => `<div style="flex:${t.runs};background:${colors[i]}"
+          class="hit-seg" data-label="${esc(NAMES[t.trigger] ?? t.trigger)}" data-v="${t.runs}"
+          data-pct="${Math.round(t.runs / total * 100)}"></div>`).join('')}
+    </div>
+    <div class="legend">
+      ${segs.map((t, i) => `<span><i class="swatch" style="background:${colors[i]}"></i>
+        ${esc(NAMES[t.trigger] ?? t.trigger)} — <b>${fmt(t.runs)}</b> (${Math.round(t.runs / total * 100)}%)</span>`).join('')}
+    </div>
+    ${runs ? `<div class="outcome">
+      <div class="label">Outcome</div>
+      <div class="outcome-v" style="color:${failed ? 'var(--ink)' : 'var(--good)'}">
+        ${fmt(ok)} of ${fmt(runs)} succeeded
+      </div>
+      <p class="sub" style="margin:6px 0 0">
+        ${failed ? `${fmt(failed)} run${failed === 1 ? '' : 's'} recorded an error.`
+                 : 'No agent run has recorded an error.'}
+      </p>
+    </div>` : ''}`;
+}
+
+function kpi(label, value, hint) {
+  return `<div class="card kpi"><div class="label">${label}</div>
+    <div class="value">${value}</div><div class="hint">${hint}</div></div>`;
+}
+
+function peopleTable(people, opts) {
+  const rows = people.filter(p => opts.test ? p.isTest : !p.isTest);
+  if (!rows.length) return '<p class="sub">None.</p>';
+  return `<div class="tablewrap"><table>
+    <thead><tr>
+      <th>Account</th><th>Signed up</th><th>Last sign-in</th><th>Plan</th>
+      <th class="num">Agent runs</th><th class="num">Txns</th><th class="num">Invoices</th><th class="num">Contracts</th>
+    </tr></thead>
+    <tbody>${rows.map(p => {
+      const rel = whenRelative(p.lastSignIn);
+      return `<tr>
+        <td><span class="dot" style="background:${p.hasSignedIn ? 'var(--good)' : 'var(--axis)'}"></span>${esc(p.email)}</td>
+        <td>${shortDate(p.signedUp)}</td>
+        <td>${rel ? esc(rel) : '<span class="never">never</span>'}</td>
+        <td><span class="pill">${esc(p.plan)}</span></td>
+        <td class="num">${fmt(p.agentRuns)}</td>
+        <td class="num">${fmt(p.transactions)}</td>
+        <td class="num">${fmt(p.invoices)}</td>
+        <td class="num">${fmt(p.contracts)}</td>
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
+function render(d) {
+  const ex = d.external, int = d.internal;
+  $('meta').innerHTML =
+    `Updated ${new Date(d.generatedAt).toLocaleString('en-GB')}`
+    + (d.productUrl ? ` · <a href="${esc(d.productUrl)}">open the app</a>` : '')
+    + (d.emailsMasked ? ' · addresses masked' : '');
+
+  $('content').className = '';
+  $('content').innerHTML = `
+    <div class="kpis">
+      ${kpi('People signed up', fmt(ex.people), `${fmt(int.people)} demo/test accounts, counted separately`)}
+      ${kpi('Signed in at least once', fmt(ex.signedIn), `${fmt(ex.activeLast7d)} in the last 7 days`)}
+      ${kpi('AI agent runs', fmt(ex.agentRuns + int.agentRuns), `${fmt(ex.agentRuns)} from outside accounts`)}
+      ${kpi('Records created', fmt(ex.transactions + ex.invoices + ex.contracts),
+            `${fmt(ex.transactions)} txns · ${fmt(ex.invoices)} invoices · ${fmt(ex.contracts)} contracts`)}
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h2>Agent runs per day</h2>
+      <p class="sub">Every calendar day, including the quiet ones.</p>
+      <div class="plot" id="dailyplot"></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Which agents ran</h2>
+        <p class="sub">All accounts, whole history.</p>
+        ${barList(d.byAgentType, 'type', 'runs')}
+      </div>
+      <div class="card">
+        <h2>What set them off</h2>
+        <p class="sub">Human action versus the app acting on its own.</p>
+        ${triggerBar(d.byTrigger, d.byStatus)}
+      </div>
+    </div>
+
+    <div class="section-title">Accounts from outside the team</div>
+    <div class="card">${peopleTable(d.people, { test: false })}</div>
+
+    <div class="section-title">Demo &amp; test accounts — excluded from the headline</div>
+    <div class="card">
+      ${peopleTable(d.people, { test: true })}
+      <p class="note">Listed so the totals reconcile against the raw database rather than
+        appearing to. The demo account is the shared login evaluators use, and it holds most of
+        the seeded sample data.</p>
+    </div>`;
+
+  drawDaily(d.daily);
+}
+
+/* The chart is drawn AFTER the shell is in the DOM, because it needs the card's
+   real width. Redrawn on resize for the same reason — a chart sized once at
+   load is wrong the moment the window changes. */
+let _daily = [];
+function drawDaily(daily) {
+  _daily = daily;
+  const host = $('dailyplot');
+  if (!host) return;
+  host.innerHTML = areaChart(daily, host.clientWidth);
+  wireHovers();
+}
+let _rt;
+addEventListener('resize', () => {
+  clearTimeout(_rt);
+  _rt = setTimeout(() => { if (_daily.length) drawDaily(_daily); }, 150);
+});
+
+function wireHovers() {
+  document.querySelectorAll('.hit').forEach(el => {
+    el.addEventListener('mousemove', (e) => {
+      const svg = el.ownerSVGElement;
+      const cross = svg.querySelector('#cross'), dot = svg.querySelector('#crossdot');
+      const cx = +el.getAttribute('x') + +el.getAttribute('width') / 2;
+      if (cross) { cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('opacity', '.5'); }
+      const s = +el.dataset.s;
+      showTip(e, `<b>${new Date(el.dataset.d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</b><br>`
+        + `${fmt(+el.dataset.r)} agent run${+el.dataset.r === 1 ? '' : 's'}`
+        + (s ? `<br>${s} signup${s === 1 ? '' : 's'}` : ''));
+    });
+    el.addEventListener('mouseleave', () => {
+      hideTip();
+      const svg = el.ownerSVGElement, cross = svg && svg.querySelector('#cross');
+      if (cross) cross.setAttribute('opacity', '0');
+    });
+  });
+  document.querySelectorAll('.hit-bar, .hit-seg').forEach(el => {
+    el.addEventListener('mousemove', (e) => showTip(e,
+      `<b>${esc(el.dataset.label)}</b><br>${fmt(+el.dataset.v)} runs`
+      + (el.dataset.pct ? ` · ${el.dataset.pct}%` : '')));
+    el.addEventListener('mouseleave', hideTip);
+  });
+}
+
+fetch('api/stats')
+  .then(r => r.json().then(j => ({ ok: r.ok, j })))
+  .then(({ ok, j }) => {
+    if (!ok || j.error) throw new Error(j.error || 'request failed');
+    render(j);
+  })
+  .catch(err => {
+    $('meta').textContent = '';
+    $('content').className = 'state err';
+    $('content').textContent = 'Could not read the database — ' + err.message;
+  });
+</script>
+</body>
+</html>
