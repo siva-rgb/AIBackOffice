@@ -36,6 +36,12 @@ echo "▸ deploy ${SERVICE}"
 # --allow-unauthenticated: no login, by request. The mitigation lives in the
 # app — email addresses are masked unless ANALYTICS_SHOW_EMAILS is set, and no
 # route takes input that reaches a query.
+#
+# The `^|^` prefix picks pipe as the list separator, because ANALYTICS_TEST_ACCOUNTS
+# holds a comma-separated list and gcloud's default separator is the comma. Pipe
+# rather than the `@` used elsewhere in this repo: the value is a list of EMAIL
+# ADDRESSES, so an `@` delimiter splits mid-address and gcloud reads the
+# fragments as flags. Any delimiter here must appear in none of the values.
 gcloud run deploy "${SERVICE}" \
   --image="${IMAGE}" \
   --project="${PROJECT}" \
@@ -45,7 +51,7 @@ gcloud run deploy "${SERVICE}" \
   --min-instances=0 \
   --max-instances=3 \
   --memory=512Mi \
-  --set-env-vars="^@^ANALYTICS_PRODUCT_URL=${ANALYTICS_PRODUCT_URL:-}@ANALYTICS_SHOW_EMAILS=${ANALYTICS_SHOW_EMAILS:-false}@ANALYTICS_TEST_ACCOUNTS=${ANALYTICS_TEST_ACCOUNTS:-demo@kora.app,tester@kora.app,uat-tenant-b@kora.app,pandasivananda0@gmail.com}" \
+  --set-env-vars="^|^ANALYTICS_PRODUCT_URL=${ANALYTICS_PRODUCT_URL:-}|ANALYTICS_SHOW_EMAILS=${ANALYTICS_SHOW_EMAILS:-false}|ANALYTICS_TEST_ACCOUNTS=${ANALYTICS_TEST_ACCOUNTS:-demo@kora.app,tester@kora.app,uat-tenant-b@kora.app,pandasivananda0@gmail.com}" \
   --set-secrets="SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest" \
   --quiet
 

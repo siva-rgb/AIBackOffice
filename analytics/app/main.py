@@ -29,10 +29,17 @@ STATIC = Path(__file__).resolve().parent.parent / "static"
 app = FastAPI(title="Kora analytics", docs_url=None, redoc_url=None)
 
 
-@app.get("/healthz")
-async def healthz() -> dict:
+@app.get("/health")
+async def health() -> dict:
     """Liveness only — deliberately does not touch the database, so a database
-    blip cannot make Cloud Run recycle a container that is otherwise fine."""
+    blip cannot make Cloud Run recycle a container that is otherwise fine.
+
+    NOT `/healthz`: that path is intercepted by Google's frontend and never
+    reaches the container. It answers a Google 404 page while every other route
+    on the same host works, and nothing appears in the Cloud Run request log —
+    which is how this was found, since the endpoint worked perfectly in local
+    testing and only failed once deployed.
+    """
     return {"ok": True}
 
 
