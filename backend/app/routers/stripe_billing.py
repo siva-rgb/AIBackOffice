@@ -310,6 +310,10 @@ async def _handle_invoice_payment(session: dict, account_id: str | None) -> None
             "amount_paid": float(invoice.total),
         },
     )
+    from ..services.invoice_payments import record_payment_received
+
+    record_payment_received(user_id, invoice, "the payment link")
+
     _log_billing_event(
         user_id,
         f"Invoice {invoice.invoice_number} paid via Stripe",

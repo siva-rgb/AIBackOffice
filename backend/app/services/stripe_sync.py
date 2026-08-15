@@ -8,7 +8,7 @@ import stripe
 from app import store
 from app.models import Transaction
 from app.services.agent_logger import log_action
-from app.services.invoice_payments import from_minor_units
+from app.services.invoice_payments import from_minor_units, record_payment_received
 
 # Pull transactions from a user's connected Stripe account and normalize
 # into Kora's Transaction format. Pre-categorized from Stripe's typed data —
@@ -160,6 +160,9 @@ def _settle_linked_invoices(user_id: str, inserted: list, raw_rows: list[dict]) 
                         "amount_paid": float(invoice.total),
                     },
                 )
+                # Only on the transition, so the webhook and this sync cannot
+                # both announce the same payment.
+                record_payment_received(user_id, invoice, "Stripe")
             log_action(
                 user_id=user_id,
                 agent_type="cross_module",

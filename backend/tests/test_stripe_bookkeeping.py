@@ -245,3 +245,65 @@ class TestMigrationShipped:
 @pytest.mark.parametrize("field", ["external_id"])
 def test_the_transaction_model_carries_the_field(field):
     assert field in Transaction.model_fields
+
+
+class TestTheUserIsToldTheyWerePaid:
+    """`reconcile_payments` has always raised a "Payment received" alert — it is
+    how a user learns they have been paid. Payment links settle invoices on two
+    newer paths that bypass that function, so without this the invoice flips to
+    paid and stops being chased with nothing telling anyone."""
+
+    def test_the_sync_announces_a_payment_it_settles(self, monkeypatch):
+        alerts = []
+        monkeypatch.setattr(
+            stripe_sync.store,
+            "get_invoice",
+            lambda uid, iid: SimpleNamespace(id=iid, invoice_number="INV-1", status="sent", total=500.0, currency="USD", client_name="Acme"),
+        )
+        monkeypatch.setattr(stripe_sync.store, "update_invoice", lambda *a, **k: None)
+        monkeypatch.setattr(stripe_sync, "log_action", lambda **kw: None)
+        monkeypatch.setattr(stripe_sync, "record_payment_received", lambda *a: alerts.append(a))
+
+        rows = [{"date": "2026-08-14", "description": "Acme — Stripe payment", "amount": 500.0, "invoice_id": "inv_A", "stripe_id": "t1"}]
+        stripe_sync._settle_linked_invoices("u1", [_txn(id="tx1")], rows)
+        assert len(alerts) == 1
+
+    def test_it_does_not_announce_an_invoice_the_webhook_already_settled(self, monkeypatch):
+        """Otherwise the same payment is announced twice — once by the webhook
+        instantly, once by the sync hours later."""
+        alerts = []
+        monkeypatch.setattr(
+            stripe_sync.store,
+            "get_invoice",
+            lambda uid, iid: SimpleNamespace(id=iid, invoice_number="INV-1", status="paid", total=500.0, currency="USD", client_name="Acme"),
+        )
+        monkeypatch.setattr(stripe_sync.store, "update_invoice", lambda *a, **k: None)
+        monkeypatch.setattr(stripe_sync, "log_action", lambda **kw: None)
+        monkeypatch.setattr(stripe_sync, "record_payment_received", lambda *a: alerts.append(a))
+
+        rows = [{"date": "2026-08-14", "description": "Acme — Stripe payment", "amount": 500.0, "invoice_id": "inv_A", "stripe_id": "t1"}]
+        stripe_sync._settle_linked_invoices("u1", [_txn(id="tx1")], rows)
+        assert alerts == []
+
+    def test_the_alert_names_the_client_and_the_amount(self, monkeypatch):
+        from app.services import invoice_payments
+
+        written = []
+        monkeypatch.setattr(invoice_payments.store, "insert_alert", lambda a: written.append(a))
+        monkeypatch.setattr(invoice_payments.store, "uid", lambda p: "alert_1")
+        inv = SimpleNamespace(invoice_number="INV-7", total=1250.0, currency="USD", client_name="Acme Ltd")
+        invoice_payments.record_payment_received("u1", inv, "the payment link")
+        assert len(written) == 1
+        assert "Acme Ltd" in written[0].body and "1,250.00" in written[0].body
+        assert written[0].type == "payment_reconciled"
+
+    def test_a_failed_alert_does_not_lose_the_payment(self, monkeypatch):
+        from app.services import invoice_payments
+
+        def _boom(_):
+            raise RuntimeError("alerts table missing")
+
+        monkeypatch.setattr(invoice_payments.store, "insert_alert", _boom)
+        monkeypatch.setattr(invoice_payments.store, "uid", lambda p: "a1")
+        inv = SimpleNamespace(invoice_number="INV-7", total=10.0, currency="USD", client_name="A")
+        invoice_payments.record_payment_received("u1", inv, "Stripe")  # must not raise

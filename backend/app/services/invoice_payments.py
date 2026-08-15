@@ -107,6 +107,44 @@ class PaymentLinkUnavailable(Exception):
     """Carries a reason the caller can show the user verbatim."""
 
 
+def record_payment_received(user_id: str, invoice, via: str) -> None:
+    """Raise the "Payment received" alert for an invoice settled through Stripe.
+
+    `reconcile_payments` has always raised this when it matched a bank payment
+    to an invoice, and it is how a user finds out they have been paid. Payment
+    links settle invoices on two newer paths — the webhook and the sync — and
+    neither went through that function, so the invoice quietly flipped to paid
+    and stopped being chased with nothing telling anyone.
+
+    Called only from the branch that actually transitions the invoice, so the
+    webhook and the sync cannot both announce the same payment.
+    """
+    from datetime import datetime, timezone
+
+    from ..models import Alert
+
+    try:
+        store.insert_alert(
+            Alert(
+                id=store.uid("alert"),
+                user_id=user_id,
+                type="payment_reconciled",
+                severity="info",
+                title="Payment received — invoice marked paid",
+                body=(
+                    f"{invoice.client_name} paid {invoice.currency} {float(invoice.total):,.2f} "
+                    f"for {invoice.invoice_number} via {via}. Kora marked it paid and stopped follow-ups."
+                ),
+                action_label="View invoices",
+                action_url="/invoices",
+                read=False,
+                created_at=datetime.now(timezone.utc).isoformat(),
+            )
+        )
+    except Exception as exc:  # pragma: no cover - a missed alert must not lose the payment
+        print(f"[invoice-payments] could not raise payment alert: {type(exc).__name__}: {str(exc)[:100]}")
+
+
 def _connected_account(user_id: str) -> str:
     conn = store.get_stripe_connection(user_id)
     if not conn or not conn.get("connected") or not conn.get("stripe_account_id"):
