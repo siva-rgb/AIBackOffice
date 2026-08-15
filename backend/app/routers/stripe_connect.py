@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import stripe
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from app.config import settings
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, verify_cron_secret
 from app.clients.pool import get_async_http
 from app.services.oauth_state import issue_oauth_state, verify_oauth_state
 from app.services.token_encryption import encrypt_token
@@ -144,6 +144,59 @@ async def trigger_sync(user=Depends(get_current_user)):
     if "error" in result and not result.get("synced_count"):
         raise HTTPException(400, result["error"])
     return result
+
+
+@router.post("/run")
+async def scheduled_sync(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    is_cron: bool = Depends(verify_cron_secret),
+):
+    """Pull Stripe activity into the books for every connected tenant.
+
+    Until this existed, `sync_stripe_transactions` had exactly one caller — the
+    Sync button in Settings. A client could pay an invoice, the webhook would
+    mark it paid, and the income stayed outside the books until somebody
+    remembered to click. Everything downstream — P&L, the cash-flow forecast,
+    revenue-goal tracking, the alert agent — read stale numbers in the meantime.
+
+    Unlike the other cron routes this one does NOT act as a single scheduler
+    tenant. Bookkeeping is per-tenant work: syncing only the scheduler's own
+    account would leave every other connected user exactly as stale as before.
+    One tenant's failure is logged and the rest continue.
+    """
+    if not is_cron:
+        # Same route serves a signed-in user syncing just themselves.
+        user = await get_current_user(request, authorization)
+        result = await _sync_one(user.id)
+        if result.get("error") and not result.get("synced_count"):
+            raise HTTPException(400, result["error"])
+        return {"trigger": "user", **result}
+
+    from app.services.stripe_sync import sync_stripe_transactions
+
+    user_ids = store.list_connected_stripe_user_ids()
+    synced = 0
+    failed = 0
+    for uid in user_ids:
+        try:
+            result = await sync_stripe_transactions(uid)
+            synced += int(result.get("synced_count") or 0)
+        except Exception as exc:  # pragma: no cover - one tenant must not stop the rest
+            failed += 1
+            print(f"[stripe-sync] tenant {uid} failed ({type(exc).__name__}: {str(exc)[:120]})")
+    return {
+        "trigger": "scheduler",
+        "tenants": len(user_ids),
+        "transactions_synced": synced,
+        "tenants_failed": failed,
+    }
+
+
+async def _sync_one(user_id: str) -> dict:
+    from app.services.stripe_sync import sync_stripe_transactions
+
+    return await sync_stripe_transactions(user_id)
 
 
 @router.delete("/disconnect")

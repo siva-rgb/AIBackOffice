@@ -340,6 +340,11 @@ class Transaction(CamelModel):
     ai_confidence: float | None = None
     raw_text: str | None = None
     report_id: str | None = None
+    # Source-system id (Stripe balance transaction, etc). When present it is the
+    # dedupe key instead of (date, description, amount) — two genuine payments
+    # from the same client on the same day for the same amount are two rows, not
+    # one. See migrations/2026-08-15_transaction_external_id.sql.
+    external_id: str | None = None
     created_at: str
 
 

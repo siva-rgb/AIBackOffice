@@ -123,20 +123,59 @@ def list_transactions(user_id: str) -> list[Transaction]:
     return [Transaction(**row) for row in r.data]
 
 
+# Set to False the first time the database rejects `external_id`, so a
+# deployment running ahead of migrations/2026-08-15_transaction_external_id.sql
+# degrades to the old shape-based dedupe instead of failing every import.
+_HAS_EXTERNAL_ID = True
+
+
+def _txn_dedupe_key(date: str, description: str, amount, external_id: str | None):
+    """One row per source record when we have a source id; per shape otherwise.
+
+    Shape alone loses money: two genuine payments from the same client, same
+    day, same amount are indistinguishable under (date, description, amount) and
+    the second is silently dropped. A client settling two equal invoices at once
+    is exactly that, and so is a pair of same-value retainers.
+    """
+    if external_id:
+        return ("ext", external_id)
+    return (date, description, round(float(amount), 2))
+
+
 def insert_transactions(rows: list[Transaction]) -> list[Transaction]:
+    global _HAS_EXTERNAL_ID
     if not rows:
         return []
     user_id = rows[0].user_id
     existing = repo(user_id).select("transactions").order("date", desc=True).execute()
-    seen = {(e["date"], e["description"], round(float(e["amount"]), 2)) for e in existing.data}
+    seen = {_txn_dedupe_key(e["date"], e["description"], e["amount"], e.get("external_id")) for e in existing.data}
     new: list[Transaction] = []
     for row in rows:
-        key = (row.date, row.description, round(float(row.amount), 2))
+        key = _txn_dedupe_key(row.date, row.description, row.amount, row.external_id)
         if key not in seen:
             seen.add(key)
             new.append(row)
-    if new:
-        repo(user_id).raw_table("transactions").insert([_dump(t) for t in new]).execute()
+    if not new:
+        return []
+
+    payload = [_dump(t) for t in new]
+    if not _HAS_EXTERNAL_ID:
+        for item in payload:
+            item.pop("external_id", None)
+    try:
+        repo(user_id).raw_table("transactions").insert(payload).execute()
+    except Exception as exc:
+        # The column is missing only until the migration is applied. Retry once
+        # without it rather than failing the whole import, and remember, so the
+        # next call does not pay for the round trip.
+        if _HAS_EXTERNAL_ID and "external_id" in str(exc):
+            _HAS_EXTERNAL_ID = False
+            print("[store] transactions.external_id missing — apply migrations/2026-08-15_transaction_external_id.sql; falling back to shape dedupe")
+            for item in payload:
+                item.pop("external_id", None)
+            repo(user_id).raw_table("transactions").insert(payload).execute()
+        else:
+            raise
     return new
 
 
@@ -690,6 +729,19 @@ def upsert_stripe_connection(user_id: str, data: dict) -> dict:
 def get_stripe_connection(user_id: str) -> dict | None:
     r = repo(user_id).select("stripe_connections").eq("connected", True).execute()
     return r.data[0] if r.data else None
+
+
+def list_connected_stripe_user_ids() -> list[str]:
+    """Every tenant with a live Stripe connection.
+
+    Cross-tenant on purpose, and one of the few reads that must be — the
+    scheduled sync has no user on the request and has to service everyone who
+    connected an account, not just the scheduler's own tenant. Returns ids only:
+    no tokens, no account ids, nothing that would widen the blast radius if a
+    caller logged it.
+    """
+    r = _sb.table("stripe_connections").select("user_id").eq("connected", True).execute()
+    return [row["user_id"] for row in (r.data or []) if row.get("user_id")]
 
 
 def update_stripe_connection(user_id: str, updates: dict) -> dict:

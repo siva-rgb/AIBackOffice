@@ -23,6 +23,10 @@ on:
     - cron: "30 7 * * 1-5"
     # Invoice follow-up campaign — 9:00 UTC Mon–Fri
     - cron: "0 9 * * 1-5"
+    # Stripe payment sync — 6:20 UTC daily. Runs BEFORE the briefings and the
+    # supervisor so the money they reason over includes what clients paid
+    # overnight; without it the books only moved when someone clicked Sync.
+    - cron: "20 6 * * *"
     # Gmail client-email intel refresh — 6:30 UTC daily (before the briefings)
     - cron: "30 6 * * *"
     # Drive intel sync (transcripts + docs) — 6:45 UTC daily
@@ -43,7 +47,7 @@ on:
         required: true
         default: supervisor
         type: choice
-        options: [supervisor, butler, invoices, gmail, drive, graph, memory, notion, client_views, all]
+        options: [supervisor, butler, invoices, stripe, gmail, drive, graph, memory, notion, client_views, all]
 
 jobs:
   supervisor:
@@ -86,6 +90,19 @@ jobs:
         # Path is /follow-up — the workflow asked for /run-follow-ups, which no
         # route ever answered, so this job returned 405 rather than running.
         run: .github/scripts/cron-call.sh /api/invoices/follow-up
+
+  stripe:
+    if: >
+      github.event_name == 'workflow_dispatch' && (inputs.job == 'stripe' || inputs.job == 'all') ||
+      github.event_name == 'schedule' && startsWith(github.event.schedule, '20 6')
+    runs-on: ubuntu-latest
+    env:
+      KORA_API_URL: ${{ secrets.KORA_API_URL }}
+      KORA_CRON_SECRET: ${{ secrets.KORA_CRON_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync Stripe payments into the books
+        run: .github/scripts/cron-call.sh /api/stripe-connect/run
 
   gmail:
     if: >

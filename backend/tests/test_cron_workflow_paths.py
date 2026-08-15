@@ -51,6 +51,7 @@ class TestScheduledPathsResolve:
             "supervisor",
             "butler",
             "invoices",
+            "stripe",
             "gmail",
             "drive",
             "graph",
@@ -58,6 +59,21 @@ class TestScheduledPathsResolve:
             "notion",
             "client_views",
         }
+
+    def test_the_stripe_sync_runs_before_the_agents_that_read_the_books(self):
+        """Ordering is the whole point of its 6:20 slot: the supervisor (07:00)
+        and butler (07:30) reason over money, and syncing after them would have
+        them read yesterday's balance every single day."""
+        spec = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        schedules = [c["cron"] for c in spec[True]["schedule"]]
+
+        def minutes(expr: str) -> int:
+            minute, hour = expr.split()[0], expr.split()[1]
+            return int(hour) * 60 + int(minute)
+
+        assert "20 6 * * *" in schedules
+        assert minutes("20 6") < minutes("0 7")  # supervisor
+        assert minutes("20 6") < minutes("30 7")  # butler
 
     @pytest.mark.parametrize("job,path", sorted(_workflow_paths().items()))
     def test_each_scheduled_path_is_a_real_post_route(self, job, path):

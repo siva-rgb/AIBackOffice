@@ -198,6 +198,7 @@ delete_notion_connection = _b.delete_notion_connection
 # Stripe Connect
 upsert_stripe_connection = _b.upsert_stripe_connection
 get_stripe_connection = _b.get_stripe_connection
+list_connected_stripe_user_ids = _b.list_connected_stripe_user_ids
 update_stripe_connection = _b.update_stripe_connection
 delete_stripe_connection = _b.delete_stripe_connection
 

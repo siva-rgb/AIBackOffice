@@ -154,11 +154,21 @@ def list_transactions(user_id: str) -> list[Transaction]:
     return sorted(rows, key=lambda t: t.date, reverse=True)
 
 
+def _txn_dedupe_key(txn: Transaction):
+    """Mirror of the supabase backend's key — one row per source record when a
+    source id exists, per shape otherwise. See its docstring for why."""
+    if txn.external_id:
+        return (txn.user_id, "ext", txn.external_id)
+    return (txn.user_id, txn.date, txn.description, round(float(txn.amount), 2))
+
+
 def insert_transactions(rows: list[Transaction]) -> list[Transaction]:
     inserted: list[Transaction] = []
+    seen = {_txn_dedupe_key(t) for t in _transactions}
     for row in rows:
-        dupe = any(t.user_id == row.user_id and t.date == row.date and t.description == row.description and t.amount == row.amount for t in _transactions)
-        if not dupe:
+        key = _txn_dedupe_key(row)
+        if key not in seen:
+            seen.add(key)
             _transactions.append(row)
             inserted.append(row)
     return inserted
@@ -1013,6 +1023,11 @@ def upsert_stripe_connection(user_id: str, data: dict) -> dict:
 def get_stripe_connection(user_id: str) -> dict | None:
     conn = _stripe_connections.get(user_id)
     return conn if conn and conn.get("connected") else None
+
+
+def list_connected_stripe_user_ids() -> list[str]:
+    """Mirror of the supabase backend's cross-tenant read (see its docstring)."""
+    return [uid for uid, conn in _stripe_connections.items() if conn.get("connected")]
 
 
 def update_stripe_connection(user_id: str, updates: dict) -> dict:

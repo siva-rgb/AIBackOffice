@@ -81,6 +81,21 @@ def to_minor_units(amount: float, currency: str) -> int:
     return int(round(amount * 100))
 
 
+def from_minor_units(minor: int, currency: str) -> float:
+    """Inverse of `to_minor_units` — Stripe's smallest unit back to a decimal.
+
+    Dividing everything by 100 records a ¥5,000 charge as ¥50, understating the
+    user's income by 99%. The same table governs both directions, so they cannot
+    drift apart.
+    """
+    code = (currency or "usd").lower()
+    if code in _ZERO_DECIMAL:
+        return float(minor)
+    if code in _THREE_DECIMAL:
+        return round(minor / 1000, 3)
+    return round(minor / 100, 2)
+
+
 def outstanding_amount(invoice) -> float:
     """What is actually still owed — never the full total on a part-paid invoice."""
     total = float(getattr(invoice, "total", 0) or 0)
