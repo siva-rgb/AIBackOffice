@@ -52,6 +52,7 @@ export default async function InvoicesPage() {
     sentAt: i.sentAt ?? null,
     paymentTerms: i.paymentTerms ?? null,
     amountPaid: i.amountPaid ?? 0,
+    paymentLink: i.paymentLink ?? null,
   }));
 
   return (

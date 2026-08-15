@@ -31,6 +31,7 @@ export interface InvoiceVM {
   sentAt?: string | null;
   paymentTerms?: string | null;
   amountPaid?: number;
+  paymentLink?: string | null;
 }
 
 export interface DemandResult {
@@ -55,6 +56,8 @@ export function InvoiceList({ invoices }: { invoices: InvoiceVM[] }) {
   const [paymentOpen, setPaymentOpen] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentBusy, setPaymentBusy] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   async function act(id: string, fn: () => Promise<Response>) {
     setPending(id);
@@ -91,6 +94,34 @@ export function InvoiceList({ invoices }: { invoices: InvoiceVM[] }) {
     await navigator.clipboard.writeText(`${d.subject}\n\n${d.body}`);
     setCopied(id);
     setTimeout(() => setCopied((c) => (c === id ? null : c)), 1500);
+  }
+
+  /* Creates a real Stripe Payment Link on the user's own connected account.
+     A 409 here is not a failure — it means Stripe is not connected yet, and the
+     detail explains what to do. Showing it verbatim beats a generic error,
+     because the fix is entirely in the user's hands. */
+  async function addPaymentLink(id: string) {
+    setLinkBusy(id);
+    setLinkError(null);
+    try {
+      const res = await authedFetch(`/api/invoices/${id}/payment-link`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) {
+        setLinkError(typeof json.detail === 'string' ? json.detail : 'Could not create a payment link.');
+        return;
+      }
+      router.refresh();
+    } catch {
+      setLinkError('Could not reach Stripe. Please try again.');
+    } finally {
+      setLinkBusy(null);
+    }
+  }
+
+  async function copyPaymentLink(id: string, url: string) {
+    await navigator.clipboard.writeText(url);
+    setCopied(`pay-${id}`);
+    setTimeout(() => setCopied((c) => (c === `pay-${id}` ? null : c)), 1500);
   }
 
   async function recordPayment(id: string) {
@@ -178,6 +209,11 @@ export function InvoiceList({ invoices }: { invoices: InvoiceVM[] }) {
           {demandError}
         </div>
       )}
+      {linkError && (
+        <div className="border-b border-gray-100 bg-amber-50 px-5 py-2.5 text-xs text-amber-800">
+          {linkError}
+        </div>
+      )}
       <ul className="divide-y divide-gray-100">
         {invoices.map((inv) => {
           const overdueDays = daysBetween(inv.dueDate);
@@ -263,6 +299,26 @@ export function InvoiceList({ invoices }: { invoices: InvoiceVM[] }) {
                     >
                       <DollarSign size={12} /> Record payment
                     </button>
+                  )}
+                  {inv.status !== 'paid' && inv.status !== 'cancelled' && (
+                    inv.paymentLink ? (
+                      <button
+                        onClick={() => copyPaymentLink(inv.id, inv.paymentLink!)}
+                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                        title="Copy the Stripe payment link sent to the client"
+                      >
+                        {copied === `pay-${inv.id}` ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />} Pay link
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => addPaymentLink(inv.id)}
+                        disabled={linkBusy === inv.id}
+                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                        title="Create a Stripe payment link so the client can pay online"
+                      >
+                        {linkBusy === inv.id ? <Loader2 size={12} className="animate-spin" /> : <Link2 size={12} />} Add pay link
+                      </button>
+                    )
                   )}
                   {inv.status === 'overdue' && (
                     <button

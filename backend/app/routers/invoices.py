@@ -160,7 +160,15 @@ async def send_invoice(invoice_id: str, user: User = Depends(get_current_user)):
         except Exception:
             pass
 
-    payment_link = inv.payment_link or f"https://pay.stripe.com/demo/{inv.invoice_number}"
+    # A real Stripe Payment Link on the user's connected account, or None.
+    # This used to fabricate `pay.stripe.com/demo/{number}`, which is not a
+    # Stripe endpoint — every invoice ever sent carried a Pay Now button that
+    # went nowhere, failing in front of the user's own client. `send_invoice_email`
+    # omits the button when the link is None, so an unconnected account now
+    # sends a working invoice without a button rather than a broken button.
+    from ..services.invoice_payments import ensure_payment_link
+
+    payment_link = ensure_payment_link(user.id, inv)
 
     user_obj = store.get_user(user.id)
     sender_name = ""
@@ -189,10 +197,35 @@ async def send_invoice(invoice_id: str, user: User = Depends(get_current_user)):
         {
             "status": "sent",
             "sent_at": datetime.now(timezone.utc).isoformat(),
-            "payment_link": payment_link,
+            # Only persist a link we actually made. Writing None would wipe a
+            # working link if a later send happened while Stripe was unreachable.
+            **({"payment_link": payment_link} if payment_link else {}),
             **({"email_message_id": message_id} if message_id else {}),
         },
     )
+
+
+@router.post("/{invoice_id}/payment-link", response_model=Invoice)
+async def create_invoice_payment_link(invoice_id: str, user: User = Depends(get_current_user)):
+    """Create (or replace) the Pay Now link for an invoice.
+
+    Separate from sending so the user can add a button to an invoice already
+    out, and so a link can be regenerated after the amount changes — a Payment
+    Link is fixed at the amount it was created with.
+    """
+    from ..services.invoice_payments import PaymentLinkUnavailable, create_payment_link
+
+    inv = store.get_invoice(user.id, invoice_id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Not found")
+    if inv.status in ("paid", "cancelled"):
+        raise HTTPException(status_code=409, detail="Invoice is already paid or cancelled")
+    try:
+        link = create_payment_link(user.id, inv)
+    except PaymentLinkUnavailable as exc:
+        # 409, not 500 — nothing is broken, the account just is not set up.
+        raise HTTPException(status_code=409, detail=str(exc))
+    return store.update_invoice(user.id, invoice_id, {"payment_link": link})
 
 
 @router.post("/{invoice_id}/pdf")

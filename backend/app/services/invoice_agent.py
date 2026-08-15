@@ -9,6 +9,7 @@ from ..models import Contract
 from ..utils.security import safe_sanitize
 from . import agent_logger
 from .cross_module import on_invoice_demand_sent, reconcile_payments
+from .invoice_payments import ensure_payment_link
 from .vertex_ai import generate_with_retry, get_ai
 
 # Follow-up cadence after due date (SKILL.md modules.md#invoices):
@@ -135,7 +136,7 @@ def run_follow_up_agent(user_id: str, triggered_by: str = "scheduler") -> Follow
             "amount": inv.total,
             "due_date": inv.due_date,
             "days_overdue": days,
-            "payment_link": inv.payment_link,
+            "payment_link": ensure_payment_link(user_id, inv),
         }
         # On the final notice, ground the email in the linked contract's terms.
         if attempt == 3:
@@ -240,7 +241,7 @@ def send_follow_up_for(user_id: str, invoice_id: str, triggered_by: str = "user"
         "amount": inv.total,
         "due_date": inv.due_date,
         "days_overdue": days,
-        "payment_link": inv.payment_link,
+        "payment_link": ensure_payment_link(user_id, inv),
     }
     if attempt == 3:
         params.update(contract_context(user_id, inv.contract_id))

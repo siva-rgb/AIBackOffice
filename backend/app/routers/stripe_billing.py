@@ -256,7 +256,17 @@ async def stripe_webhook(request: Request):
 
     try:
         if event_type == "checkout.session.completed":
-            await _handle_checkout_completed(data)
+            # Two different things produce this event and they must not be
+            # confused. A subscription checkout runs on THIS platform account;
+            # an invoice payment runs on the user's CONNECTED account and
+            # carries kora_invoice_id. Both can be mode="payment", and the
+            # platform branch grants a contract credit — so routing on mode
+            # alone would hand out a free contract every time someone's client
+            # paid an invoice.
+            if (data.get("metadata") or {}).get("kora_invoice_id"):
+                await _handle_invoice_payment(data, event.get("account"))
+            else:
+                await _handle_checkout_completed(data)
         elif event_type in ("customer.subscription.created", "customer.subscription.updated"):
             await _handle_subscription_change(data)
         elif event_type == "customer.subscription.deleted":
@@ -267,6 +277,50 @@ async def stripe_webhook(request: Request):
         print(f"[stripe-webhook] handler error for {event_type}: {e}")
 
     return {"received": True}
+
+
+async def _handle_invoice_payment(session: dict, account_id: str | None) -> None:
+    """A client paid one of the user's invoices through its Pay Now link.
+
+    Idempotent by construction: the invoice is SET to fully paid rather than
+    having the received amount added to `amount_paid`. Stripe delivers webhooks
+    at least once, and an increment would double-count a redelivery. Setting is
+    correct here because the Payment Link is created for exactly the amount
+    outstanding, so a completed session settles the invoice by definition.
+    """
+    meta = session.get("metadata") or {}
+    user_id = meta.get("kora_user_id")
+    invoice_id = meta.get("kora_invoice_id")
+    if not user_id or not invoice_id:
+        return
+
+    invoice = store.get_invoice(user_id, invoice_id)
+    if not invoice:
+        print(f"[stripe-webhook] payment for unknown invoice {invoice_id}")
+        return
+    if invoice.status in ("paid", "cancelled"):
+        return  # already settled, or a redelivery
+
+    store.update_invoice(
+        user_id,
+        invoice_id,
+        {
+            "status": "paid",
+            "paid_at": _now(),
+            "amount_paid": float(invoice.total),
+        },
+    )
+    _log_billing_event(
+        user_id,
+        f"Invoice {invoice.invoice_number} paid via Stripe",
+        {
+            "invoice_id": invoice_id,
+            "amount_total": session.get("amount_total"),
+            "currency": session.get("currency"),
+            "connected_account": account_id,
+            "session_id": session.get("id"),
+        },
+    )
 
 
 async def _handle_checkout_completed(session: dict) -> None:
