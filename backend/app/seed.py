@@ -222,7 +222,11 @@ def build_seed(user_id: str = DEMO_USER_ID) -> dict:
     ]
 
     overdue = invoices[2]
-    pay = overdue.payment_link
+    # The sample invoices stopped carrying a fabricated pay URL when real Stripe
+    # links landed, so there is usually no link to offer here. Build the whole
+    # sentence or nothing: interpolating a bare value printed "You can pay
+    # securely here: None" into the demo follow-up emails every new tenant sees.
+    pay_line = f"\n\nYou can pay securely here: {overdue.payment_link}" if overdue.payment_link else ""
 
     agent_logs: list[AgentLog] = [
         AgentLog(
@@ -253,7 +257,7 @@ def build_seed(user_id: str = DEMO_USER_ID) -> dict:
                     f"Hi {overdue.client_name},\n\nThis is a friendly reminder that invoice "
                     f"{overdue.invoice_number} for $3,500.00 was due a few days ago. "
                     f"It may have simply slipped through \u2014 no worries at all if so."
-                    f"\n\nYou can pay securely here: {pay}\n\nBest,\nRivera Studio"
+                    f"{pay_line}\n\nBest,\nRivera Studio"
                 ),
                 "delivered": True,
             },
@@ -280,7 +284,7 @@ def build_seed(user_id: str = DEMO_USER_ID) -> dict:
                     f"{overdue.invoice_number} for $3,500.00, which is now 7 days overdue. "
                     f"My earlier reminder may have been missed.\n\nCould you confirm when "
                     f"payment will be processed, or let me know if there's an issue I can "
-                    f"help resolve?\n\nYou can pay securely here: {pay}\n\nThanks,\nRivera Studio"
+                    f"help resolve?{pay_line}\n\nThanks,\nRivera Studio"
                 ),
                 "delivered": True,
             },
