@@ -131,6 +131,34 @@ def _stamp(request: Request, user: User) -> None:
     """
     set_user_id(user.id)
     request.state.user_id = user.id
+    _settle_lapsed_trial(user)
+
+
+def _settle_lapsed_trial(user: User) -> None:
+    """Write a lapsed launch trial back to free, once, on first request after it
+    expires.
+
+    The entitlement gate already treats a lapsed plan as free, so this grants and
+    revokes nothing. It exists so that everything reading `users.plan` directly —
+    the billing screen, the pricing page's "your current plan", the usage
+    dashboard — stops disagreeing with what the user can actually do.
+
+    The in-memory object is updated too, not just the row: the verified-token
+    cache holds this very instance, so without it the response to THIS request
+    still claims Pro, and so does every cached request for the next 30 seconds.
+
+    Imported locally because entitlements imports this module.
+    """
+    from .entitlements import plan_has_lapsed, settle_lapsed_plan
+
+    try:
+        if not plan_has_lapsed(user):
+            return
+        if settle_lapsed_plan(user):
+            user.plan = "free"
+            user.plan_expires_at = None
+    except Exception as exc:  # pragma: no cover - never fail auth over billing state
+        print(f"[dependencies] lapsed-plan settle skipped: {type(exc).__name__}")
 
 
 def require_plan(min_plan: str):

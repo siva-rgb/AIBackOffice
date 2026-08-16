@@ -37,7 +37,7 @@ const NAV = [
   // Pricing existed as a page but was reachable only from Settings → Billing,
   // so nobody evaluating the product ever saw what it costs.
   { href: '/pricing', label: 'Plans & pricing', icon: CreditCard },
-  { href: '/about', label: 'How it works', icon: HelpCircle },
+  { href: '/how-it-works', label: 'How it works', icon: HelpCircle },
 ];
 
 function SidebarContent({

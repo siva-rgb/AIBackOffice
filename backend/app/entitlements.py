@@ -19,6 +19,9 @@ entry, breaks the suite.
 
 from __future__ import annotations
 
+import math
+from datetime import datetime, timedelta, timezone
+
 from fastapi import Depends, HTTPException, Request
 
 from .dependencies import get_current_user
@@ -146,6 +149,61 @@ def plans_payload(price_ids: dict[str, str] | None = None) -> list[dict]:
     return plans
 
 
+def _parse_expiry(value) -> datetime | None:
+    """Accept the several shapes a timestamp column comes back as."""
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        # An unparseable expiry must not silently grant Pro forever. Treat it as
+        # no expiry rather than as expired, so a bad value never locks a paying
+        # customer out — but say so, because it is a data problem either way.
+        print(f"[entitlements] unparseable plan_expires_at: {value!r}")
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def plan_has_lapsed(user) -> bool:
+    """True when a granted plan's window has closed."""
+    expires = _parse_expiry(getattr(user, "plan_expires_at", None))
+    return bool(expires and datetime.now(timezone.utc) >= expires)
+
+
+def effective_plan(user) -> str:
+    """The plan a user actually holds RIGHT NOW.
+
+    A stored plan is a claim; this is the fact. The launch offer grants the full
+    suite for a fixed window, and the window closing has to take the features
+    with it — otherwise the trial is permanent for anyone who signed up early.
+
+    Deliberately computed at the gate rather than swept by a nightly job: a job
+    that fails to run would leave lapsed trials working indefinitely, and nobody
+    would notice because the failure mode is "the customer is happy".
+    """
+    plan = getattr(user, "plan", None) or FREE
+    if plan != FREE and plan_has_lapsed(user):
+        return FREE
+    return plan
+
+
+def days_remaining(user) -> int | None:
+    """Days left on a granted plan, or None when it does not lapse.
+
+    Rounded UP: with eight hours to go the honest thing to tell someone is
+    "1 day left", not "0 days left" while the features still work.
+    """
+    expires = _parse_expiry(getattr(user, "plan_expires_at", None))
+    if not expires:
+        return None
+    seconds = (expires - datetime.now(timezone.utc)).total_seconds()
+    if seconds <= 0:
+        return 0
+    return math.ceil(seconds / 86400)
+
+
 def grant_signup_plan(user_id: str, current_plan: str | None) -> str | None:
     """Apply SIGNUP_PLAN to a new account, returning the plan set (or None).
 
@@ -153,6 +211,9 @@ def grant_signup_plan(user_id: str, current_plan: str | None) -> str | None:
     paid, or that an operator has already promoted, must not be rewritten by a
     deployment flag — and re-running onboarding must not silently re-grant a tier
     someone downgraded from.
+
+    When SIGNUP_PLAN_DAYS is set the grant carries an expiry, which is what makes
+    the launch offer a trial rather than a giveaway.
     """
     from .config import settings  # local: config imports nothing from here
 
@@ -164,13 +225,38 @@ def grant_signup_plan(user_id: str, current_plan: str | None) -> str | None:
 
     from . import store
 
+    patch: dict = {"plan": wanted}
+    days = int(getattr(settings, "SIGNUP_PLAN_DAYS", 0) or 0)
+    if days > 0:
+        patch["plan_expires_at"] = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+
     try:
-        store.update_user(user_id, {"plan": wanted})
+        store.update_user(user_id, patch)
     except Exception as exc:  # pragma: no cover - depends on live schema
         # A failed grant must not block onboarding; the user simply stays free.
         print(f"[signup-plan] could not grant {wanted} to {user_id} ({type(exc).__name__}: {str(exc)[:100]})")
         return None
     return wanted
+
+
+def settle_lapsed_plan(user) -> bool:
+    """Write a lapsed trial back to free, so the stored plan stops lying.
+
+    The gate already treats it as free, so this changes no permission. It exists
+    so everything that reads `users.plan` directly — the billing screen, the
+    pricing page's "current plan", the usage dashboard — agrees with what the
+    user can actually do.
+    """
+    if not plan_has_lapsed(user) or (getattr(user, "plan", FREE) == FREE):
+        return False
+    from . import store
+
+    try:
+        store.update_user(user.id, {"plan": FREE, "plan_expires_at": None})
+    except Exception as exc:  # pragma: no cover - never break a request over this
+        print(f"[entitlements] could not settle lapsed plan for {getattr(user, 'id', '?')}: {type(exc).__name__}")
+        return False
+    return True
 
 
 def rank(plan: str | None) -> int:
@@ -199,7 +285,8 @@ async def enforce_plan(request: Request, user: User = Depends(get_current_user))
     need = min_plan_for(request.method, path)
     if need is None:
         raise RuntimeError(f"enforce_plan is attached to {request.method} {path} but it has no " f"POLICY entry — add one to app/entitlements.POLICY.")
-    if rank(user.plan) < _RANK[need]:
+    # effective_plan, not user.plan: a lapsed trial still stores "pro".
+    if rank(effective_plan(user)) < _RANK[need]:
         raise HTTPException(
             status_code=403,
             detail=f"Upgrade to {need} to use this feature.",

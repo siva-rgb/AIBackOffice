@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 // Public routes that never require a session.
-const PUBLIC = ['/', '/login', '/signup', '/auth', '/privacy', '/terms'];
+const PUBLIC = ['/', '/login', '/signup', '/auth', '/privacy', '/terms', '/plans', '/about'];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC.some((p) => pathname === p || pathname.startsWith(p + '/')) || pathname === '/';

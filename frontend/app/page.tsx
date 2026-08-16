@@ -1,23 +1,11 @@
 import Link from 'next/link';
-import { Sparkles, ArrowRight, BookOpen, FileText, Bot } from 'lucide-react';
+import { ArrowRight, BookOpen, FileText, Bot } from 'lucide-react';
+import { PublicHeader } from '@/components/marketing/public-header';
 
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white">
-      <header className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-kora-600 text-white">
-            <Sparkles size={18} />
-          </div>
-          <span className="text-lg font-bold">Kora</span>
-        </div>
-        <Link
-          href="/dashboard"
-          className="rounded-lg bg-kora-600 px-4 py-2 text-sm font-semibold text-white hover:bg-kora-700"
-        >
-          Open dashboard
-        </Link>
-      </header>
+      <PublicHeader />
 
       <section className="mx-auto max-w-3xl px-6 py-20 text-center">
         <p className="mb-4 inline-block rounded-full bg-kora-50 px-3 py-1 text-xs font-semibold text-kora-700">
@@ -38,6 +26,13 @@ export default function LandingPage() {
             Try the live demo <ArrowRight size={16} />
           </Link>
         </div>
+        <p className="mt-4 text-sm text-gray-600">
+          Or{' '}
+          <Link href="/plans" className="font-semibold text-kora-700 hover:underline">
+            sign up and get Pro free for 90 days
+          </Link>{' '}
+          — launch offer for early users.
+        </p>
         <p className="mt-3 text-xs text-gray-400">
           Runs on seeded demo data — no signup, no credit card.
         </p>

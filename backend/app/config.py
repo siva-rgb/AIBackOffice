@@ -129,6 +129,14 @@ class Settings(BaseSettings):
     # page still shows what each tier costs.
     SIGNUP_PLAN: str = ""
 
+    # How many days the granted plan lasts. 0 means it never lapses.
+    #
+    # The launch offer gives early users the full suite for 90 days, after
+    # which they fall back to free. Expiry is enforced at the entitlement
+    # gate rather than by a nightly job, so a lapsed trial cannot keep
+    # working just because a scheduled task failed to run.
+    SIGNUP_PLAN_DAYS: int = 0
+
     # Google Cloud / Vertex AI
     GOOGLE_CLOUD_PROJECT_ID: str = ""
     GOOGLE_CLOUD_LOCATION: str = "us-central1"

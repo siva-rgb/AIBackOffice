@@ -304,6 +304,9 @@ class User(CamelModel):
     country: str = "US"
     currency: str = "USD"
     plan: Literal["free", "starter", "pro"] = "free"
+    # When a granted plan lapses back to free. The column has existed since
+    # the first schema; nothing read it until the launch trial needed it.
+    plan_expires_at: str | None = None
     stripe_customer_id: str | None = None
     stripe_subscription_id: str | None = None
     contract_credits: int = 0

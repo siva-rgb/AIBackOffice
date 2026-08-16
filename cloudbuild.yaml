@@ -40,6 +40,8 @@ substitutions:
   _SCHEDULER_USER_ID: ""
   # Plan granted to new accounts on signup ("pro" for the evaluation deploy).
   _SIGNUP_PLAN: ""
+  # Days the granted plan lasts before lapsing to free ("90" for the launch offer).
+  _SIGNUP_PLAN_DAYS: "0"
   # Populate a brand-new tenant with the sample business on onboarding
   # completion. "true" only for public evaluation deployments — see
   # services/sample_data.py.
@@ -89,7 +91,7 @@ steps:
           --allow-unauthenticated \
           --no-cpu-throttling \
           --min-instances=${_MIN_INSTANCES} \
-          --set-env-vars="^@^ENVIRONMENT=${_ENVIRONMENT}@ALLOW_DEMO_USER=false@KORA_DATA_BACKEND=supabase@FRONTEND_ORIGIN=${_FRONTEND_ORIGIN}@KORA_AI_BACKEND=vertex@MODEL_NAME=${_MODEL_NAME}@GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID@GOOGLE_CLOUD_LOCATION=${_REGION}@PROTECTED_TENANT_IDS=${_PROTECTED_TENANT_IDS}@SEED_SAMPLE_DATA_ON_SIGNUP=${_SEED_SAMPLE_DATA_ON_SIGNUP}@SCHEDULER_USER_ID=${_SCHEDULER_USER_ID}@SIGNUP_PLAN=${_SIGNUP_PLAN}" \
+          --set-env-vars="^@^ENVIRONMENT=${_ENVIRONMENT}@ALLOW_DEMO_USER=false@KORA_DATA_BACKEND=supabase@FRONTEND_ORIGIN=${_FRONTEND_ORIGIN}@KORA_AI_BACKEND=vertex@MODEL_NAME=${_MODEL_NAME}@GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID@GOOGLE_CLOUD_LOCATION=${_REGION}@PROTECTED_TENANT_IDS=${_PROTECTED_TENANT_IDS}@SEED_SAMPLE_DATA_ON_SIGNUP=${_SEED_SAMPLE_DATA_ON_SIGNUP}@SCHEDULER_USER_ID=${_SCHEDULER_USER_ID}@SIGNUP_PLAN=${_SIGNUP_PLAN}@SIGNUP_PLAN_DAYS=${_SIGNUP_PLAN_DAYS}" \
           "$$SECRET_FLAG"
 
   # 3. Capture the backend URL into a workspace file for the next step.
