@@ -131,7 +131,7 @@ It needs two repository secrets: `KORA_API_URL` and `KORA_CRON_SECRET` (matching
 
 ## License & ownership
 
-**Copyright © 2026 [YOUR FULL LEGAL NAME]. All Rights Reserved.**
+**Copyright © 2026 [SIVANANDA PANDA]. All Rights Reserved.**
 
 Kora — including its source code, design, architecture, and documentation — was created by and
 is the exclusive property of the copyright holder. It is **proprietary software**, not open
