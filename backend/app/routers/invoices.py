@@ -166,9 +166,22 @@ async def send_invoice(invoice_id: str, user: User = Depends(get_current_user)):
     # went nowhere, failing in front of the user's own client. `send_invoice_email`
     # omits the button when the link is None, so an unconnected account now
     # sends a working invoice without a button rather than a broken button.
-    from ..services.invoice_payments import ensure_payment_link
+    from ..services.invoice_payments import ensure_payment_link, is_placeholder_link
 
     payment_link = ensure_payment_link(user.id, inv)
+
+    # What to write back, which is not simply "the link we got".
+    #   * a real link is stored;
+    #   * no link, but a fabricated one on file → CLEAR it. Leaving it would keep
+    #     a dead URL on the record and render it as a working "Pay link" button
+    #     in the invoice list, which is the bug this change exists to remove;
+    #   * no link, and a real one already on file → leave it. Stripe being
+    #     briefly unreachable must not wipe a link that works.
+    link_patch: dict = {}
+    if payment_link:
+        link_patch["payment_link"] = payment_link
+    elif is_placeholder_link(inv.payment_link):
+        link_patch["payment_link"] = None
 
     user_obj = store.get_user(user.id)
     sender_name = ""
@@ -197,9 +210,7 @@ async def send_invoice(invoice_id: str, user: User = Depends(get_current_user)):
         {
             "status": "sent",
             "sent_at": datetime.now(timezone.utc).isoformat(),
-            # Only persist a link we actually made. Writing None would wipe a
-            # working link if a later send happened while Stripe was unreachable.
-            **({"payment_link": payment_link} if payment_link else {}),
+            **link_patch,
             **({"email_message_id": message_id} if message_id else {}),
         },
     )
