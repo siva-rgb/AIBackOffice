@@ -147,7 +147,7 @@ def assess(state: dict) -> list[dict]:
                 {
                     "kind": "writeoff_invoice",
                     "severity": "warning",
-                    "title": f"Write off — {inv.invoice_number} ({inv.client_name})",
+                    "title": f"Write off: {inv.invoice_number} ({inv.client_name})",
                     "rationale": (
                         f"{inv.invoice_number} for {cur} {inv.total:,.2f} is {days} days overdue after "
                         "3 reminders. Consider writing it off as bad debt to clean up your books."
@@ -164,7 +164,7 @@ def assess(state: dict) -> list[dict]:
                 {
                     "kind": "send_demand",
                     "severity": "critical",
-                    "title": f"Send payment demand — {inv.invoice_number} ({inv.client_name})",
+                    "title": f"Send payment demand: {inv.invoice_number} ({inv.client_name})",
                     "rationale": (
                         f"{inv.invoice_number} for {cur} {inv.total:,.2f} is {days} days overdue "
                         f"with {inv.follow_up_count} reminders already sent. A formal demand letter "
@@ -183,7 +183,7 @@ def assess(state: dict) -> list[dict]:
                 {
                     "kind": "send_followup",
                     "severity": "warning",
-                    "title": f"Send {label} — {inv.invoice_number} ({inv.client_name})",
+                    "title": f"Send {label}: {inv.invoice_number} ({inv.client_name})",
                     "rationale": (
                         f"{inv.invoice_number} for {cur} {inv.total:,.2f} is {days} days overdue; " f"a {label} is due (attempt {attempt} of 3)."
                     ),
@@ -240,7 +240,7 @@ def _advisories(state: dict) -> list[dict]:
                 "kind": "uncategorized_txns",
                 "severity": "info",
                 "title": f"{uc} transaction{'s' if uc > 1 else ''} flagged for review",
-                "detail": "Some transactions are uncategorized or low-confidence — tidy them for an accurate P&L.",
+                "detail": "Some transactions are uncategorized or low-confidence. Tidy them for an accurate P&L.",
             }
         )
     cc = state.get("client_context") or {}
@@ -280,7 +280,7 @@ def _advisories(state: dict) -> list[dict]:
                 "kind": "overdue_action_items",
                 "severity": "warning",
                 "title": f"{mc['overdue_action_items']} meeting action item(s) overdue",
-                "detail": "Commitments from past meetings are past their due date — clear them from the Meetings page.",
+                "detail": "Commitments from past meetings are past their due date. Clear them from the Meetings page.",
             }
         )
     if mc.get("unlogged_meetings_count"):
@@ -347,7 +347,7 @@ def run_supervisor(user_id: str, triggered_by: str = "user") -> dict:
         # Return a minimal degraded response — rule-based steps above still ran.
         return {
             "briefing": {
-                "statusLine": "Supervisor partially unavailable — some data could not be loaded.",
+                "statusLine": "Supervisor partially unavailable, some data could not be loaded.",
                 "summary": "One or more data sources failed to load. The actions above (if any) were still applied.",
                 "priorities": [],
             },
@@ -525,7 +525,7 @@ def run_supervisor(user_id: str, triggered_by: str = "user") -> dict:
         model_used, tokens, latency, cost = call.model_used, call.tokens_used, call.latency_ms, call.cost_usd
     except Exception as exc:
         briefing = {
-            "status_line": "Briefing unavailable — rule-based tasks still queued below.",
+            "status_line": "Briefing unavailable: rule-based tasks still queued below.",
             "summary": "Manager briefing could not be generated right now. All rule-based actions above were applied.",
             "priorities": [],
         }
@@ -541,7 +541,7 @@ def run_supervisor(user_id: str, triggered_by: str = "user") -> dict:
     agent_logger.log_action(
         user_id=user_id,
         agent_type="cross_module",
-        action=f"Supervisor run — {len(auto_actions)} auto action(s), {new_tasks} new decision(s) queued",
+        action=f"Supervisor run: {len(auto_actions)} auto action(s), {new_tasks} new decision(s) queued",
         input={"triggeredBy": triggered_by, "monthIncome": state["month_income"], "monthlyGoal": state["monthly_goal"]},
         output={"autoActions": auto_actions, "newTasks": new_tasks, "pending": len(pending), "statusLine": briefing.get("status_line")},
         model_used=model_used or "deterministic",
@@ -704,7 +704,7 @@ def approve_task(user_id: str, task_id: str) -> dict:
             review = review_contract(user, text=text, source="drive", title=payload.get("fileName") or "Drive document")
             risk = getattr(review, "overall_risk", None) or (review.get("overallRisk") if isinstance(review, dict) else None)
             result = {
-                "note": f"Reviewed '{payload.get('fileName', 'document')}' — {risk or 'done'} risk.",
+                "note": f"Reviewed '{payload.get('fileName', 'document')}', {risk or 'done'} risk.",
                 "review": review.model_dump(by_alias=True) if hasattr(review, "model_dump") else review,
             }
         else:
@@ -765,7 +765,7 @@ def chat(user_id: str, message: str, history: list[dict] | None = None) -> dict:
         data = call.data if isinstance(call.data, dict) else {"reply": str(call.data)}
         model_used, tokens, latency, cost = call.model_used, call.tokens_used, call.latency_ms, call.cost_usd
     except Exception as exc:
-        data = {"reply": "Sorry — I couldn't reach the manager just now. Please try again.", "suggested_actions": []}
+        data = {"reply": "Sorry, I couldn't reach the manager just now. Please try again.", "suggested_actions": []}
         print(f"[supervisor] chat failed: {exc}")
 
     reply = str(data.get("reply", "")).strip()
@@ -871,7 +871,7 @@ def _queue_invoice_task(user_id: str, number: str, kind: str, severity: str) -> 
     if not inv:
         return {"error": f"No invoice '{number}' found."}
     if inv.status in ("paid", "cancelled", "draft"):
-        return {"error": f"{inv.invoice_number} is {inv.status} — not eligible."}
+        return {"error": f"{inv.invoice_number} is {inv.status}, not eligible."}
     if store.find_open_manager_task(user_id, kind, inv.id):
         return {"queued": True, "new": False, "note": f"Already awaiting your approval for {inv.invoice_number}."}
     verb = _TASK_VERBS.get(kind, "Action")
@@ -881,7 +881,7 @@ def _queue_invoice_task(user_id: str, number: str, kind: str, severity: str) -> 
                 id=store.uid("task"),
                 user_id=user_id,
                 kind=kind,
-                title=f"{verb} — {inv.invoice_number} ({inv.client_name})",
+                title=f"{verb}: {inv.invoice_number} ({inv.client_name})",
                 rationale="Proposed by the manager chat at your request.",
                 severity=severity,
                 status="proposed",
@@ -1068,7 +1068,7 @@ _TOOLS = [
         "function": {
             "name": "list_clients",
             "description": (
-                "The owner's clients — total count, plus each client's name, status "
+                "The owner's clients: total count, plus each client's name, status "
                 "(active/prospect/inactive), health score, and email. Use this for ANY question "
                 "about clients or how many clients the owner has."
             ),
@@ -1120,7 +1120,7 @@ _TOOLS = [
         "function": {
             "name": "query_graph",
             "description": (
-                "Traverse the relationship memory for ONE client — everything linked to them: "
+                "Traverse the relationship memory for ONE client, everything linked to them: "
                 "invoices (issued/paid), contracts, engagements, proposals, retainers and learned "
                 "facts. Use this for relationship questions like 'what has <client> been involved in?' "
                 "or 'what's our history with <client>?'."
@@ -1133,8 +1133,8 @@ _TOOLS = [
         "function": {
             "name": "recall_memory",
             "description": (
-                "Semantic recall over your durable memory of PAST context — learned facts, "
-                "email/meeting summaries, commitments, preferences and prior decisions — ranked by "
+                "Semantic recall over your durable memory of PAST context, learned facts, "
+                "email/meeting summaries, commitments, preferences and prior decisions, ranked by "
                 "relevance to a free-text query. Use this when a decision needs history that isn't a "
                 "specific client or invoice, e.g. 'have we handled a late-payment dispute like this "
                 "before?', 'what did the client say about scope?', 'past context on pricing pushback'."
@@ -1147,7 +1147,7 @@ _TOOLS = [
         "function": {
             "name": "list_tasks",
             "description": (
-                "Open client WORK from the task ledger — what's outstanding, overdue or "
+                "Open client WORK from the task ledger, what's outstanding, overdue or "
                 "blocked, with due dates and owners. Use for 'what's on my plate?', "
                 "'what's overdue?', 'what's blocked?', or what's outstanding for a client. "
                 "Optionally filter by client_name or status "
@@ -1162,7 +1162,7 @@ _TOOLS = [
             "name": "propose_task",
             "description": (
                 "Add a task to the owner's ledger so a piece of work is tracked and can't be "
-                "missed. Internal tracking only — it never contacts the client, so it is "
+                "missed. Internal tracking only: it never contacts the client, so it is "
                 "applied directly. Provide a title; optionally client_name, due_date "
                 "(YYYY-MM-DD) and priority (low|medium|high|urgent)."
             ),
@@ -1200,17 +1200,17 @@ def chat_agentic(user_id: str, message: str, history: list[dict] | None = None) 
     btype = (profile.business_type if profile else None) or "small business"
     system = (
         f"You are Kora, the AI business manager for {biz} ({btype}). Use your tools to GROUND every "
-        "answer in the owner's real, live data — call read tools (get_financial_summary, "
+        "answer in the owner's real, live data: call read tools (get_financial_summary, "
         "list_overdue_invoices, list_contracts, get_cashflow, list_clients) before stating numbers. "
-        "For any question about clients or their count, call list_clients — never guess. For questions "
+        "For any question about clients or their count, call list_clients, never guess. For questions "
         "about a specific client's history or what they've been involved in, call query_graph. When a "
         "question or decision needs relevant PAST context that isn't a specific client or invoice (prior "
         "situations, what was said/agreed, recurring issues), call recall_memory with a descriptive query. "
-        "For anything about outstanding WORK — what's on their plate, overdue, blocked, or still owed to a "
-        "client — call list_tasks; use propose_task to make sure a piece of work gets tracked. "
+        "For anything about outstanding WORK, what's on their plate, overdue, blocked, or still owed to a "
+        "client, call list_tasks; use propose_task to make sure a piece of work gets tracked. "
         "Speak concisely in the second person with the actual figures. "
         "IMPORTANT SAFETY RULE: you may NEVER send a client email or move money directly. To act on an "
-        "overdue invoice, call propose_follow_up or propose_payment_demand — these only QUEUE the action "
+        "overdue invoice, call propose_follow_up or propose_payment_demand; these only QUEUE the action "
         "for the owner's approval. After queuing, tell the owner it's waiting for their approval. You may "
         "call run_full_review to reconcile payments and queue approvals. Not financial advice."
     )
@@ -1256,7 +1256,7 @@ def chat_agentic(user_id: str, message: str, history: list[dict] | None = None) 
                 tools_used.append(name)
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(result, default=str)})
         else:
-            reply = "I pulled the details together but ran out of steps — please ask once more."
+            reply = "I pulled the details together but ran out of steps, please ask once more."
     except Exception as exc:
         print(f"[supervisor] agentic chat failed, falling back: {exc}")
         return {**chat(user_id, message, history), "queued": 0}
@@ -1291,7 +1291,7 @@ async def chat_agentic_async(user_id: str, message: str, history: list[dict] | N
     btype = (profile.business_type if profile else None) or "small business"
     system = (
         f"You are Kora, the AI business manager for {biz} ({btype}). Use your tools to GROUND every "
-        "answer in the owner's real, live data — call read tools before stating numbers. "
+        "answer in the owner's real, live data: call read tools before stating numbers. "
         "IMPORTANT SAFETY RULE: you may NEVER send a client email or move money directly."
     )
     messages: list[dict] = [{"role": "system", "content": system}]
@@ -1336,7 +1336,7 @@ async def chat_agentic_async(user_id: str, message: str, history: list[dict] | N
                 tools_used.append(name)
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(result, default=str)})
         else:
-            reply = "I pulled the details together but ran out of steps — please ask once more."
+            reply = "I pulled the details together but ran out of steps, please ask once more."
     except Exception as exc:
         print(f"[supervisor] agentic chat failed, falling back: {exc}")
         return {**(await asyncio.to_thread(chat, user_id, message, history)), "queued": 0}

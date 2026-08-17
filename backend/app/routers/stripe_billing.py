@@ -210,7 +210,7 @@ async def create_customer_portal(user=Depends(get_current_user)):
     user_data = store.get_user(user.id)
     customer_id = user_data.stripe_customer_id if user_data else None
     if not customer_id:
-        raise HTTPException(400, "No billing account found — subscribe first")
+        raise HTTPException(400, "No billing account found: subscribe first")
 
     app_url = os.environ.get("NEXT_PUBLIC_APP_URL", "http://localhost:3000")
 

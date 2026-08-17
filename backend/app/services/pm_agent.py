@@ -229,7 +229,7 @@ def _brief_relationship(ctx: dict) -> str:
     silent = ctx["silentDays"]
     lines = [
         f"Days since last logged activity: {silent if silent is not None else 'unknown'}.",
-        f"Health signals — risks: {'; '.join(ctx['health']['risks']) or 'none'}.",
+        f"Health risks: {'; '.join(ctx['health']['risks']) or 'none'}.",
         f"Positives: {'; '.join(ctx['health']['positiveSignals']) or 'none'}.",
     ]
     if ctx["facts"]:
@@ -252,7 +252,7 @@ _SYSTEM = (
     "You are the {title} analyst on a freelancer's back-office team. You are given "
     "already-verified facts about ONE client. Write a tight, factual read of your "
     'area in JSON: {{"summary": "1-2 sentences", "highlights": ["..."], '
-    '"concerns": ["..."]}}. Rules: do NOT invent numbers — refer only to figures '
+    '"concerns": ["..."]}}. Rules: do NOT invent numbers, refer only to figures '
     "present in the facts; if you cite a number, copy it exactly. No preamble, JSON only."
 )
 

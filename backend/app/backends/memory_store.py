@@ -108,7 +108,7 @@ _playbook: dict[str, list[dict]] = {
                 "kind": "send_followup",
                 "reason": "repeatedly dismissed day-3 follow-ups",
             },
-            "summary": "User consistently dismisses day-3 invoice follow-ups — consider skipping",
+            "summary": "User consistently dismisses day-3 invoice follow-ups, consider skipping",
             "confidence": 0.71,
             "source": "observation",
             "observation_count": 5,

@@ -194,7 +194,7 @@ Rules: address client by first name, single clear call to action, under 150 word
             subject=draft.get("subject", "Follow-up"),
             body_html=draft.get("body_html", ""),
             body_text=draft.get("body_text", ""),
-            context=f"{body.context} — tone: {body.tone}",
+            context=f"{body.context} (tone: {body.tone})",
             related_client_id=client_id,
         )
 

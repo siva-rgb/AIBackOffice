@@ -179,4 +179,4 @@ def queue_client_email(user_id: str, client_id: str, subject: str, body_text: st
         context=f"Butler drafted a message to {client.name} on your behalf.",
         related_client_id=client_id,
     )
-    return {"queued": True, "note": f"Queued for your approval — sends to {to_email} once you approve in the Business Manager."}
+    return {"queued": True, "note": f"Queued for your approval: sends to {to_email} once you approve in the Business Manager."}

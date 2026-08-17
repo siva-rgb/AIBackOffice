@@ -120,7 +120,7 @@ def ingest_transactions(user_id: str, currency: str, rows: list[ParsedRow]) -> I
             agent_logger.log_action(
                 user_id=user_id,
                 agent_type="bookkeeper",
-                action=f"Categorization failed for {len(batch)} transactions — flagged for review",
+                action=f"Categorization failed for {len(batch)} transactions, flagged for review",
                 input={"batchSize": len(batch)},
                 output={"error": str(exc)},
                 status="error",

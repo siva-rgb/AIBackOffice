@@ -4,7 +4,7 @@ import { PublicHeader } from '@/components/marketing/public-header';
 import { API_BASE } from '@/lib/api/config';
 
 export const metadata = {
-  title: 'Plans & pricing — Kora',
+  title: 'Plans & pricing: Kora',
   description: 'Kora pricing. Early users get the full Pro suite free for 90 days.',
 };
 
@@ -46,19 +46,19 @@ export default async function PlansPage() {
 
       <section className="mx-auto max-w-3xl px-6 pt-10 text-center">
         <span className="inline-flex items-center gap-2 rounded-full bg-kora-50 px-4 py-1.5 text-sm font-medium text-kora-700">
-          <Sparkles size={15} /> Launch offer — free for early users
+          <Sparkles size={15} /> Launch offer: free for early users
         </span>
         <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
           Get the full suite free for {TRIAL_DAYS} days.
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-600">
           We&apos;re just launching, so early users get everything. Sign up now and your account is
-          upgraded to <strong className="text-gray-900">Pro</strong> — every agent, contract
-          drafting, cash-flow forecasting, the lot — free for {TRIAL_DAYS} days. No card, no trial
-          banner nagging you.
+          upgraded to <strong className="text-gray-900">Pro</strong> for {TRIAL_DAYS} days: every
+          agent, contract drafting, cash-flow forecasting, the lot. No card, no trial banner nagging
+          you.
         </p>
         <p className="mx-auto mt-3 max-w-2xl text-sm text-gray-500">
-          After {TRIAL_DAYS} days your account moves to the Free plan and keeps working — your data,
+          After {TRIAL_DAYS} days your account moves to the Free plan and keeps working. Your data,
           invoices and books stay exactly where they are. Upgrade only if you want the paid features
           back.
         </p>
@@ -135,7 +135,7 @@ export default async function PlansPage() {
               • No credit card to start. We don&apos;t ask for one during the {TRIAL_DAYS} days.
             </li>
             <li>
-              • Nothing charges automatically when the {TRIAL_DAYS} days end — you drop to Free.
+              • Nothing charges automatically when the {TRIAL_DAYS} days end. You drop to Free.
             </li>
             <li>• Your data is yours. Export it any time, delete your account any time.</li>
             <li>• Payments run through Stripe. Kora never sees or stores your card details.</li>

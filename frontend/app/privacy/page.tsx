@@ -1,7 +1,7 @@
 import { LegalShell, H2, P, UL, Callout } from '@/components/legal/legal-shell';
 
 export const metadata = {
-  title: 'Privacy Policy — Kora',
+  title: 'Privacy Policy: Kora',
   description: 'How Kora collects, uses, and protects your data.',
 };
 

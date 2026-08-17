@@ -128,7 +128,7 @@ def _seed_butler(data: dict) -> dict | None:
         for r in data.get("retainers", []):
             sbs.insert_retainer(r)
     except Exception as exc:
-        print("  butler:   SKIPPED — apply migrations/2026-06-02_add_butler.sql first " f"({str(exc)[:100]})")
+        print("  butler:   SKIPPED: apply migrations/2026-06-02_add_butler.sql first " f"({str(exc)[:100]})")
         return None
     return {
         "clients": len(data.get("clients", [])),

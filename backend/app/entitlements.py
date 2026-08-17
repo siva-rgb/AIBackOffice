@@ -284,7 +284,7 @@ async def enforce_plan(request: Request, user: User = Depends(get_current_user))
     path = getattr(route, "path", request.url.path)
     need = min_plan_for(request.method, path)
     if need is None:
-        raise RuntimeError(f"enforce_plan is attached to {request.method} {path} but it has no " f"POLICY entry — add one to app/entitlements.POLICY.")
+        raise RuntimeError(f"enforce_plan is attached to {request.method} {path} but it has no " f"POLICY entry: add one to app/entitlements.POLICY.")
     # effective_plan, not user.plan: a lapsed trial still stores "pro".
     if rank(effective_plan(user)) < _RANK[need]:
         raise HTTPException(

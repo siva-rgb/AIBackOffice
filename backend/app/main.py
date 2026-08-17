@@ -97,7 +97,7 @@ if settings.SENTRY_DSN:
 
 app = FastAPI(
     title="Kora API",
-    description="AI back-office for freelancers — FastAPI backend (SKILL.md §2/§3).",
+    description="AI back-office for freelancers: FastAPI backend (SKILL.md §2/§3).",
     version="0.1.0",
 )
 

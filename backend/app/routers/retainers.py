@@ -87,7 +87,7 @@ async def create_retainer_invoice(retainer_id: str, user: User = Depends(get_cur
     if not r:
         raise HTTPException(status_code=404, detail="Retainer not found")
     if r.status != "active":
-        raise HTTPException(status_code=400, detail=f"Retainer is {r.status} — not billable.")
+        raise HTTPException(status_code=400, detail=f"Retainer is {r.status} and not billable.")
 
     client_name, client_email = "Client", ""
     if r.client_id:

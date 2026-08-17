@@ -65,7 +65,7 @@ def generate_contract(user: User, req: GenerateContractRequest) -> Contract:
     terms = dict(req.terms or {})
     if content_md:
         try:
-            review = review_contract(user, text=content_md, source="kora", title=f"{_TITLES.get(req.type, 'Agreement')} — {req.client_name}")
+            review = review_contract(user, text=content_md, source="kora", title=f"{_TITLES.get(req.type, 'Agreement')}: {req.client_name}")
             terms["_review"] = review.model_dump(by_alias=True)
         except Exception as exc:
             print(f"[contract] auto-review skipped: {exc}")
@@ -74,7 +74,7 @@ def generate_contract(user: User, req: GenerateContractRequest) -> Contract:
         id=store.uid("ctr"),
         user_id=user.id,
         type=req.type,
-        title=f"{_TITLES.get(req.type, 'Agreement')} — {req.client_name}",
+        title=f"{_TITLES.get(req.type, 'Agreement')}: {req.client_name}",
         client_name=req.client_name,
         client_email=req.client_email,
         provider_name=payload["provider_name"],
@@ -192,7 +192,7 @@ def review_contract(
         # No 'contract_reviewer' value in the agent_logs CHECK constraint — log
         # under contract_generator; the action text marks it as a review.
         agent_type="contract_generator",
-        action=f"Reviewed contract — {review.overall_risk} risk ({title or source})",
+        action=f"Reviewed contract: {review.overall_risk} risk ({title or source})",
         input={"source": source, "chars": len(clean), "contractId": contract_id, "title": title},
         output={
             "overallRisk": review.overall_risk,
@@ -274,7 +274,7 @@ def save_received_contract(
         id=contract_id,
         user_id=user.id,
         type="service_contract",
-        title=title or f"Received contract — {resolved_name}",
+        title=title or f"Received contract: {resolved_name}",
         client_name=resolved_name,
         provider_name=user.business_name or user.full_name,
         jurisdiction=user.country or "US",

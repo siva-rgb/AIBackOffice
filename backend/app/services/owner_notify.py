@@ -106,7 +106,7 @@ def send_daily_digest(user_id: str, result: dict) -> dict:
     if auto:
         lines.append(f"Handled automatically: {len(auto)} item(s).")
     if pending:
-        lines.append(f"Awaiting your approval: {len(pending)} item(s) — open Kora to review.")
+        lines.append(f"Awaiting your approval: {len(pending)} item(s), open Kora to review.")
 
     text = "\n".join(lines).strip()
     return send_owner_email(user_id, "Your Kora daily digest", text, category="daily_digest")

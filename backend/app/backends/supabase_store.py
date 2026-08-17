@@ -170,7 +170,7 @@ def insert_transactions(rows: list[Transaction]) -> list[Transaction]:
         # next call does not pay for the round trip.
         if _HAS_EXTERNAL_ID and "external_id" in str(exc):
             _HAS_EXTERNAL_ID = False
-            print("[store] transactions.external_id missing — apply migrations/2026-08-15_transaction_external_id.sql; falling back to shape dedupe")
+            print("[store] transactions.external_id missing, apply migrations/2026-08-15_transaction_external_id.sql; falling back to shape dedupe")
             for item in payload:
                 item.pop("external_id", None)
             repo(user_id).raw_table("transactions").insert(payload).execute()
@@ -998,7 +998,7 @@ def _write_agent_memory(user_id: str, payload: dict, existing_id: str | None):
             raise
         _HAS_EMBEDDING_VEC = False
         print(
-            "[memory] agent_memory.embedding_vec is missing — storing JSONB embeddings only. "
+            "[memory] agent_memory.embedding_vec is missing, storing JSONB embeddings only. "
             "Apply migrations/2026-07-29_pgvector_agent_memory.sql to enable ANN recall."
         )
         return _send({k: v for k, v in payload.items() if k != "embedding_vec"})

@@ -225,7 +225,7 @@ def _list_folder_files(service, folder_id: str) -> list:
 
     if len(files) >= _MAX_FOLDER_FILES:
         # Say so rather than let a truncated scan read as a complete one.
-        print(f"[drive-intel] folder scan hit the {_MAX_FOLDER_FILES}-file cap — some files were not read")
+        print(f"[drive-intel] folder scan hit the {_MAX_FOLDER_FILES}-file cap, some files were not read")
     return files
 
 

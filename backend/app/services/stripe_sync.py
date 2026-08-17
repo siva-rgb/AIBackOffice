@@ -236,7 +236,7 @@ def _normalize(balance_txns: list, account_id: str, platform_key: str) -> list[d
         # settled if it came from one of our Payment Links.
         ctx = _charge_context(bt, account_id, platform_key)
         if ctx["customer_name"]:
-            description = f"{ctx['customer_name']} — {description}"
+            description = f"{ctx['customer_name']}, {description}"
 
         rows.append(
             {

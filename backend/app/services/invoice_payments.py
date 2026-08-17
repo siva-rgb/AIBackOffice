@@ -130,7 +130,7 @@ def record_payment_received(user_id: str, invoice, via: str) -> None:
                 user_id=user_id,
                 type="payment_reconciled",
                 severity="info",
-                title="Payment received — invoice marked paid",
+                title="Payment received: invoice marked paid",
                 body=(
                     f"{invoice.client_name} paid {invoice.currency} {float(invoice.total):,.2f} "
                     f"for {invoice.invoice_number} via {via}. Kora marked it paid and stopped follow-ups."

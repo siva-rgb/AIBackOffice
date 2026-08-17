@@ -99,7 +99,7 @@ async def upload_receipt(
         storage.upload_bytes(user.id, path, content, file.content_type)
     except Exception as exc:  # e.g. missing credentials off Cloud Run
         print(f"[storage] receipt upload failed: {exc}")
-        raise HTTPException(status_code=503, detail="Storage unavailable — check credentials/bucket.")
+        raise HTTPException(status_code=503, detail="Storage unavailable: check credentials/bucket.")
     return {"path": path, "sizeBytes": len(content)}
 
 
@@ -120,5 +120,5 @@ async def receipt_url(transaction_id: str, user: User = Depends(get_current_user
         raise
     except Exception as exc:  # missing credentials / GCS error
         print(f"[storage] receipt url failed: {exc}")
-        raise HTTPException(status_code=503, detail="Storage unavailable — check credentials/bucket.")
+        raise HTTPException(status_code=503, detail="Storage unavailable: check credentials/bucket.")
     return SignedUrlResponse(url=url, expires_in_minutes=5)

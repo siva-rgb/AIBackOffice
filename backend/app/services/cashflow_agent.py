@@ -27,7 +27,7 @@ _insights_inflight: set[tuple[str, int]] = set()
 _insights_lock = threading.Lock()
 
 _EMPTY_INSIGHTS = {"key_risks": [], "recommended_actions": [], "confidence_score": 0.7, "assumptions": []}
-_PENDING_NOTE = "AI insights are still being generated — the numeric projection below is complete and current."
+_PENDING_NOTE = "AI insights are still being generated. The numeric projection below is complete and current."
 
 
 def clear_insights_cache() -> None:
@@ -78,7 +78,7 @@ def _generate_insights(user_id: str, key: tuple[str, int], snapshot: dict) -> No
         agent_logger.log_action(
             user_id=user_id,
             agent_type="cashflow_forecaster",
-            action="Cash flow insight generation failed — numeric forecast served",
+            action="Cash flow insight generation failed, numeric forecast served",
             input=snapshot,
             output={"error": str(exc)},
             status="error",

@@ -78,7 +78,7 @@ async def upload_csv(
     if not parsed.rows:
         raise HTTPException(status_code=400, detail={"error": "No valid rows found", "details": parsed.errors[:10]})
     if len(parsed.rows) > 10000:
-        raise HTTPException(status_code=400, detail="File must have 2–10,000 rows")
+        raise HTTPException(status_code=400, detail="File must have 2-10,000 rows")
 
     job_id = create_job(user.id)
     background_tasks.add_task(run_import_job, job_id, user.id, user.currency, parsed.rows)

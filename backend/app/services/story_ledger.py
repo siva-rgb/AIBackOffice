@@ -112,7 +112,7 @@ def add_observation(user_id: str, story_id: str, *, kind: str, text: str, source
     if not (text or "").strip():
         raise ValueError("Observation text is required")
     if not (source_ref or "").strip():
-        raise ValueError("source_ref is required — an observation must cite the email, meeting " "or document it came from")
+        raise ValueError("source_ref is required: an observation must cite the email, meeting " "or document it came from")
 
     story = store.get_story(user_id, story_id)
     if not story:

@@ -89,7 +89,7 @@ def run_digest(user_id: str, triggered_by: str = "user") -> dict:
     agent_logger.log_action(
         user_id=user_id,
         agent_type="alert_generator",
-        action=f"Generated daily digest — {len(created)} new alert(s)",
+        action=f"Generated daily digest: {len(created)} new alert(s)",
         input={"snapshot": snapshot},
         output={"alerts": [a.type for a in created]},
         model_used=model_used,
@@ -151,13 +151,13 @@ def build_digest_email(user_id: str) -> dict:
     if alerts:
         lines = [f"- [{a.severity.upper()}] {a.title}: {a.body}".rstrip(": ") for a in alerts]
         body_text = f"Your KORA digest for {day}\n\n" f"{len(alerts)} thing(s) need your attention:\n\n" + "\n".join(lines)
-        html_items = "".join(f"<li><strong>{a.title}</strong> — {a.body}</li>" for a in alerts)
+        html_items = "".join(f"<li><strong>{a.title}</strong>: {a.body}</li>" for a in alerts)
         body_html = f"<h2>Your KORA digest for {day}</h2>" f"<p>{len(alerts)} thing(s) need your attention:</p><ul>{html_items}</ul>"
     else:
-        body_text = f"Your KORA digest for {day}\n\nAll clear — nothing needs your attention today."
-        body_html = f"<h2>Your KORA digest for {day}</h2>" f"<p>All clear — nothing needs your attention today.</p>"
+        body_text = f"Your KORA digest for {day}\n\nAll clear. Nothing needs your attention today."
+        body_html = f"<h2>Your KORA digest for {day}</h2>" f"<p>All clear. Nothing needs your attention today.</p>"
 
-    return {"subject": f"KORA daily digest — {day}", "bodyText": body_text, "bodyHtml": body_html, "alertCount": len(alerts)}
+    return {"subject": f"KORA daily digest: {day}", "bodyText": body_text, "bodyHtml": body_html, "alertCount": len(alerts)}
 
 
 def queue_digest_email(user_id: str, *, triggered_by: str = "user") -> dict:
@@ -180,7 +180,7 @@ def queue_digest_email(user_id: str, *, triggered_by: str = "user") -> dict:
             "ok": True,
             "delivered": False,
             "draftOnly": True,
-            "note": "Gmail isn't connected — the digest is available in-app as alerts; " "nothing was emailed.",
+            "note": "Gmail isn't connected: the digest is available in-app as alerts; " "nothing was emailed.",
         }
 
     src = _digest_source_id(date.today().isoformat())
@@ -194,7 +194,7 @@ def queue_digest_email(user_id: str, *, triggered_by: str = "user") -> dict:
         user_id=user_id,
         kind=DIGEST_KIND,
         title=f"Email you the daily digest: {email['subject']}",
-        rationale="Daily digest email — approve to send it to yourself.",
+        rationale="Daily digest email: approve to send it to yourself.",
         severity="info",
         status="proposed",
         payload={
@@ -225,5 +225,5 @@ def queue_digest_email(user_id: str, *, triggered_by: str = "user") -> dict:
         "delivered": False,
         "queued": True,
         "taskId": task.id,
-        "note": "Digest queued — approve it in the Business Manager to send it to your inbox.",
+        "note": "Digest queued: approve it in the Business Manager to send it to your inbox.",
     }

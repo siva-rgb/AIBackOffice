@@ -162,7 +162,7 @@ def build_seed(user_id: str = DEMO_USER_ID) -> dict:
             invoice_number="INV-2026-009",
             client_name="Blue Label LLC",
             client_email="accounts@bluelabel.example",
-            line_items=[LineItem(description="Monthly retainer — design + motion", quantity=1, rate=3500, amount=3500)],
+            line_items=[LineItem(description="Monthly retainer: design + motion", quantity=1, rate=3500, amount=3500)],
             subtotal=3500,
             tax_rate=0,
             tax_amount=0,
@@ -183,7 +183,7 @@ def build_seed(user_id: str = DEMO_USER_ID) -> dict:
             invoice_number="INV-2026-021",
             client_name="Harbor Co",
             client_email="ops@harbor.example",
-            line_items=[LineItem(description="Website redesign — project kickoff milestone", quantity=1, rate=3000, amount=3000)],
+            line_items=[LineItem(description="Website redesign: project kickoff milestone", quantity=1, rate=3000, amount=3000)],
             subtotal=3000,
             tax_rate=0,
             tax_amount=0,
@@ -256,7 +256,7 @@ def build_seed(user_id: str = DEMO_USER_ID) -> dict:
                 "body": (
                     f"Hi {overdue.client_name},\n\nThis is a friendly reminder that invoice "
                     f"{overdue.invoice_number} for $3,500.00 was due a few days ago. "
-                    f"It may have simply slipped through \u2014 no worries at all if so."
+                    f"It may have simply slipped through, which is no problem at all."
                     f"{pay_line}\n\nBest,\nRivera Studio"
                 ),
                 "delivered": True,
@@ -302,7 +302,7 @@ def build_seed(user_id: str = DEMO_USER_ID) -> dict:
             id=_sid("log"),
             user_id=user_id,
             agent_type="alert_generator",
-            action="Generated daily digest — 2 alerts",
+            action="Generated daily digest: 2 alerts",
             input={"window": "30d"},
             output={"alerts": ["invoice_pile_up", "deduction_opportunity"]},
             model_used="gemini-1.5-pro",
@@ -362,7 +362,7 @@ def build_seed(user_id: str = DEMO_USER_ID) -> dict:
             id=harbor_contract_id,
             user_id=user_id,
             type="freelance_agreement",
-            title="Freelance Agreement — Harbor Co",
+            title="Freelance Agreement: Harbor Co",
             client_name="Harbor Co",
             client_email="ops@harbor.example",
             provider_name="Rivera Studio",
@@ -570,7 +570,7 @@ def build_seed(user_id: str = DEMO_USER_ID) -> dict:
             proposal_number="PROP-2026-001",
             scope_md="Design and build three campaign landing pages.",
             content_md=(
-                "# Proposal — Q3 Campaign Landing Pages\n\n## 1. Executive Summary\n"
+                "# Proposal: Q3 Campaign Landing Pages\n\n## 1. Executive Summary\n"
                 "A focused engagement to ship three high-converting landing pages for Nova "
                 "Agency's Q3 campaigns.\n\n## 2. Scope of Work\nDesign and build three "
                 "responsive landing pages.\n\n## 5. Investment\nTotal: $3,600 (fixed).\n"
@@ -591,7 +591,7 @@ def build_seed(user_id: str = DEMO_USER_ID) -> dict:
             id=_sid("ret"),
             user_id=user_id,
             client_id=bluelabel_id,
-            title="Monthly design + motion — Blue Label",
+            title="Monthly design + motion: Blue Label",
             amount=3500,
             currency="USD",
             billing_cycle="monthly",

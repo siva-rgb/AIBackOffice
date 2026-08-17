@@ -37,7 +37,7 @@ def sanitize_prompt_input(value: str, *, max_len: int = 2000) -> str:
         if pattern.search(clean):
             raise PromptInjectionError("Invalid input detected")
     if len(clean) > max_len:
-        print(f"[sanitize] truncated {len(clean)} chars to {max_len} — raise max_len at this call site if the tail matters")
+        print(f"[sanitize] truncated {len(clean)} chars to {max_len}, raise max_len at this call site if the tail matters")
     return clean[:max_len]
 
 

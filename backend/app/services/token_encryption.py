@@ -122,5 +122,5 @@ def decrypt_token(ciphertext: str) -> str:
     try:
         return _fernet.decrypt(ciphertext.encode()).decode()
     except InvalidToken:
-        logger.warning("Token decryption failed — likely encrypted with a previous key. " "User must reconnect Google / Notion / Stripe Connect.")
+        logger.warning("Token decryption failed: likely encrypted with a previous key. " "User must reconnect Google / Notion / Stripe Connect.")
         raise

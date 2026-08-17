@@ -206,16 +206,16 @@ def _maybe_send(user_id: str, inv, subject: str, body: str, deliver: bool):
         return False, None, None
     to_email = _current_client_email(user_id, inv)
     if not to_email:
-        return False, None, "No client email on file — drafted only (not sent)."
+        return False, None, "No client email on file: drafted only (not sent)."
     try:
         from .gmail_agent import is_gmail_connected, send_via_gmail
 
         if not is_gmail_connected(user_id):
-            return False, None, ("Google account not connected — drafted only. " "Connect Gmail in Settings to send.")
+            return False, None, ("Google account not connected: drafted only. " "Connect Gmail in Settings to send.")
         msg_id = send_via_gmail(user_id, to_email, inv.client_name, subject, body)
         return True, msg_id, f"Sent to {to_email} via Gmail."
     except Exception as exc:
-        return False, None, f"Send failed — drafted only ({exc})."
+        return False, None, f"Send failed: drafted only ({exc})."
 
 
 def send_follow_up_for(user_id: str, invoice_id: str, triggered_by: str = "user", deliver: bool = False) -> dict:

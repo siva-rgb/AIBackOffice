@@ -80,10 +80,11 @@ def build_profile_brief(
         ident.append(f"({btype.replace('_', ' ')})")
     if _s(p.get("industry")):
         ident.append(f"in {_s(p['industry'])}")
-    if _s(p.get("role_title")):
-        ident.append(f"— {_s(p['role_title'])}")
     if ident:
-        lines.append(" ".join(ident) + ".")
+        # The role is a separate clause, not another space-joined fragment, so
+        # the line reads "Rivera Studio (design studio) in branding, Founder."
+        role = _s(p.get("role_title"))
+        lines.append(" ".join(ident) + (f", {role}" if role else "") + ".")
     if _s(p.get("description")):
         lines.append(_s(p["description"]))
 
@@ -124,7 +125,7 @@ def build_profile_brief(
             first = personas[0] if isinstance(personas[0], dict) else {}
             pname = _s(first.get("name"))
             if pname:
-                lines.append(f"Primary customer: {pname}" + (f" — {_s(first.get('description'))}" if _s(first.get("description")) else "") + ".")
+                lines.append(f"Primary customer: {pname}" + (f", {_s(first.get('description'))}" if _s(first.get("description")) else "") + ".")
         if _joined(cust.get("industries_served")):
             lines.append(f"Serves: {_joined(cust.get('industries_served'))}.")
     # Fallback to the legacy flat field.

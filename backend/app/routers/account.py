@@ -213,7 +213,7 @@ async def delete_account(user: User = Depends(get_current_user)):
         raise HTTPException(
             status_code=409,
             detail=(
-                "This is a shared demo account, so erasure is disabled — the data here "
+                "This is a shared demo account, so erasure is disabled. The data here "
                 "belongs to everyone evaluating Kora, not to one signed-in visitor, and "
                 "deleting it would remove the account for every later visitor. Nothing "
                 "was deleted. Data export (GET /api/account/export) works normally, and "

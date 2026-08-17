@@ -46,7 +46,7 @@ def extract_text(filename: str, content_type: str | None, raw: bytes) -> str:
         try:
             text = raw.decode("utf-8")
         except UnicodeDecodeError:
-            raise UnsupportedDocument("Unsupported file type. Upload a PDF, Word (.docx), or text file — or paste the text.")
+            raise UnsupportedDocument("Unsupported file type. Upload a PDF, Word (.docx) or text file, or paste the text in instead.")
 
     text = text.replace("\x00", "").strip()
     if len(text) < 20:

@@ -57,7 +57,7 @@ def observe_decision(user_id: str, task: dict, action: str) -> None:
                     "client_id": client_id,
                     "key": rule_key,
                     "value": {"kind": kind, "reason": "repeatedly dismissed"},
-                    "summary": (f"User consistently dismisses '{kind}' actions" + (" for this client" if client_id else "") + " — consider not proposing"),
+                    "summary": (f"User consistently dismisses '{kind}' actions" + (" for this client" if client_id else "") + ", so stop proposing them"),
                     "source": "observation",
                     "confidence": 0.7,
                 },
@@ -380,7 +380,7 @@ def observe_meeting(user_id: str, client_id: str | None, extracted: dict) -> Non
                     "value": mention,
                     "summary": (
                         f"Meeting mentioned: {mention.get('type', '')} ${mention['amount']:,.0f}"
-                        + (f" — {mention.get('context', '')}" if mention.get("context") else "")
+                        + (f", {mention.get('context', '')}" if mention.get("context") else "")
                     ),
                     "source": "extraction",
                     "confidence": 0.65,

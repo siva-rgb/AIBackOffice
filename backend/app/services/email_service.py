@@ -82,7 +82,7 @@ def send_invoice_email(
     message_id = _send(
         from_addr=_DEFAULT_FROM_EMAIL,
         to=[client_email],
-        subject=f"Invoice #{invoice_number} from {sender_name} — {sym}{amount:,.2f}",
+        subject=f"Invoice #{invoice_number} from {sender_name} for {sym}{amount:,.2f}",
         html=html,
     )
 
@@ -131,7 +131,7 @@ def send_follow_up_email(
 
     html = f"""
 <html><body style="font-family:sans-serif;color:#14171f;max-width:600px;margin:auto">
-  <h2 style="color:#c72e2e">Payment Reminder — Invoice #{invoice_number}</h2>
+  <h2 style="color:#c72e2e">Payment Reminder: Invoice #{invoice_number}</h2>
   <p>{body_text.replace(chr(10), "<br/>")}</p>
   {pay_btn}
   <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0">
@@ -143,7 +143,7 @@ def send_follow_up_email(
     message_id = _send(
         from_addr=_DEFAULT_FROM_EMAIL,
         to=[client_email],
-        subject=f"Payment reminder — Invoice #{invoice_number} ({overdue_label})",
+        subject=f"Payment reminder: Invoice #{invoice_number} ({overdue_label})",
         html=html,
     )
 
@@ -177,9 +177,7 @@ def send_morning_digest(
     start = datetime.now(timezone.utc)
     sym = _currency_sym(currency)
     subject = (
-        f"Your morning digest — {overdue_count} overdue ({sym}{overdue_total:,.2f})"
-        if overdue_count
-        else f"Your morning digest — {due_soon_count} due soon"
+        f"Your morning digest: {overdue_count} overdue ({sym}{overdue_total:,.2f})" if overdue_count else f"Your morning digest: {due_soon_count} due soon"
     )
 
     html = f"""

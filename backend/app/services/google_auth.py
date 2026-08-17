@@ -39,7 +39,7 @@ def get_user_credentials(user_id: str) -> Credentials | None:
         db.table("google_connections").update(
             {
                 "connected": False,
-                "last_error": f"Token undecryptable — reconnect required ({type(exc).__name__})",
+                "last_error": f"Token undecryptable: reconnect required ({type(exc).__name__})",
             }
         ).eq("user_id", user_id).execute()
         db.table("users").update({"google_connected": False}).eq("id", user_id).execute()

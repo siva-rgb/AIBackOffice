@@ -240,10 +240,10 @@ def _render(inv, user, profile: dict) -> bytes:
 
     date_lines = [
         Paragraph("INVOICE DATE", h_label),
-        Paragraph(invoice_date_str or "—", h_value),
+        Paragraph(invoice_date_str or "n/a", h_value),
         Spacer(1, 4 * mm),
         Paragraph("DUE DATE", h_label),
-        Paragraph(inv.due_date or "—", h_value),
+        Paragraph(inv.due_date or "n/a", h_value),
     ]
     if inv.payment_terms:
         date_lines += [

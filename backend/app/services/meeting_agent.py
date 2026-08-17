@@ -139,7 +139,7 @@ def process_transcript(
 def _build_mom_prompt(transcript: str, client_context: str) -> str:
     return f"""You are analyzing a business meeting transcript for a freelancer or small business owner.
 Extract structured intelligence: key decisions, commitments, risks, and follow-up actions.
-Only extract what is actually stated — if unclear, mark confidence low.
+Only extract what is actually stated, if unclear, mark confidence low.
 
 {f"CONTEXT: {client_context}" if client_context else ""}
 
