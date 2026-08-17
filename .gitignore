@@ -74,3 +74,7 @@ desktop.ini
 
 # Local agent scaffolding / rolling state (genesis-kit)
 
+# Hackathon submission materials — deck, notes, screenshots. Deliberately local:
+# they are presentation assets, not source, and must not reach the remote.
+hackathon_deck/
+
